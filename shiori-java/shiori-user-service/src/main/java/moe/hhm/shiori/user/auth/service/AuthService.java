@@ -4,13 +4,18 @@ import java.time.LocalDateTime;
 import java.util.List;
 import moe.hhm.shiori.common.error.UserErrorCode;
 import moe.hhm.shiori.common.exception.BizException;
+import moe.hhm.shiori.user.auth.dto.RegisterResponse;
+import moe.hhm.shiori.user.auth.model.RegisterUserEntity;
 import moe.hhm.shiori.user.auth.dto.TokenPairResponse;
 import moe.hhm.shiori.user.auth.model.UserAuthRecord;
 import moe.hhm.shiori.user.auth.repository.AuthUserMapper;
 import moe.hhm.shiori.user.domain.UserStatus;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 @Service
 public class AuthService {
@@ -53,8 +58,51 @@ public class AuthService {
         return tokenService.refresh(refreshToken);
     }
 
+    @Transactional(rollbackFor = Exception.class)
+    public RegisterResponse register(String username, String password, String nickname) {
+        if (authUserMapper.countByUsername(username) > 0) {
+            throw new BizException(UserErrorCode.USERNAME_ALREADY_EXISTS, HttpStatus.CONFLICT);
+        }
+
+        Long roleId = authUserMapper.findRoleIdByCode("ROLE_USER");
+        if (roleId == null) {
+            throw new BizException(UserErrorCode.ROLE_NOT_FOUND, HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+
+        RegisterUserEntity user = new RegisterUserEntity();
+        user.setUserNo(generateUserNo());
+        user.setUsername(username);
+        user.setPasswordHash(passwordEncoder.encode(password));
+        user.setNickname(StringUtils.hasText(nickname) ? nickname.trim() : username);
+
+        try {
+            authUserMapper.insertUser(user);
+        } catch (DuplicateKeyException e) {
+            throw new BizException(UserErrorCode.USERNAME_ALREADY_EXISTS, HttpStatus.CONFLICT);
+        }
+        if (user.getId() == null) {
+            throw new IllegalStateException("用户注册后未返回主键");
+        }
+        authUserMapper.insertUserRole(user.getId(), roleId);
+
+        return new RegisterResponse(user.getId(), user.getUserNo(), user.getUsername(), user.getNickname());
+    }
+
     public void logout(String refreshToken) {
         tokenService.logout(refreshToken);
+    }
+
+    public void changePassword(Long userId, String oldPassword, String newPassword) {
+        UserAuthRecord user = authUserMapper.findById(userId);
+        if (user == null || isDeleted(user)) {
+            throw new BizException(UserErrorCode.USER_NOT_FOUND, HttpStatus.NOT_FOUND);
+        }
+
+        if (!passwordEncoder.matches(oldPassword, user.passwordHash())) {
+            throw new BizException(UserErrorCode.PASSWORD_INCORRECT, HttpStatus.BAD_REQUEST);
+        }
+
+        authUserMapper.updatePasswordHashById(userId, passwordEncoder.encode(newPassword));
     }
 
     private boolean isDeleted(UserAuthRecord user) {
@@ -75,5 +123,10 @@ public class AuthService {
             }
         }
         return UserStatus.ENABLED;
+    }
+
+    private String generateUserNo() {
+        int randomSuffix = (int) (Math.random() * 9000) + 1000;
+        return "U" + System.currentTimeMillis() + randomSuffix;
     }
 }

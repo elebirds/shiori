@@ -4,7 +4,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 import moe.hhm.shiori.common.exception.BizException;
 import moe.hhm.shiori.user.auth.dto.AuthUserInfo;
+import moe.hhm.shiori.user.auth.dto.RegisterResponse;
 import moe.hhm.shiori.user.auth.dto.TokenPairResponse;
+import moe.hhm.shiori.user.auth.model.RegisterUserEntity;
 import moe.hhm.shiori.user.auth.model.UserAuthRecord;
 import moe.hhm.shiori.user.auth.repository.AuthUserMapper;
 import org.junit.jupiter.api.Test;
@@ -16,7 +18,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -105,5 +110,56 @@ class AuthServiceTest {
         assertThat(actual.accessToken()).isEqualTo("access");
         verify(tokenService).refresh("r1");
         verify(tokenService).logout("r1");
+    }
+
+    @Test
+    void shouldChangePasswordSuccess() {
+        UserAuthRecord record = new UserAuthRecord(1L, "U202603030001", "alice", "$2a$old", 1, 0, null, 0);
+        when(authUserMapper.findById(1L)).thenReturn(record);
+        when(passwordEncoder.matches("oldPwd", "$2a$old")).thenReturn(true);
+        when(passwordEncoder.encode("newPwd123")).thenReturn("$2a$new");
+
+        authService.changePassword(1L, "oldPwd", "newPwd123");
+
+        verify(authUserMapper).updatePasswordHashById(1L, "$2a$new");
+    }
+
+    @Test
+    void shouldRejectChangePasswordWhenOldPasswordWrong() {
+        UserAuthRecord record = new UserAuthRecord(1L, "U202603030001", "alice", "$2a$old", 1, 0, null, 0);
+        when(authUserMapper.findById(1L)).thenReturn(record);
+        when(passwordEncoder.matches("wrong", "$2a$old")).thenReturn(false);
+
+        assertThatThrownBy(() -> authService.changePassword(1L, "wrong", "newPwd123"))
+                .isInstanceOf(BizException.class);
+    }
+
+    @Test
+    void shouldRegisterSuccess() {
+        when(authUserMapper.countByUsername("alice")).thenReturn(0);
+        when(authUserMapper.findRoleIdByCode("ROLE_USER")).thenReturn(10L);
+        when(passwordEncoder.encode("newPwd123")).thenReturn("$2a$new");
+        doAnswer(invocation -> {
+            RegisterUserEntity user = invocation.getArgument(0);
+            user.setId(1L);
+            return 1;
+        }).when(authUserMapper).insertUser(any(RegisterUserEntity.class));
+
+        RegisterResponse response = authService.register("alice", "newPwd123", "Alice");
+
+        assertThat(response.userId()).isEqualTo(1L);
+        assertThat(response.username()).isEqualTo("alice");
+        assertThat(response.nickname()).isEqualTo("Alice");
+        verify(authUserMapper).insertUserRole(eq(1L), eq(10L));
+    }
+
+    @Test
+    void shouldRejectRegisterWhenUsernameExists() {
+        when(authUserMapper.countByUsername("alice")).thenReturn(1);
+
+        assertThatThrownBy(() -> authService.register("alice", "newPwd123", "Alice"))
+                .isInstanceOf(BizException.class);
+
+        verify(authUserMapper, never()).insertUser(any(RegisterUserEntity.class));
     }
 }

@@ -102,6 +102,20 @@ class GatewaySecurityIntegrationTest {
     }
 
     @Test
+    void shouldAllowAnonymousOnAuthRegisterPath() {
+        HttpStatusCode status = webTestClient().post()
+                .uri("/api/user/auth/register")
+                .header(HttpHeaders.CONTENT_TYPE, "application/json")
+                .bodyValue("{\"username\":\"alice\",\"password\":\"newPwd123\",\"nickname\":\"Alice\"}")
+                .exchange()
+                .returnResult(String.class)
+                .getStatus();
+
+        assertThat(status.value()).isNotEqualTo(401);
+        assertThat(status.value()).isNotEqualTo(403);
+    }
+
+    @Test
     void shouldAllowAnonymousOnAuthRefreshPath() {
         HttpStatusCode status = webTestClient().post()
                 .uri("/api/user/auth/refresh")

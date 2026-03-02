@@ -15,6 +15,7 @@ public class GatewaySignProperties {
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html",
+            "/api/user/auth/register",
             "/api/user/auth/login",
             "/api/user/auth/refresh",
             "/api/user/auth/logout"

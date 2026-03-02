@@ -3,6 +3,7 @@ package moe.hhm.shiori.user.security;
 import moe.hhm.shiori.common.security.GatewaySignUtils;
 import moe.hhm.shiori.common.security.GatewaySignVerifyFilter;
 import moe.hhm.shiori.user.auth.repository.AuthUserMapper;
+import moe.hhm.shiori.user.profile.repository.UserProfileMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -35,9 +36,12 @@ class UserServiceGatewaySignIntegrationTest {
     @MockitoBean
     private StringRedisTemplate stringRedisTemplate;
 
+    @MockitoBean
+    private UserProfileMapper userProfileMapper;
+
     @Test
     void shouldReturn401WhenSignHeadersMissing() throws Exception {
-        mockMvc.perform(get("/api/user/profile"))
+        mockMvc.perform(get("/api/user/me"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value(10003));
     }
@@ -47,10 +51,10 @@ class UserServiceGatewaySignIntegrationTest {
         String userId = "u1001";
         String roles = "ROLE_USER";
         String ts = String.valueOf(System.currentTimeMillis() - 600_000);
-        String sign = sign("GET", "/api/user/profile", null, userId, roles, ts);
+        String sign = sign("GET", "/api/user/me", null, userId, roles, ts);
         HttpHeaders headers = signedHeaders(userId, roles, ts, sign);
 
-        mockMvc.perform(get("/api/user/profile")
+        mockMvc.perform(get("/api/user/me")
                         .headers(headers))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value(10003));
@@ -72,13 +76,13 @@ class UserServiceGatewaySignIntegrationTest {
 
     @Test
     void shouldPassSecurityChainWithValidSign() throws Exception {
-        String userId = "u1001";
+        String userId = "1001";
         String roles = "ROLE_USER";
         String ts = String.valueOf(System.currentTimeMillis());
-        String sign = sign("GET", "/api/user/profile", null, userId, roles, ts);
+        String sign = sign("GET", "/api/user/me", null, userId, roles, ts);
         HttpHeaders headers = signedHeaders(userId, roles, ts, sign);
 
-        mockMvc.perform(get("/api/user/profile")
+        mockMvc.perform(get("/api/user/me")
                         .headers(headers))
                 .andExpect(result -> assertThat(result.getResponse().getStatus()).isNotIn(401, 403));
     }

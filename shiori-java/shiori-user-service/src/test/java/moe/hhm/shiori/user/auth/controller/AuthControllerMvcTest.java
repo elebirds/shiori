@@ -4,6 +4,7 @@ import java.util.List;
 import moe.hhm.shiori.common.mvc.GlobalExceptionHandler;
 import moe.hhm.shiori.common.mvc.ResultResponseBodyAdvice;
 import moe.hhm.shiori.user.auth.dto.AuthUserInfo;
+import moe.hhm.shiori.user.auth.dto.RegisterResponse;
 import moe.hhm.shiori.user.auth.dto.TokenPairResponse;
 import moe.hhm.shiori.user.auth.service.AuthService;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,6 +13,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
@@ -66,6 +69,23 @@ class AuthControllerMvcTest {
     }
 
     @Test
+    void shouldRegisterSuccess() throws Exception {
+        when(authService.register("alice", "newPwd123", "Alice"))
+                .thenReturn(new RegisterResponse(1L, "U202603030001", "alice", "Alice"));
+
+        mockMvc.perform(post("/api/user/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"username":"alice","password":"newPwd123","nickname":"Alice"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.username").value("alice"));
+
+        verify(authService).register("alice", "newPwd123", "Alice");
+    }
+
+    @Test
     void shouldReturnValidationErrorForBadLoginRequest() throws Exception {
         mockMvc.perform(post("/api/user/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -105,5 +125,22 @@ class AuthControllerMvcTest {
 
         verify(authService).refresh("r1");
         verify(authService).logout("r1");
+    }
+
+    @Test
+    void shouldChangePassword() throws Exception {
+        mockMvc.perform(post("/api/user/auth/change-password")
+                        .principal(new UsernamePasswordAuthenticationToken(
+                                "1", "N/A", java.util.List.of(new SimpleGrantedAuthority("ROLE_USER"))
+                        ))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"oldPassword":"oldPwd","newPassword":"newPwd123"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.success").value(true));
+
+        verify(authService).changePassword(1L, "oldPwd", "newPwd123");
     }
 }
