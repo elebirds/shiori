@@ -6,6 +6,7 @@ dependencies {
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
     compileOnly 'org.springframework.boot:spring-boot-webflux'
     compileOnly 'org.springframework:spring-web'
+    compileOnly 'org.springframework:spring-webmvc'
     compileOnly 'org.springframework:spring-webflux'
     compileOnly 'jakarta.servlet:jakarta.servlet-api'
     compileOnly 'jakarta.validation:jakarta.validation-api'
