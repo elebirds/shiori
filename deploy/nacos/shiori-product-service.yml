@@ -12,3 +12,15 @@ mybatis:
   mapper-locations: classpath*:mapper/**/*.xml
   configuration:
     map-underscore-to-camel-case: true
+
+storage:
+  oss:
+    enabled: true
+    endpoint: http://minio:9000
+    region: us-east-1
+    access-key: shiori
+    secret-key: shiori-minio-secret
+    bucket: shiori-product
+    path-style-access: true
+    presign-put-expire-seconds: 300
+    presign-get-expire-seconds: 300
