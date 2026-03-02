@@ -340,6 +340,37 @@ curl -X POST http://localhost:8080/api/order/orders/<orderNo>/pay \
   -d '{"paymentNo":"pay-demo-001"}'
 ```
 
+### 3.3) 一键端到端烟测（交易 + 通知）
+
+当网关、user/product/order、notify 均已启动后，可运行：
+
+```bash
+bash scripts/smoke/e2e_trade_notify.sh
+```
+
+脚本会自动执行：
+- 注册/登录 buyer + seller
+- seller 创建并发布商品（2 个 SKU）
+- buyer 下单并重复请求校验 `Idempotency-Key` 幂等
+- buyer 支付订单
+- buyer/seller 两端 WebSocket 均收到 `OrderPaid` 事件
+
+可选环境变量：
+
+```bash
+export GATEWAY_BASE_URL=http://localhost:8080
+export NOTIFY_WS_BASE_URL=ws://localhost:8090/ws
+export SMOKE_TIMEOUT_SECONDS=60
+export SMOKE_PREFIX=smoke
+```
+
+`ws-smoke` 探针命令（脚本内部也会调用）：
+
+```bash
+cd shiori-notify
+go run ./cmd/ws-smoke -base-url ws://localhost:8090/ws -user-id 1001 -expect-type OrderPaid -expect-aggregate Oxxxx -timeout 60s
+```
+
 ### 4) Run Frontend
 
 ```bash
