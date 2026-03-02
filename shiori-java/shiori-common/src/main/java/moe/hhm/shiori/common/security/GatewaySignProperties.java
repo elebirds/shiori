@@ -20,6 +20,9 @@ public class GatewaySignProperties {
             "/api/user/auth/refresh",
             "/api/user/auth/logout"
     ));
+    private List<String> anonymousGetPaths = new ArrayList<>(List.of(
+            "/api/product/**"
+    ));
 
     public boolean isEnabled() {
         return enabled;
@@ -51,5 +54,13 @@ public class GatewaySignProperties {
 
     public void setPermitAllPaths(List<String> permitAllPaths) {
         this.permitAllPaths = permitAllPaths;
+    }
+
+    public List<String> getAnonymousGetPaths() {
+        return anonymousGetPaths;
+    }
+
+    public void setAnonymousGetPaths(List<String> anonymousGetPaths) {
+        this.anonymousGetPaths = anonymousGetPaths;
     }
 }

@@ -180,6 +180,10 @@ docker compose up -d
 - `shiori_product`
 - `shiori_order`
 
+并启动 MinIO（商品图片对象存储）：
+- S3 API: `http://localhost:9000`
+- Console: `http://localhost:9001`
+
 ### 2) Run Core Services (Java)
 
 ```bash
@@ -209,11 +213,12 @@ cd shiori-java
 
 当前脚手架已启用“认证闭环第二阶段”：
 - 网关统一 JWT 验签（HMAC）
-- 认证接口白名单：`/api/user/auth/login|refresh|logout`
+- 认证接口白名单：`/api/user/auth/register|login|refresh|logout`
 - 业务接口默认受保护：`/api/**`
 - 管理路径：`/api/admin/**` 需要 `ROLE_ADMIN`
 - 网关向下游透传 `X-User-Id`、`X-User-Roles`
 - 网关为 `/api/**` 写入 `X-Gateway-Ts`、`X-Gateway-Sign`，业务服务执行签名校验作为第二道防线
+- `GET /api/product/**` 允许匿名读取（商品浏览）
 
 推荐通过 Nacos 配置中心下发密钥（dataId: `shiori-security.yml`，group: `DEFAULT_GROUP`）：
 
@@ -268,6 +273,11 @@ curl -i -X POST http://localhost:8080/api/user/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"alice","password":"password"}'
 
+# 注册（白名单接口，无需 Bearer）
+curl -i -X POST http://localhost:8080/api/user/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"alice","password":"password123","nickname":"Alice"}'
+
 # 刷新（白名单接口，无需 Bearer）
 curl -i -X POST http://localhost:8080/api/user/auth/refresh \
   -H "Content-Type: application/json" \
@@ -275,6 +285,26 @@ curl -i -X POST http://localhost:8080/api/user/auth/refresh \
 
 # 携带 Access Token 访问受保护路径（通过网关鉴权后再转发）
 curl -i -H "Authorization: Bearer <access-jwt>" http://localhost:8080/api/user/profile
+
+# 商品匿名浏览（无需 Bearer）
+curl -i http://localhost:8080/api/product/products
+```
+
+### 3.1) 商品域最小闭环（当前可用）
+
+商品服务当前已支持：
+- 图片预签名直传：`POST /api/product/media/presign-upload`
+- 商品读接口（匿名）：`GET /api/product/products`、`GET /api/product/products/{id}`
+- 商品写接口（需登录）：`POST /api/product/products`、`PUT /api/product/products/{id}`、`publish/off-shelf`
+- 库存交易接口（供后续订单服务）：`/api/product/internal/stock/deduct|release`（`bizNo + opType` 幂等）
+
+图片上传预签名示例：
+
+```bash
+curl -X POST http://localhost:8080/api/product/media/presign-upload \
+  -H "Authorization: Bearer <access-jwt>" \
+  -H "Content-Type: application/json" \
+  -d '{"fileName":"book-cover.jpg","contentType":"image/jpeg"}'
 ```
 
 ### 4) Run Frontend

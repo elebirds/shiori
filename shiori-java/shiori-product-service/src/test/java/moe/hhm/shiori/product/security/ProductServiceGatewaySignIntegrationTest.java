@@ -2,11 +2,13 @@ package moe.hhm.shiori.product.security;
 
 import moe.hhm.shiori.common.security.GatewaySignUtils;
 import moe.hhm.shiori.common.security.GatewaySignVerifyFilter;
+import moe.hhm.shiori.product.repository.ProductMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -25,6 +27,9 @@ class ProductServiceGatewaySignIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @MockitoBean
+    private ProductMapper productMapper;
 
     @Test
     void shouldReturn401WhenSignHeadersMissing() throws Exception {
@@ -68,6 +73,17 @@ class ProductServiceGatewaySignIntegrationTest {
         String ts = String.valueOf(System.currentTimeMillis());
         String sign = sign("GET", "/api/product/demo", null, userId, roles, ts);
         HttpHeaders headers = signedHeaders(userId, roles, ts, sign);
+
+        mockMvc.perform(get("/api/product/demo")
+                        .headers(headers))
+                .andExpect(result -> assertThat(result.getResponse().getStatus()).isNotIn(401, 403));
+    }
+
+    @Test
+    void shouldAllowAnonymousGetWhenSignValid() throws Exception {
+        String ts = String.valueOf(System.currentTimeMillis());
+        String sign = sign("GET", "/api/product/demo", null, "", "", ts);
+        HttpHeaders headers = signedHeaders("", "", ts, sign);
 
         mockMvc.perform(get("/api/product/demo")
                         .headers(headers))

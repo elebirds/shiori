@@ -7,6 +7,7 @@ import moe.hhm.shiori.common.error.CommonErrorCode;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -34,17 +35,24 @@ public class ServiceSecurityConfiguration {
                                                           ObjectProvider<ObjectMapper> objectMapperProvider) throws Exception {
         ObjectMapper objectMapper = objectMapperProvider.getIfAvailable(ObjectMapper::new);
         String[] permitAllPaths = properties.getPermitAllPaths().toArray(String[]::new);
+        String[] anonymousGetPaths = properties.getAnonymousGetPaths().toArray(String[]::new);
 
         return http
                 .csrf(csrf -> csrf.disable())
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(permitAllPaths).permitAll()
-                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        .requestMatchers("/api/**").authenticated()
-                        .anyRequest().permitAll())
+                .authorizeHttpRequests(auth -> {
+                    if (permitAllPaths.length > 0) {
+                        auth.requestMatchers(permitAllPaths).permitAll();
+                    }
+                    if (anonymousGetPaths.length > 0) {
+                        auth.requestMatchers(HttpMethod.GET, anonymousGetPaths).permitAll();
+                    }
+                    auth.requestMatchers("/api/admin/**").hasRole("ADMIN")
+                            .requestMatchers("/api/**").authenticated()
+                            .anyRequest().permitAll();
+                })
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((request, response, authException) ->
                                 writeSecurityError(response, objectMapper, CommonErrorCode.UNAUTHORIZED))

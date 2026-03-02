@@ -10,6 +10,7 @@ import moe.hhm.shiori.gateway.security.JwtClaimUtils;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
@@ -42,6 +43,7 @@ public class GatewaySecurityConfiguration {
                                                          GatewayAuthenticationEntryPoint authenticationEntryPoint,
                                                          GatewayAccessDeniedHandler accessDeniedHandler) {
         String[] whitelist = properties.getAuth().getWhitelist().toArray(String[]::new);
+        String[] anonymousGetPaths = properties.getAuth().getAnonymousGetPaths().toArray(String[]::new);
         return http
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
@@ -49,6 +51,9 @@ public class GatewaySecurityConfiguration {
                 .authorizeExchange(authorize -> {
                     if (whitelist.length > 0) {
                         authorize.pathMatchers(whitelist).permitAll();
+                    }
+                    if (anonymousGetPaths.length > 0) {
+                        authorize.pathMatchers(HttpMethod.GET, anonymousGetPaths).permitAll();
                     }
                     authorize.pathMatchers("/api/admin/**").hasRole("ADMIN")
                             .pathMatchers("/api/**").authenticated()

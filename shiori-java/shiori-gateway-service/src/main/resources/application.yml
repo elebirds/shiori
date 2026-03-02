@@ -46,6 +46,8 @@ security:
       - /api/user/auth/login
       - /api/user/auth/refresh
       - /api/user/auth/logout
+    anonymous-get-paths:
+      - /api/product/**
   gateway-sign:
     internal-secret: ${GATEWAY_SIGN_SECRET:change-me-internal-sign-secret-change-me}
     max-skew-seconds: ${GATEWAY_SIGN_MAX_SKEW_SECONDS:300}

@@ -143,6 +143,18 @@ class GatewaySecurityIntegrationTest {
         assertThat(status.value()).isNotEqualTo(403);
     }
 
+    @Test
+    void shouldAllowAnonymousOnProductGetPath() {
+        HttpStatusCode status = webTestClient().get()
+                .uri("/api/product/products")
+                .exchange()
+                .returnResult(String.class)
+                .getStatus();
+
+        assertThat(status.value()).isNotEqualTo(401);
+        assertThat(status.value()).isNotEqualTo(403);
+    }
+
     private String createToken(String userId, List<String> roles) throws JOSEException {
         Instant now = Instant.now();
         JWTClaimsSet claims = new JWTClaimsSet.Builder()
