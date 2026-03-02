@@ -184,6 +184,29 @@ cd shiori-java
 ./gradlew :shiori-order-service:bootRun
 ```
 
+### 2.1) Gateway 鉴权（第一阶段）
+
+当前脚手架已启用网关统一 JWT 验签（HMAC）：
+- 受保护路径：`/api/**`
+- 管理路径：`/api/admin/**` 需要 `ROLE_ADMIN`
+- 白名单路径：`/actuator/health/**`、`/v3/api-docs/**`、`/swagger-ui/**`、`/swagger-ui.html`
+
+推荐通过 Nacos 配置中心下发密钥（dataId: `shiori-security.yml`，group: `DEFAULT_GROUP`）：
+
+```yaml
+security:
+  jwt:
+    hmac-secret: "replace-with-your-32+bytes-secret"
+    issuer: "shiori"
+```
+
+本地临时调试也可直接使用环境变量：
+
+```bash
+export JWT_HMAC_SECRET='replace-with-your-32+bytes-secret'
+export JWT_ISSUER='shiori'
+```
+
 ### 3) Run Edge Notify (Go)
 
 ```bash
@@ -203,6 +226,16 @@ export RABBITMQ_ADDR=amqp://shiori:shiori@localhost:5672/
 export RABBITMQ_EXCHANGE=shiori.order.event
 export RABBITMQ_QUEUE=notify.order.paid
 export RABBITMQ_ROUTING_KEY=order.paid
+```
+
+鉴权快速验证（示例）：
+
+```bash
+# 未携带 Token，应返回 401（Result.code=20002）
+curl -i http://localhost:8080/api/user/profile
+
+# 携带有效 Token，可通过鉴权（状态通常为 404/503，取决于下游是否可达）
+curl -i -H "Authorization: Bearer <your-jwt>" http://localhost:8080/api/user/profile
 ```
 
 ### 4) Run Frontend
