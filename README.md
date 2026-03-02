@@ -13,7 +13,7 @@
 ### 🚀 核心/边缘异构微服务 (Core & Edge Polyglot)
 
 - **Java 核心域 (Spring Cloud 体系)**  
-  采用 **JDK 21 + Spring Boot 3.x + Spring Cloud（Gateway / OpenFeign）** 承载核心交易链路（用户/商品/订单/支付模拟）。  
+  采用 **JDK 21 + Spring Boot 4.0.x + Spring Cloud（Gateway / OpenFeign）** 承载核心交易链路（用户/商品/订单/支付模拟）。  
   重点落地：订单状态机、库存扣减、幂等控制、Outbox 事件发布、超时关单等可追问能力。
 
 - **Go 边缘域 (Gin + WebSocket)**  
