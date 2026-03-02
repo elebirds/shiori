@@ -55,6 +55,30 @@ func TestRouteOrderPaid(t *testing.T) {
 	}
 }
 
+func TestRouteOrderPaidWithNumericUserID(t *testing.T) {
+	hub := &mockHub{}
+	logger := zerolog.New(io.Discard)
+	r := New(hub, &logger)
+
+	env := event.Envelope{
+		EventID:     "evt-1n",
+		Type:        "OrderPaid",
+		AggregateID: "order-1n",
+		CreatedAt:   "2026-03-02T00:00:00Z",
+		Payload:     []byte(`{"userId":123}`),
+	}
+
+	if err := r.Route(context.Background(), env); err != nil {
+		t.Fatalf("unexpected route error: %v", err)
+	}
+	if hub.calls != 1 {
+		t.Fatalf("expected 1 call, got %d", hub.calls)
+	}
+	if hub.userID != "123" {
+		t.Fatalf("unexpected routed user: %s", hub.userID)
+	}
+}
+
 func TestRouteUnknownEvent(t *testing.T) {
 	hub := &mockHub{}
 	logger := zerolog.New(io.Discard)

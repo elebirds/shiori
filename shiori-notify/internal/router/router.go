@@ -1,10 +1,12 @@
 package router
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/hhm/shiori/shiori-notify/internal/event"
 	"github.com/hhm/shiori/shiori-notify/internal/ws"
@@ -23,7 +25,7 @@ type Router struct {
 }
 
 type orderPaidPayload struct {
-	UserID string `json:"userId"`
+	UserID json.RawMessage `json:"userId"`
 }
 
 func New(hub Hub, logger *zerolog.Logger) *Router {
@@ -52,7 +54,11 @@ func (r *Router) routeOrderPaid(ctx context.Context, env event.Envelope) error {
 	if err := json.Unmarshal(env.Payload, &payload); err != nil {
 		return fmt.Errorf("unmarshal order paid payload: %w", err)
 	}
-	if payload.UserID == "" {
+	userID, err := parseUserID(payload.UserID)
+	if err != nil {
+		return fmt.Errorf("parse order paid userId: %w", err)
+	}
+	if userID == "" {
 		return ErrMissingTargetUser
 	}
 
@@ -61,12 +67,12 @@ func (r *Router) routeOrderPaid(ctx context.Context, env event.Envelope) error {
 		return fmt.Errorf("marshal ws payload: %w", err)
 	}
 
-	sent, err := r.hub.SendToUser(payload.UserID, message)
+	sent, err := r.hub.SendToUser(userID, message)
 	if err != nil {
 		if errors.Is(err, ws.ErrNoSession) {
 			r.logger.Debug().
 				Str("eventId", env.EventID).
-				Str("userId", payload.UserID).
+				Str("userId", userID).
 				Msg("目标用户无活跃 WebSocket 会话")
 			return nil
 		}
@@ -75,8 +81,28 @@ func (r *Router) routeOrderPaid(ctx context.Context, env event.Envelope) error {
 
 	r.logger.Info().
 		Str("eventId", env.EventID).
-		Str("userId", payload.UserID).
+		Str("userId", userID).
 		Int("sent", sent).
 		Msg("订单支付事件路由完成")
 	return nil
+}
+
+func parseUserID(raw json.RawMessage) (string, error) {
+	if len(raw) == 0 {
+		return "", nil
+	}
+
+	var asString string
+	if err := json.Unmarshal(raw, &asString); err == nil {
+		return strings.TrimSpace(asString), nil
+	}
+
+	var asNumber json.Number
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	if err := decoder.Decode(&asNumber); err == nil {
+		return strings.TrimSpace(asNumber.String()), nil
+	}
+
+	return "", errors.New("userId must be string or number")
 }

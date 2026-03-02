@@ -6,7 +6,6 @@ import moe.hhm.shiori.order.service.OrderCommandService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -14,7 +13,6 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
 @Component
-@ConditionalOnBean(name = "rabbitListenerContainerFactory")
 @ConditionalOnProperty(prefix = "order.mq", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class OrderTimeoutConsumer {
 

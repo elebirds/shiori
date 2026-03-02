@@ -50,6 +50,8 @@ services:
       NACOS_AUTH_CACHE_ENABLE: "true"
     ports:
       - "8848:8848"
+      - "9848:9848"
+      - "9849:9849"
     networks:
       - shiori-net
 

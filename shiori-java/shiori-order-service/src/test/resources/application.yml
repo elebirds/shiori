@@ -1,0 +1,13 @@
+spring:
+  cloud:
+    nacos:
+      config:
+        enabled: false
+      discovery:
+        enabled: false
+
+order:
+  outbox:
+    enabled: false
+  mq:
+    enabled: false
