@@ -105,7 +105,7 @@
 ### 核心后端 (Core Services)
 
 * **主语言 & 框架:** Java 21 / Spring Boot 4.0.x / Spring Cloud (Gateway, OpenFeign)
-* **持久层:** MySQL 8.0 / MyBatis-Plus / Flyway
+* **持久层:** MySQL 8.0（单实例多库：`shiori_user`/`shiori_product`/`shiori_order`） / MyBatis-Plus / Flyway
 * **微服务大脑:** Nacos (服务注册与动态配置)
 * **接口文档:** SpringDoc OpenAPI 3 (Swagger UI)
 * **构建工具:** Gradle
@@ -149,7 +149,8 @@ shiori/
 ├── shiori-admin-web/                 # 💻 [管理端后台 Web] 请使用 WebStorm / VSCode 打开
 ├── deploy/                           # 🐳 [基础设施部署]
 │   ├── docker-compose.yml            # MySQL, Redis, RabbitMQ, (可选 Nacos/Prom/Grafana)
-│   └── sql/                          # Flyway 初始迁移脚本存放处
+│   ├── nacos/                        # Nacos dataId 配置模板（security / user / product / order）
+│   └── sql/                          # MySQL 初始化脚本（创建多库）与后续运维 SQL
 └── perf/                             # ⚡ [压测资产] k6 脚本与结果记录
     ├── k6-order.js
     ├── k6-ws.js
@@ -174,6 +175,11 @@ cd deploy
 docker compose up -d
 ```
 
+`docker-compose` 会通过 `deploy/sql/mysql-init/` 自动初始化业务数据库：
+- `shiori_user`
+- `shiori_product`
+- `shiori_order`
+
 ### 2) Run Core Services (Java)
 
 ```bash
@@ -183,6 +189,21 @@ cd shiori-java
 ./gradlew :shiori-product-service:bootRun
 ./gradlew :shiori-order-service:bootRun
 ```
+
+### 2.2) Nacos 数据源配置（必须）
+
+三大业务服务的数据源/Flyway/MyBatis 配置统一由 Nacos 下发：
+- dataId: `shiori-user-service.yml`
+- dataId: `shiori-product-service.yml`
+- dataId: `shiori-order-service.yml`
+
+可直接参考仓库模板：
+- `deploy/nacos/shiori-user-service.yml`
+- `deploy/nacos/shiori-product-service.yml`
+- `deploy/nacos/shiori-order-service.yml`
+
+网关 JWT 配置仍使用：
+- dataId: `shiori-security.yml`
 
 ### 2.1) Gateway 鉴权（第一阶段）
 
