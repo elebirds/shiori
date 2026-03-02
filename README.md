@@ -187,8 +187,22 @@ cd shiori-java
 ### 3) Run Edge Notify (Go)
 
 ```bash
-cd shiori-notify
+# ensure RabbitMQ is up
+cd deploy
+docker compose up -d rabbitmq
+
+cd ../shiori-notify
 go run .
+```
+
+常用环境变量（可选）：
+
+```bash
+export NOTIFY_HTTP_ADDR=:8090
+export RABBITMQ_ADDR=amqp://shiori:shiori@localhost:5672/
+export RABBITMQ_EXCHANGE=shiori.order.event
+export RABBITMQ_QUEUE=notify.order.paid
+export RABBITMQ_ROUTING_KEY=order.paid
 ```
 
 ### 4) Run Frontend
