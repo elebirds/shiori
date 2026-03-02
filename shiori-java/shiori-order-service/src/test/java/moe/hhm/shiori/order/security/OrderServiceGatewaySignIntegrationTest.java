@@ -2,11 +2,14 @@ package moe.hhm.shiori.order.security;
 
 import moe.hhm.shiori.common.security.GatewaySignUtils;
 import moe.hhm.shiori.common.security.GatewaySignVerifyFilter;
+import moe.hhm.shiori.order.service.OrderCommandService;
+import moe.hhm.shiori.order.service.OrderService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -26,6 +29,12 @@ class OrderServiceGatewaySignIntegrationTest {
     @Autowired
     private MockMvc mockMvc;
 
+    @MockitoBean
+    private OrderCommandService orderCommandService;
+
+    @MockitoBean
+    private OrderService orderService;
+
     @Test
     void shouldReturn401WhenSignHeadersMissing() throws Exception {
         mockMvc.perform(get("/api/order/demo"))
@@ -35,42 +44,39 @@ class OrderServiceGatewaySignIntegrationTest {
 
     @Test
     void shouldReturn401WhenTimestampExpired() throws Exception {
-        String userId = "u1001";
+        String userId = "1001";
         String roles = "ROLE_USER";
         String ts = String.valueOf(System.currentTimeMillis() - 600_000);
         String sign = sign("GET", "/api/order/demo", null, userId, roles, ts);
         HttpHeaders headers = signedHeaders(userId, roles, ts, sign);
 
-        mockMvc.perform(get("/api/order/demo")
-                        .headers(headers))
+        mockMvc.perform(get("/api/order/demo").headers(headers))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value(10003));
     }
 
     @Test
     void shouldReturn403WhenUserAccessAdminPath() throws Exception {
-        String userId = "u1001";
+        String userId = "1001";
         String roles = "ROLE_USER";
         String ts = String.valueOf(System.currentTimeMillis());
         String sign = sign("GET", "/api/admin/demo", null, userId, roles, ts);
         HttpHeaders headers = signedHeaders(userId, roles, ts, sign);
 
-        mockMvc.perform(get("/api/admin/demo")
-                        .headers(headers))
+        mockMvc.perform(get("/api/admin/demo").headers(headers))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value(10004));
     }
 
     @Test
     void shouldPassSecurityChainWithValidSign() throws Exception {
-        String userId = "u1001";
+        String userId = "1001";
         String roles = "ROLE_USER";
         String ts = String.valueOf(System.currentTimeMillis());
         String sign = sign("GET", "/api/order/demo", null, userId, roles, ts);
         HttpHeaders headers = signedHeaders(userId, roles, ts, sign);
 
-        mockMvc.perform(get("/api/order/demo")
-                        .headers(headers))
+        mockMvc.perform(get("/api/order/demo").headers(headers))
                 .andExpect(result -> assertThat(result.getResponse().getStatus()).isNotIn(401, 403));
     }
 

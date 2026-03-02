@@ -307,6 +307,39 @@ curl -X POST http://localhost:8080/api/product/media/presign-upload \
   -d '{"fileName":"book-cover.jpg","contentType":"image/jpeg"}'
 ```
 
+### 3.2) 订单域交易闭环（当前可用）
+
+订单服务当前已支持：
+- 下单（幂等）：`POST /api/order/orders`（必须 `Idempotency-Key`）
+- 我的订单分页：`GET /api/order/orders`
+- 订单详情：`GET /api/order/orders/{orderNo}`
+- 模拟支付：`POST /api/order/orders/{orderNo}/pay`
+- 主动取消：`POST /api/order/orders/{orderNo}/cancel`
+- 超时关单：通过 `OrderTimeout` 延迟消息（TTL + DLX）自动触发，消费时二次校验状态
+- Outbox 事件投递：`OrderCreated` / `OrderPaid` / `OrderCanceled`（`OrderPaid` 会分别给买家和卖家写事件）
+
+最小调用示例：
+
+```bash
+# 1) 创建订单（多 SKU，但限制同一卖家）
+curl -X POST http://localhost:8080/api/order/orders \
+  -H "Authorization: Bearer <access-jwt>" \
+  -H "Idempotency-Key: create-order-demo-001" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "items": [
+      {"productId": 1, "skuId": 11, "quantity": 1},
+      {"productId": 1, "skuId": 12, "quantity": 2}
+    ]
+  }'
+
+# 2) 支付订单（模拟）
+curl -X POST http://localhost:8080/api/order/orders/<orderNo>/pay \
+  -H "Authorization: Bearer <access-jwt>" \
+  -H "Content-Type: application/json" \
+  -d '{"paymentNo":"pay-demo-001"}'
+```
+
 ### 4) Run Frontend
 
 ```bash
