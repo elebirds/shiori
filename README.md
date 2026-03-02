@@ -180,6 +180,26 @@ docker compose up -d
 - `shiori_product`
 - `shiori_order`
 
+并通过一次性容器 `nacos-config-init` 自动导入 Nacos 配置（`deploy/nacos/*.yml`）：
+- `shiori-user-service.yml`
+- `shiori-product-service.yml`
+- `shiori-order-service.yml`
+- `shiori-security.yml`
+
+可用以下命令查看导入日志：
+
+```bash
+cd deploy
+docker compose logs nacos-config-init
+```
+
+如需手工重跑导入：
+
+```bash
+cd deploy
+docker compose run --rm nacos-config-init
+```
+
 并启动 MinIO（商品图片对象存储）：
 - S3 API: `http://localhost:9000`
 - Console: `http://localhost:9001`
@@ -201,13 +221,11 @@ cd shiori-java
 - dataId: `shiori-product-service.yml`
 - dataId: `shiori-order-service.yml`
 
-可直接参考仓库模板：
+脚手架默认通过 `nacos-config-init` 自动导入，模板仍位于：
 - `deploy/nacos/shiori-user-service.yml`
 - `deploy/nacos/shiori-product-service.yml`
 - `deploy/nacos/shiori-order-service.yml`
-
-网关 JWT 配置仍使用：
-- dataId: `shiori-security.yml`
+- `deploy/nacos/shiori-security.yml`
 
 ### 2.1) Gateway 鉴权（第二阶段）
 
