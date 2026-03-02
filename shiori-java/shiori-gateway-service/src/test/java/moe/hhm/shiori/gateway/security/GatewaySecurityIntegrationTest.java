@@ -14,7 +14,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.test.web.reactive.server.WebTestClient;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "security.jwt.hmac-secret=test-secret-test-secret-test-secret-1234",
@@ -73,11 +76,57 @@ class GatewaySecurityIntegrationTest {
     @Test
     void shouldPassSecurityWhenTokenValid() throws Exception {
         String token = createToken("u1001", List.of("USER"));
-        webTestClient().get()
+        HttpStatusCode status = webTestClient().get()
                 .uri("/api/user/profile")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                 .exchange()
-                .expectStatus().is5xxServerError();
+                .returnResult(String.class)
+                .getStatus();
+
+        assertThat(status.value()).isNotEqualTo(401);
+        assertThat(status.value()).isNotEqualTo(403);
+    }
+
+    @Test
+    void shouldAllowAnonymousOnAuthLoginPath() {
+        HttpStatusCode status = webTestClient().post()
+                .uri("/api/user/auth/login")
+                .header(HttpHeaders.CONTENT_TYPE, "application/json")
+                .bodyValue("{\"username\":\"alice\",\"password\":\"pwd\"}")
+                .exchange()
+                .returnResult(String.class)
+                .getStatus();
+
+        assertThat(status.value()).isNotEqualTo(401);
+        assertThat(status.value()).isNotEqualTo(403);
+    }
+
+    @Test
+    void shouldAllowAnonymousOnAuthRefreshPath() {
+        HttpStatusCode status = webTestClient().post()
+                .uri("/api/user/auth/refresh")
+                .header(HttpHeaders.CONTENT_TYPE, "application/json")
+                .bodyValue("{\"refreshToken\":\"x\"}")
+                .exchange()
+                .returnResult(String.class)
+                .getStatus();
+
+        assertThat(status.value()).isNotEqualTo(401);
+        assertThat(status.value()).isNotEqualTo(403);
+    }
+
+    @Test
+    void shouldAllowAnonymousOnAuthLogoutPath() {
+        HttpStatusCode status = webTestClient().post()
+                .uri("/api/user/auth/logout")
+                .header(HttpHeaders.CONTENT_TYPE, "application/json")
+                .bodyValue("{\"refreshToken\":\"x\"}")
+                .exchange()
+                .returnResult(String.class)
+                .getStatus();
+
+        assertThat(status.value()).isNotEqualTo(401);
+        assertThat(status.value()).isNotEqualTo(403);
     }
 
     private String createToken(String userId, List<String> roles) throws JOSEException {

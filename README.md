@@ -205,12 +205,15 @@ cd shiori-java
 网关 JWT 配置仍使用：
 - dataId: `shiori-security.yml`
 
-### 2.1) Gateway 鉴权（第一阶段）
+### 2.1) Gateway 鉴权（第二阶段）
 
-当前脚手架已启用网关统一 JWT 验签（HMAC）：
-- 受保护路径：`/api/**`
+当前脚手架已启用“认证闭环第二阶段”：
+- 网关统一 JWT 验签（HMAC）
+- 认证接口白名单：`/api/user/auth/login|refresh|logout`
+- 业务接口默认受保护：`/api/**`
 - 管理路径：`/api/admin/**` 需要 `ROLE_ADMIN`
-- 白名单路径：`/actuator/health/**`、`/v3/api-docs/**`、`/swagger-ui/**`、`/swagger-ui.html`
+- 网关向下游透传 `X-User-Id`、`X-User-Roles`
+- 网关为 `/api/**` 写入 `X-Gateway-Ts`、`X-Gateway-Sign`，业务服务执行签名校验作为第二道防线
 
 推荐通过 Nacos 配置中心下发密钥（dataId: `shiori-security.yml`，group: `DEFAULT_GROUP`）：
 
@@ -219,6 +222,11 @@ security:
   jwt:
     hmac-secret: "replace-with-your-32+bytes-secret"
     issuer: "shiori"
+    access-ttl-seconds: 900
+    refresh-ttl-seconds: 604800
+  gateway-sign:
+    internal-secret: "replace-with-your-internal-sign-secret"
+    max-skew-seconds: 300
 ```
 
 本地临时调试也可直接使用环境变量：
@@ -255,8 +263,18 @@ export RABBITMQ_ROUTING_KEY=order.paid
 # 未携带 Token，应返回 401（Result.code=20002）
 curl -i http://localhost:8080/api/user/profile
 
-# 携带有效 Token，可通过鉴权（状态通常为 404/503，取决于下游是否可达）
-curl -i -H "Authorization: Bearer <your-jwt>" http://localhost:8080/api/user/profile
+# 登录签发（白名单接口，无需 Bearer）
+curl -i -X POST http://localhost:8080/api/user/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"alice","password":"password"}'
+
+# 刷新（白名单接口，无需 Bearer）
+curl -i -X POST http://localhost:8080/api/user/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken":"<opaque-refresh-token>"}'
+
+# 携带 Access Token 访问受保护路径（通过网关鉴权后再转发）
+curl -i -H "Authorization: Bearer <access-jwt>" http://localhost:8080/api/user/profile
 ```
 
 ### 4) Run Frontend

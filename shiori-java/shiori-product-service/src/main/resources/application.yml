@@ -2,7 +2,9 @@ spring:
   application:
     name: shiori-product-service
   config:
-    import: optional:nacos:${spring.application.name}.yml?group=DEFAULT_GROUP&refreshEnabled=true
+    import:
+      - optional:nacos:${spring.application.name}.yml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:shiori-security.yml?group=DEFAULT_GROUP&refreshEnabled=true
   cloud:
     nacos:
       discovery:

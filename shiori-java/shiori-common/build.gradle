@@ -5,6 +5,9 @@ plugins {
 dependencies {
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
     compileOnly 'org.springframework.boot:spring-boot-webflux'
+    compileOnly 'org.springframework.security:spring-security-config'
+    compileOnly 'org.springframework.security:spring-security-core'
+    compileOnly 'org.springframework.security:spring-security-web'
     compileOnly 'org.springframework:spring-web'
     compileOnly 'org.springframework:spring-webmvc'
     compileOnly 'org.springframework:spring-webflux'

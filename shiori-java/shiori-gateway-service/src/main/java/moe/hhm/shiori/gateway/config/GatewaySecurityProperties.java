@@ -9,6 +9,7 @@ public class GatewaySecurityProperties {
 
     private final Jwt jwt = new Jwt();
     private final Auth auth = new Auth();
+    private final GatewaySign gatewaySign = new GatewaySign();
 
     public Jwt getJwt() {
         return jwt;
@@ -18,9 +19,15 @@ public class GatewaySecurityProperties {
         return auth;
     }
 
+    public GatewaySign getGatewaySign() {
+        return gatewaySign;
+    }
+
     public static class Jwt {
         private String hmacSecret;
         private String issuer;
+        private long accessTtlSeconds = 900;
+        private long refreshTtlSeconds = 604800;
 
         public String getHmacSecret() {
             return hmacSecret;
@@ -37,6 +44,22 @@ public class GatewaySecurityProperties {
         public void setIssuer(String issuer) {
             this.issuer = issuer;
         }
+
+        public long getAccessTtlSeconds() {
+            return accessTtlSeconds;
+        }
+
+        public void setAccessTtlSeconds(long accessTtlSeconds) {
+            this.accessTtlSeconds = accessTtlSeconds;
+        }
+
+        public long getRefreshTtlSeconds() {
+            return refreshTtlSeconds;
+        }
+
+        public void setRefreshTtlSeconds(long refreshTtlSeconds) {
+            this.refreshTtlSeconds = refreshTtlSeconds;
+        }
     }
 
     public static class Auth {
@@ -48,6 +71,27 @@ public class GatewaySecurityProperties {
 
         public void setWhitelist(List<String> whitelist) {
             this.whitelist = whitelist;
+        }
+    }
+
+    public static class GatewaySign {
+        private String internalSecret = "change-me-internal-sign-secret-change-me";
+        private long maxSkewSeconds = 300;
+
+        public String getInternalSecret() {
+            return internalSecret;
+        }
+
+        public void setInternalSecret(String internalSecret) {
+            this.internalSecret = internalSecret;
+        }
+
+        public long getMaxSkewSeconds() {
+            return maxSkewSeconds;
+        }
+
+        public void setMaxSkewSeconds(long maxSkewSeconds) {
+            this.maxSkewSeconds = maxSkewSeconds;
         }
     }
 }
