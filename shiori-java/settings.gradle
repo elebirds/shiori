@@ -1,0 +1,18 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+    }
+    plugins {
+        id 'org.springframework.boot' version '4.0.3'
+        id 'io.spring.dependency-management' version '1.1.7'
+    }
+}
+
+rootProject.name = 'shiori-java'
+
+include 'shiori-common'
+include 'shiori-gateway-service'
+include 'shiori-user-service'
+include 'shiori-product-service'
+include 'shiori-order-service'

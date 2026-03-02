@@ -132,6 +132,13 @@ When core services publish domain events:
   * `orderNo` / `paymentNo` are stable business identifiers
   * `eventId` is a UUID (or equivalent)
 
+### 3.4 Commit Message Convention
+
+* Use format: `type(module): 中文 msg`
+* Recommended `type`: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`
+* Example:
+  * `chore(scaffold): 初始化多模块微服务脚手架（Spring Boot 4 + Spring Cloud + Nacos）`
+
 ---
 
 ## 4) API & Event Schema Rules
@@ -239,4 +246,3 @@ When proposing a change, AI should provide:
 * [ ] Flyway migrations updated if schema changes
 * [ ] Tests updated or added
 * [ ] Docs updated if behavior/schema changed
-

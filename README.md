@@ -139,10 +139,10 @@ shiori/
 ├── shiori-java/                      # ☕ [核心微服务群] 请使用 IntelliJ IDEA 打开
 │   ├── build.gradle                  # 全局依赖管理
 │   ├── shiori-common/                # 全局异常、统一返回体 Result<T>、错误码、事件模型
-│   ├── shiori-gateway/               # API 网关与 JWT 统一鉴权拦截
-│   ├── shiori-user/                  # 用户服务
-│   ├── shiori-product/               # 商品/库存服务
-│   └── shiori-order/                 # 订单交易服务（Outbox + 超时关单）
+│   ├── shiori-gateway-service/       # API 网关与 JWT 统一鉴权拦截
+│   ├── shiori-user-service/          # 用户服务
+│   ├── shiori-product-service/       # 商品/库存服务
+│   └── shiori-order-service/         # 订单交易服务（Outbox + 超时关单）
 ├── shiori-notify/                    # 🐹 [推送边缘服务] 请使用 GoLand 打开
 │   └── main.go                       # 监听 MQ 并通过 WebSocket 推送前端
 ├── shiori-app/                       # 📱 [用户端小程序] 请使用 HBuilderX / VSCode 打开
@@ -178,10 +178,10 @@ docker compose up -d
 
 ```bash
 cd shiori-java
-./gradlew :shiori-gateway:bootRun
-./gradlew :shiori-user:bootRun
-./gradlew :shiori-product:bootRun
-./gradlew :shiori-order:bootRun
+./gradlew :shiori-gateway-service:bootRun
+./gradlew :shiori-user-service:bootRun
+./gradlew :shiori-product-service:bootRun
+./gradlew :shiori-order-service:bootRun
 ```
 
 ### 3) Run Edge Notify (Go)

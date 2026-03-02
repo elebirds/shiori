@@ -1,0 +1,19 @@
+# Monorepo common
+.DS_Store
+.idea/
+.vscode/
+*.iml
+*.log
+*.swp
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# Node.js
+**/node_modules/
+
+# Go
+**/bin/
+**/tmp/

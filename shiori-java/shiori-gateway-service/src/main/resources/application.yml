@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: shiori-gateway-service
+  config:
+    import: optional:nacos:${spring.application.name}.yml?group=DEFAULT_GROUP&refreshEnabled=true
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_ADDR:nacos:8848}
+      config:
+        server-addr: ${NACOS_ADDR:nacos:8848}
+      username: ${NACOS_USERNAME:nacos}
+      password: ${NACOS_PASSWORD:nacos}
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: user-service
+              uri: lb://shiori-user-service
+              predicates:
+                - Path=/api/user/**
+            - id: product-service
+              uri: lb://shiori-product-service
+              predicates:
+                - Path=/api/product/**
+            - id: order-service
+              uri: lb://shiori-order-service
+              predicates:
+                - Path=/api/order/**
+
+server:
+  port: 8080

@@ -1,0 +1,60 @@
+version: '3.9'
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: shiori-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: shiori
+      MYSQL_USER: shiori
+      MYSQL_PASSWORD: shiori
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - shiori-net
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: shiori-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - shiori-net
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: shiori-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: shiori
+      RABBITMQ_DEFAULT_PASS: shiori
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - shiori-net
+
+  nacos:
+    image: nacos/nacos-server:3.1.1
+    container_name: shiori-nacos
+    environment:
+      MODE: standalone
+      PREFER_HOST_MODE: hostname
+      NACOS_AUTH_ENABLE: "true"
+      NACOS_AUTH_TOKEN: "c2hpb3JpLXN0YWNrLXNlY3JldC1mb3ItbmFjb3MtYXV0aC1kZW1vLTIwMjYtMDMtMDI="
+      NACOS_AUTH_IDENTITY_KEY: shiori
+      NACOS_AUTH_IDENTITY_VALUE: shiori
+      NACOS_AUTH_CACHE_ENABLE: "true"
+    ports:
+      - "8848:8848"
+    networks:
+      - shiori-net
+
+networks:
+  shiori-net:
+    driver: bridge
+
+volumes:
+  mysql-data:
