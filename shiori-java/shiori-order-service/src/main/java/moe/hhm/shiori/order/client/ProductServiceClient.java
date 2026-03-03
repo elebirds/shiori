@@ -1,5 +1,9 @@
 package moe.hhm.shiori.order.client;
 
+import java.net.ConnectException;
+import java.net.NoRouteToHostException;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
 import java.util.List;
 import moe.hhm.shiori.common.api.Result;
 import moe.hhm.shiori.common.error.CommonErrorCode;
@@ -17,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
+import org.springframework.web.client.ResourceAccessException;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
@@ -52,8 +57,14 @@ public class ProductServiceClient {
                     .headers(headers -> fillSignedHeaders(headers, "GET", path, null, userId, roles))
                     .retrieve()
                     .body(PRODUCT_DETAIL_TYPE);
-            if (result == null || result.code() != Result.SUCCESS_CODE || result.data() == null) {
-                throw new BizException(OrderErrorCode.ORDER_PRODUCT_INVALID, HttpStatus.BAD_REQUEST);
+            if (result == null) {
+                throw new BizException(OrderErrorCode.ORDER_PRODUCT_RESPONSE_INVALID, HttpStatus.BAD_GATEWAY);
+            }
+            if (result.code() != Result.SUCCESS_CODE) {
+                throw mapRemoteFailure(HttpStatus.BAD_REQUEST.value(), result);
+            }
+            if (result.data() == null) {
+                throw new BizException(OrderErrorCode.ORDER_PRODUCT_RESPONSE_INVALID, HttpStatus.BAD_GATEWAY);
             }
             return result.data();
         } catch (RestClientResponseException ex) {
@@ -61,7 +72,7 @@ public class ProductServiceClient {
         } catch (BizException ex) {
             throw ex;
         } catch (RuntimeException ex) {
-            throw new BizException(CommonErrorCode.SERVICE_UNAVAILABLE, HttpStatus.SERVICE_UNAVAILABLE);
+            throw mapRuntimeException(ex);
         }
     }
 
@@ -112,8 +123,14 @@ public class ProductServiceClient {
                     .body(command)
                     .retrieve()
                     .body(STOCK_OPERATE_TYPE);
-            if (result == null || result.code() != Result.SUCCESS_CODE || result.data() == null) {
-                throw new BizException(CommonErrorCode.SERVICE_UNAVAILABLE, HttpStatus.SERVICE_UNAVAILABLE);
+            if (result == null) {
+                throw new BizException(OrderErrorCode.ORDER_PRODUCT_RESPONSE_INVALID, HttpStatus.BAD_GATEWAY);
+            }
+            if (result.code() != Result.SUCCESS_CODE) {
+                throw mapRemoteFailure(HttpStatus.BAD_REQUEST.value(), result);
+            }
+            if (result.data() == null) {
+                throw new BizException(OrderErrorCode.ORDER_PRODUCT_RESPONSE_INVALID, HttpStatus.BAD_GATEWAY);
             }
             return result.data();
         } catch (RestClientResponseException ex) {
@@ -121,12 +138,16 @@ public class ProductServiceClient {
         } catch (BizException ex) {
             throw ex;
         } catch (RuntimeException ex) {
-            throw new BizException(CommonErrorCode.SERVICE_UNAVAILABLE, HttpStatus.SERVICE_UNAVAILABLE);
+            throw mapRuntimeException(ex);
         }
     }
 
     private BizException mapRemoteException(RestClientResponseException ex) {
         Result<?> failure = parseFailure(ex.getResponseBodyAsString());
+        return mapRemoteFailure(ex.getStatusCode().value(), failure);
+    }
+
+    BizException mapRemoteFailure(int statusCode, Result<?> failure) {
         if (failure != null) {
             if (failure.code() == ProductErrorCode.STOCK_NOT_ENOUGH.code()) {
                 return new BizException(OrderErrorCode.ORDER_STOCK_NOT_ENOUGH, HttpStatus.CONFLICT);
@@ -136,6 +157,42 @@ public class ProductServiceClient {
                     || failure.code() == ProductErrorCode.PRODUCT_NOT_ON_SALE.code()) {
                 return new BizException(OrderErrorCode.ORDER_PRODUCT_INVALID, HttpStatus.BAD_REQUEST);
             }
+            if (failure.code() == CommonErrorCode.UNAUTHORIZED.code()
+                    || failure.code() == CommonErrorCode.FORBIDDEN.code()) {
+                return new BizException(OrderErrorCode.ORDER_PRODUCT_AUTH_FAILED, HttpStatus.BAD_GATEWAY);
+            }
+        }
+
+        if (statusCode == HttpStatus.UNAUTHORIZED.value() || statusCode == HttpStatus.FORBIDDEN.value()) {
+            return new BizException(OrderErrorCode.ORDER_PRODUCT_AUTH_FAILED, HttpStatus.BAD_GATEWAY);
+        }
+        if (statusCode == HttpStatus.NOT_FOUND.value()) {
+            return new BizException(OrderErrorCode.ORDER_PRODUCT_INVALID, HttpStatus.BAD_REQUEST);
+        }
+        if (statusCode == HttpStatus.REQUEST_TIMEOUT.value()
+                || statusCode == HttpStatus.GATEWAY_TIMEOUT.value()) {
+            return new BizException(OrderErrorCode.ORDER_PRODUCT_TIMEOUT, HttpStatus.GATEWAY_TIMEOUT);
+        }
+        if (statusCode >= HttpStatus.INTERNAL_SERVER_ERROR.value()) {
+            return new BizException(OrderErrorCode.ORDER_PRODUCT_SERVICE_ERROR, HttpStatus.BAD_GATEWAY);
+        }
+        if (statusCode >= HttpStatus.BAD_REQUEST.value()) {
+            return new BizException(OrderErrorCode.ORDER_PRODUCT_RESPONSE_INVALID, HttpStatus.BAD_GATEWAY);
+        }
+        return new BizException(CommonErrorCode.SERVICE_UNAVAILABLE, HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
+    BizException mapRuntimeException(RuntimeException ex) {
+        if (hasCause(ex, SocketTimeoutException.class)) {
+            return new BizException(OrderErrorCode.ORDER_PRODUCT_TIMEOUT, HttpStatus.GATEWAY_TIMEOUT);
+        }
+        if (hasCause(ex, UnknownHostException.class)
+                || hasCause(ex, ConnectException.class)
+                || hasCause(ex, NoRouteToHostException.class)) {
+            return new BizException(OrderErrorCode.ORDER_PRODUCT_UNREACHABLE, HttpStatus.SERVICE_UNAVAILABLE);
+        }
+        if (ex instanceof ResourceAccessException) {
+            return new BizException(OrderErrorCode.ORDER_PRODUCT_UNREACHABLE, HttpStatus.SERVICE_UNAVAILABLE);
         }
         return new BizException(CommonErrorCode.SERVICE_UNAVAILABLE, HttpStatus.SERVICE_UNAVAILABLE);
     }
@@ -150,5 +207,16 @@ public class ProductServiceClient {
         } catch (JacksonException e) {
             return null;
         }
+    }
+
+    private boolean hasCause(Throwable ex, Class<? extends Throwable> targetType) {
+        Throwable current = ex;
+        while (current != null) {
+            if (targetType.isInstance(current)) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 }

@@ -10,7 +10,12 @@ public enum OrderErrorCode implements ErrorCode {
     ORDER_NO_PERMISSION(50006, "无订单操作权限"),
     ORDER_DUPLICATE_REQUEST(50007, "重复下单请求"),
     ORDER_PAYMENT_CONFLICT(50008, "支付流水号冲突"),
-    ORDER_PRODUCT_INVALID(50009, "商品信息非法或不可下单");
+    ORDER_PRODUCT_INVALID(50009, "商品信息非法或不可下单"),
+    ORDER_PRODUCT_AUTH_FAILED(50010, "商品服务鉴权失败"),
+    ORDER_PRODUCT_UNREACHABLE(50011, "商品服务不可达"),
+    ORDER_PRODUCT_TIMEOUT(50012, "商品服务响应超时"),
+    ORDER_PRODUCT_SERVICE_ERROR(50013, "商品服务异常"),
+    ORDER_PRODUCT_RESPONSE_INVALID(50014, "商品服务响应异常");
 
     private final int code;
     private final String message;
