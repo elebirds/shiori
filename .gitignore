@@ -22,3 +22,6 @@
 # Go
 **/bin/
 **/tmp/
+
+# CI artifacts
+ci-logs/
