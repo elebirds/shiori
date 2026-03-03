@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
+import moe.hhm.shiori.common.error.CommonErrorCode;
 import moe.hhm.shiori.common.error.ProductErrorCode;
 import moe.hhm.shiori.common.exception.BizException;
 import moe.hhm.shiori.product.domain.ProductStatus;
@@ -41,14 +42,38 @@ public class ProductService {
     }
 
     public ProductPageResponse listOnSaleProducts(String keyword, int page, int size) {
-        int normalizedPage = Math.max(page, 1);
-        int normalizedSize = Math.min(Math.max(size, 1), 100);
+        int normalizedPage = normalizePage(page);
+        int normalizedSize = normalizeSize(size);
         int offset = (normalizedPage - 1) * normalizedSize;
         long total = productMapper.countOnSaleProducts(keyword);
         List<ProductRecord> records = productMapper.listOnSaleProducts(keyword, normalizedSize, offset);
         if (records == null) {
             records = List.of();
         }
+        List<ProductSummaryResponse> items = records.stream()
+                .map(this::toSummaryResponse)
+                .toList();
+        return new ProductPageResponse(total, normalizedPage, normalizedSize, items);
+    }
+
+    public ProductPageResponse listMyProducts(Long ownerUserId, String keyword, String status, int page, int size) {
+        int normalizedPage = normalizePage(page);
+        int normalizedSize = normalizeSize(size);
+        Integer statusCode = parseStatusCode(status);
+        int offset = (normalizedPage - 1) * normalizedSize;
+
+        long total = productMapper.countProductsByOwner(ownerUserId, keyword, statusCode);
+        List<ProductRecord> records = productMapper.listProductsByOwner(
+                ownerUserId,
+                keyword,
+                statusCode,
+                normalizedSize,
+                offset
+        );
+        if (records == null) {
+            records = List.of();
+        }
+
         List<ProductSummaryResponse> items = records.stream()
                 .map(this::toSummaryResponse)
                 .toList();
@@ -64,6 +89,13 @@ public class ProductService {
             }
             throw new BizException(ProductErrorCode.PRODUCT_NOT_ON_SALE, HttpStatus.BAD_REQUEST);
         }
+        List<SkuRecord> skus = productMapper.listActiveSkusByProductId(productId);
+        return toDetailResponse(product, skus);
+    }
+
+    public ProductDetailResponse getMyProductDetail(Long productId, Long userId, boolean admin) {
+        ProductRecord product = requireProduct(productId);
+        ensureOwnerOrAdmin(product, userId, admin);
         List<SkuRecord> skus = productMapper.listActiveSkusByProductId(productId);
         return toDetailResponse(product, skus);
     }
@@ -260,5 +292,24 @@ public class ProductService {
 
     private String generateSkuNo() {
         return "S" + System.currentTimeMillis() + ThreadLocalRandom.current().nextInt(1000, 10000);
+    }
+
+    private int normalizePage(int page) {
+        return Math.max(page, 1);
+    }
+
+    private int normalizeSize(int size) {
+        return Math.min(Math.max(size, 1), 100);
+    }
+
+    private Integer parseStatusCode(String status) {
+        if (!StringUtils.hasText(status)) {
+            return null;
+        }
+        try {
+            return ProductStatus.valueOf(status.trim().toUpperCase()).getCode();
+        } catch (IllegalArgumentException ex) {
+            throw new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST);
+        }
     }
 }

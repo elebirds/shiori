@@ -4,6 +4,7 @@ import java.util.List;
 import moe.hhm.shiori.common.exception.BizException;
 import moe.hhm.shiori.product.domain.ProductStatus;
 import moe.hhm.shiori.product.dto.CreateProductRequest;
+import moe.hhm.shiori.product.dto.ProductPageResponse;
 import moe.hhm.shiori.product.dto.ProductWriteResponse;
 import moe.hhm.shiori.product.dto.SkuInput;
 import moe.hhm.shiori.product.dto.UpdateProductRequest;
@@ -134,5 +135,25 @@ class ProductServiceTest {
         ArgumentCaptor<Long> removedSkuCaptor = ArgumentCaptor.forClass(Long.class);
         verify(productMapper).softDeleteSkuById(removedSkuCaptor.capture(), eq(1L));
         assertThat(removedSkuCaptor.getValue()).isEqualTo(11L);
+    }
+
+    @Test
+    void shouldListMyProductsWithStatusFilter() {
+        when(productMapper.countProductsByOwner(1001L, "java", ProductStatus.ON_SALE.getCode())).thenReturn(1L);
+        when(productMapper.listProductsByOwner(1001L, "java", ProductStatus.ON_SALE.getCode(), 10, 0)).thenReturn(List.of(
+                new ProductRecord(1L, "P001", 1001L, "Java Book", "desc", null, ProductStatus.ON_SALE.getCode(), 0)
+        ));
+
+        ProductPageResponse response = productService.listMyProducts(1001L, "java", "ON_SALE", 1, 10);
+
+        assertThat(response.total()).isEqualTo(1L);
+        assertThat(response.items()).hasSize(1);
+        assertThat(response.items().getFirst().status()).isEqualTo(ProductStatus.ON_SALE.name());
+    }
+
+    @Test
+    void shouldRejectUnknownStatusWhenListMyProducts() {
+        assertThatThrownBy(() -> productService.listMyProducts(1001L, null, "UNKNOWN", 1, 10))
+                .isInstanceOf(BizException.class);
     }
 }

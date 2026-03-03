@@ -1,0 +1,418 @@
+<script setup lang="ts">
+import { useMutation, useQuery } from '@tanstack/vue-query'
+import { computed, onUnmounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+
+import ResultState from '@/components/ResultState.vue'
+import { presignProductUpload, uploadByPresignedUrl } from '@/api/media'
+import { getMyProductDetail, offShelfProduct, publishProduct, updateProduct, type SkuInput } from '@/api/product'
+import { ApiBizError } from '@/types/result'
+
+interface DraftSku extends SkuInput {
+  localId: string
+}
+
+const route = useRoute()
+const router = useRouter()
+
+const productId = computed(() => Number(route.params.id))
+
+const form = reactive({
+  title: '',
+  description: '',
+  coverObjectKey: '',
+})
+const skus = ref<DraftSku[]>([])
+
+const coverPreviewUrl = ref('')
+const selectedCoverName = ref('')
+const uploadMessage = ref('')
+const uploadingCover = ref(false)
+const resultMessage = ref('')
+const resultError = ref('')
+
+const detailQuery = useQuery({
+  queryKey: computed(() => ['my-product-detail', productId.value]),
+  queryFn: () => getMyProductDetail(productId.value),
+  enabled: computed(() => Number.isFinite(productId.value) && productId.value > 0),
+})
+
+watch(
+  () => detailQuery.data.value,
+  (detail) => {
+    if (!detail) {
+      return
+    }
+    form.title = detail.title || ''
+    form.description = detail.description || ''
+    form.coverObjectKey = detail.coverObjectKey || ''
+    skus.value = detail.skus.map((sku) => ({
+      localId: crypto.randomUUID(),
+      id: sku.skuId,
+      skuName: sku.skuName,
+      specJson: sku.specJson || '',
+      priceCent: sku.priceCent,
+      stock: sku.stock,
+    }))
+  },
+  { immediate: true },
+)
+
+const updateMutation = useMutation({
+  mutationFn: () =>
+    updateProduct(productId.value, {
+      title: form.title.trim(),
+      description: form.description.trim() || undefined,
+      coverObjectKey: form.coverObjectKey.trim() || undefined,
+      skus: skus.value.map((item) => ({
+        id: item.id,
+        skuName: item.skuName.trim(),
+        specJson: item.specJson?.trim() || undefined,
+        priceCent: item.priceCent,
+        stock: item.stock,
+      })),
+    }),
+})
+
+const publishMutation = useMutation({
+  mutationFn: () => publishProduct(productId.value),
+  onSuccess: async () => {
+    await detailQuery.refetch()
+  },
+})
+
+const offShelfMutation = useMutation({
+  mutationFn: () => offShelfProduct(productId.value),
+  onSuccess: async () => {
+    await detailQuery.refetch()
+  },
+})
+
+const errorMessage = computed(() => (detailQuery.error.value instanceof Error ? detailQuery.error.value.message : ''))
+const status = computed(() => detailQuery.data.value?.status || '')
+
+function addSku(): void {
+  skus.value.push({
+    localId: crypto.randomUUID(),
+    skuName: '',
+    specJson: '',
+    priceCent: 100,
+    stock: 0,
+  })
+}
+
+function removeSku(localId: string): void {
+  if (skus.value.length <= 1) {
+    return
+  }
+  skus.value = skus.value.filter((item) => item.localId !== localId)
+}
+
+function validate(): string | null {
+  if (!form.title.trim()) {
+    return '商品标题不能为空'
+  }
+  if (skus.value.length === 0) {
+    return '请至少保留一个 SKU'
+  }
+
+  for (const item of skus.value) {
+    if (!item.skuName.trim()) {
+      return 'SKU 名称不能为空'
+    }
+    if (!Number.isInteger(item.priceCent) || item.priceCent <= 0) {
+      return 'SKU 价格必须为正整数（分）'
+    }
+    if (!Number.isInteger(item.stock) || item.stock < 0) {
+      return 'SKU 库存必须为非负整数'
+    }
+  }
+
+  return null
+}
+
+async function handleCoverChange(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) {
+    return
+  }
+
+  uploadMessage.value = ''
+  resultError.value = ''
+  uploadingCover.value = true
+
+  try {
+    const presigned = await presignProductUpload({
+      fileName: file.name,
+      contentType: file.type || undefined,
+    })
+    await uploadByPresignedUrl(presigned.uploadUrl, file, presigned.requiredHeaders)
+
+    form.coverObjectKey = presigned.objectKey
+    selectedCoverName.value = file.name
+    uploadMessage.value = '封面上传成功'
+
+    if (coverPreviewUrl.value) {
+      URL.revokeObjectURL(coverPreviewUrl.value)
+    }
+    coverPreviewUrl.value = URL.createObjectURL(file)
+  } catch (error) {
+    if (error instanceof ApiBizError) {
+      resultError.value = error.message
+    } else if (error instanceof Error) {
+      resultError.value = error.message
+    } else {
+      resultError.value = '封面上传失败'
+    }
+  } finally {
+    uploadingCover.value = false
+    input.value = ''
+  }
+}
+
+async function handleSubmit(): Promise<void> {
+  resultError.value = ''
+  resultMessage.value = ''
+
+  const validationError = validate()
+  if (validationError) {
+    resultError.value = validationError
+    return
+  }
+
+  try {
+    const result = await updateMutation.mutateAsync()
+    resultMessage.value = `更新成功（${result.status}）`
+    await detailQuery.refetch()
+  } catch (error) {
+    if (error instanceof ApiBizError) {
+      resultError.value = error.message
+    } else if (error instanceof Error) {
+      resultError.value = error.message
+    } else {
+      resultError.value = '更新失败'
+    }
+  }
+}
+
+async function handlePublish(): Promise<void> {
+  resultError.value = ''
+  resultMessage.value = ''
+  try {
+    const result = await publishMutation.mutateAsync()
+    resultMessage.value = `上架成功（${result.status}）`
+  } catch (error) {
+    if (error instanceof ApiBizError) {
+      resultError.value = error.message
+    }
+  }
+}
+
+async function handleOffShelf(): Promise<void> {
+  resultError.value = ''
+  resultMessage.value = ''
+  try {
+    const result = await offShelfMutation.mutateAsync()
+    resultMessage.value = `下架成功（${result.status}）`
+  } catch (error) {
+    if (error instanceof ApiBizError) {
+      resultError.value = error.message
+    }
+  }
+}
+
+onUnmounted(() => {
+  if (coverPreviewUrl.value) {
+    URL.revokeObjectURL(coverPreviewUrl.value)
+  }
+})
+</script>
+
+<template>
+  <section class="space-y-4">
+    <button
+      type="button"
+      class="rounded-lg border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
+      @click="router.push('/my-products')"
+    >
+      返回我的商品
+    </button>
+
+    <ResultState :loading="detailQuery.isLoading.value" :error="errorMessage" :empty="!detailQuery.isLoading.value && !detailQuery.data.value" empty-text="商品不存在">
+      <form class="space-y-4 rounded-2xl border border-stone-200 bg-white/95 p-5" @submit.prevent="handleSubmit">
+        <div class="flex items-center justify-between">
+          <h1 class="font-display text-2xl text-stone-900">编辑商品</h1>
+          <span
+            class="rounded-full px-3 py-1 text-xs font-semibold"
+            :class="
+              status === 'ON_SALE'
+                ? 'bg-emerald-100 text-emerald-700'
+                : status === 'OFF_SHELF'
+                  ? 'bg-stone-200 text-stone-700'
+                  : 'bg-amber-100 text-amber-700'
+            "
+          >
+            {{ status || 'UNKNOWN' }}
+          </span>
+        </div>
+
+        <div class="grid gap-3 sm:grid-cols-2">
+          <label class="text-sm text-stone-700 sm:col-span-2">
+            商品标题
+            <input
+              v-model.trim="form.title"
+              type="text"
+              class="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2 outline-none transition focus:border-amber-500"
+            />
+          </label>
+
+          <label class="text-sm text-stone-700 sm:col-span-2">
+            商品描述
+            <textarea
+              v-model.trim="form.description"
+              rows="4"
+              class="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2 outline-none transition focus:border-amber-500"
+            />
+          </label>
+
+          <div class="space-y-2 sm:col-span-2">
+            <label class="block text-sm text-stone-700">
+              更换封面（OSS 预签名直传）
+              <input
+                type="file"
+                accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                class="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2 text-sm"
+                :disabled="uploadingCover"
+                @change="handleCoverChange"
+              />
+            </label>
+            <p class="text-xs text-stone-500">支持 jpg/jpeg/png/webp，上传后自动回填 objectKey。</p>
+            <p v-if="selectedCoverName" class="text-xs text-stone-600">已选文件：{{ selectedCoverName }}</p>
+            <p v-if="uploadingCover" class="text-xs text-amber-700">正在上传封面...</p>
+            <p v-if="uploadMessage" class="text-xs text-emerald-700">{{ uploadMessage }}</p>
+          </div>
+
+          <label class="text-sm text-stone-700 sm:col-span-2">
+            封面 object key
+            <input
+              v-model.trim="form.coverObjectKey"
+              type="text"
+              class="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2 outline-none transition focus:border-amber-500"
+            />
+          </label>
+
+          <div v-if="coverPreviewUrl || detailQuery.data.value?.coverImageUrl" class="sm:col-span-2">
+            <p class="mb-1 text-xs text-stone-600">封面预览</p>
+            <img
+              :src="coverPreviewUrl || detailQuery.data.value?.coverImageUrl"
+              alt="封面预览"
+              class="h-48 w-full rounded-xl border border-stone-200 object-cover sm:w-72"
+            />
+          </div>
+        </div>
+
+        <section class="space-y-3">
+          <div class="flex items-center justify-between">
+            <h2 class="text-base font-semibold text-stone-900">SKU 列表</h2>
+            <button
+              type="button"
+              class="rounded-lg border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
+              @click="addSku"
+            >
+              添加 SKU
+            </button>
+          </div>
+
+          <article v-for="(sku, index) in skus" :key="sku.localId" class="grid gap-2 rounded-xl border border-stone-200 bg-stone-50 p-3 sm:grid-cols-2">
+            <label class="text-sm text-stone-700">
+              SKU 名称
+              <input
+                v-model.trim="sku.skuName"
+                type="text"
+                class="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 outline-none transition focus:border-amber-500"
+                :placeholder="`SKU ${index + 1}`"
+              />
+            </label>
+
+            <label class="text-sm text-stone-700">
+              规格描述
+              <input
+                v-model.trim="sku.specJson"
+                type="text"
+                class="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 outline-none transition focus:border-amber-500"
+              />
+            </label>
+
+            <label class="text-sm text-stone-700">
+              价格（分）
+              <input
+                v-model.number="sku.priceCent"
+                type="number"
+                min="1"
+                step="1"
+                class="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 outline-none transition focus:border-amber-500"
+              />
+            </label>
+
+            <label class="text-sm text-stone-700">
+              库存
+              <input
+                v-model.number="sku.stock"
+                type="number"
+                min="0"
+                step="1"
+                class="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 outline-none transition focus:border-amber-500"
+              />
+            </label>
+
+            <div class="sm:col-span-2">
+              <button
+                type="button"
+                class="rounded-lg border border-rose-300 px-3 py-1.5 text-xs text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                :disabled="skus.length <= 1"
+                @click="removeSku(sku.localId)"
+              >
+                删除该 SKU
+              </button>
+            </div>
+          </article>
+        </section>
+
+        <div class="flex flex-wrap gap-2">
+          <button
+            type="submit"
+            class="rounded-xl bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-70"
+            :disabled="updateMutation.isPending.value"
+          >
+            {{ updateMutation.isPending.value ? '保存中...' : '保存修改' }}
+          </button>
+
+          <button
+            v-if="status !== 'ON_SALE'"
+            type="button"
+            class="rounded-xl border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-70"
+            :disabled="publishMutation.isPending.value"
+            @click="handlePublish"
+          >
+            {{ publishMutation.isPending.value ? '上架中...' : '上架商品' }}
+          </button>
+
+          <button
+            v-if="status === 'ON_SALE'"
+            type="button"
+            class="rounded-xl border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-70"
+            :disabled="offShelfMutation.isPending.value"
+            @click="handleOffShelf"
+          >
+            {{ offShelfMutation.isPending.value ? '下架中...' : '下架商品' }}
+          </button>
+        </div>
+
+        <p v-if="resultError" class="text-sm text-rose-600">{{ resultError }}</p>
+        <p v-if="resultMessage" class="text-sm text-emerald-700">{{ resultMessage }}</p>
+      </form>
+    </ResultState>
+  </section>
+</template>
+

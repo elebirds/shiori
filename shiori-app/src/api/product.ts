@@ -44,6 +44,12 @@ export interface ProductQuery {
   keyword?: string
 }
 
+export type ProductStatus = 'DRAFT' | 'ON_SALE' | 'OFF_SHELF'
+
+export interface MyProductQuery extends ProductQuery {
+  status?: ProductStatus
+}
+
 export interface SkuInput {
   id?: number
   skuName: string
@@ -71,6 +77,14 @@ export function listProducts(query: ProductQuery): Promise<ProductPageResponse> 
 
 export function getProductDetail(productId: number): Promise<ProductDetailResponse> {
   return httpGet<ProductDetailResponse>(`/api/product/products/${productId}`)
+}
+
+export function listMyProducts(query: MyProductQuery): Promise<ProductPageResponse> {
+  return httpGet<ProductPageResponse>('/api/product/my/products', { params: query })
+}
+
+export function getMyProductDetail(productId: number): Promise<ProductDetailResponse> {
+  return httpGet<ProductDetailResponse>(`/api/product/my/products/${productId}`)
 }
 
 export function createProduct(payload: ProductWriteRequest): Promise<ProductWriteResponse> {

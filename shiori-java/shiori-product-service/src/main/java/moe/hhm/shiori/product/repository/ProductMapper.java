@@ -128,6 +128,55 @@ public interface ProductMapper {
             """)
     long countOnSaleProducts(@Param("keyword") String keyword);
 
+    @Select("""
+            <script>
+            SELECT id,
+                   product_no AS productNo,
+                   owner_user_id AS ownerUserId,
+                   title,
+                   description,
+                   cover_object_key AS coverObjectKey,
+                   status,
+                   is_deleted AS isDeleted
+            FROM p_product
+            WHERE is_deleted = 0
+              AND owner_user_id = #{ownerUserId}
+            <if test="keyword != null and keyword != ''">
+              AND (title LIKE CONCAT('%', #{keyword}, '%')
+                   OR description LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="status != null">
+              AND status = #{status}
+            </if>
+            ORDER BY id DESC
+            LIMIT #{size} OFFSET #{offset}
+            </script>
+            """)
+    List<ProductRecord> listProductsByOwner(@Param("ownerUserId") Long ownerUserId,
+                                            @Param("keyword") String keyword,
+                                            @Param("status") Integer status,
+                                            @Param("size") int size,
+                                            @Param("offset") int offset);
+
+    @Select("""
+            <script>
+            SELECT COUNT(1)
+            FROM p_product
+            WHERE is_deleted = 0
+              AND owner_user_id = #{ownerUserId}
+            <if test="keyword != null and keyword != ''">
+              AND (title LIKE CONCAT('%', #{keyword}, '%')
+                   OR description LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="status != null">
+              AND status = #{status}
+            </if>
+            </script>
+            """)
+    long countProductsByOwner(@Param("ownerUserId") Long ownerUserId,
+                              @Param("keyword") String keyword,
+                              @Param("status") Integer status);
+
     @Update("""
             UPDATE p_product
             SET status = #{status},
