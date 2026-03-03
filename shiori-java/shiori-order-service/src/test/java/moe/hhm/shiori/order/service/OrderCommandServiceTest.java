@@ -76,6 +76,27 @@ class OrderCommandServiceTest {
     }
 
     @Test
+    void shouldRejectSelfPurchase() {
+        CreateOrderRequest request = new CreateOrderRequest(List.of(
+                new CreateOrderItem(1L, 11L, 1)
+        ));
+        when(orderMapper.findOrderNoByBuyerAndIdempotencyKey(1001L, "idem-self")).thenReturn(null);
+        when(productServiceClient.getProductDetail(1L, 1001L, List.of("ROLE_USER")))
+                .thenReturn(product(1L, "P1", 1001L, 11L, "S11", 1200L));
+
+        BizException ex;
+        try {
+            orderCommandService.createOrder(1001L, List.of("ROLE_USER"), "idem-self", request);
+            throw new AssertionError("expected BizException");
+        } catch (BizException actual) {
+            ex = actual;
+        }
+
+        assertThat(ex.getErrorCode().code()).isEqualTo(50015);
+        verify(productServiceClient, never()).deductStock(anyLong(), any(), anyString(), anyLong(), anyList());
+    }
+
+    @Test
     void shouldReturnIdempotentCreateResponseWhenOrderExists() {
         when(orderMapper.findOrderNoByBuyerAndIdempotencyKey(1001L, "idem-2")).thenReturn("O202603030001");
         when(orderMapper.findOrderByOrderNo("O202603030001"))

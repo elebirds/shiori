@@ -349,6 +349,9 @@ public class OrderCommandService {
             if (product == null || !"ON_SALE".equals(product.status())) {
                 throw new BizException(OrderErrorCode.ORDER_PRODUCT_INVALID, HttpStatus.BAD_REQUEST);
             }
+            if (Objects.equals(buyerUserId, product.ownerUserId())) {
+                throw new BizException(OrderErrorCode.ORDER_SELF_PURCHASE_NOT_ALLOWED, HttpStatus.BAD_REQUEST);
+            }
             if (sellerUserId == null) {
                 sellerUserId = product.ownerUserId();
             } else if (!sellerUserId.equals(product.ownerUserId())) {

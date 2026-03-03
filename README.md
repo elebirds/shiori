@@ -438,6 +438,7 @@ curl -X POST http://localhost:8080/api/product/media/presign-upload \
 
 订单服务当前已支持：
 - 下单（幂等）：`POST /api/order/orders`（必须 `Idempotency-Key`）
+- 下单规则：不允许购买自己发布的商品（违规则返回 `50015 ORDER_SELF_PURCHASE_NOT_ALLOWED`）
 - 我的订单分页：`GET /api/order/orders`
 - 订单详情：`GET /api/order/orders/{orderNo}`
 - 模拟支付：`POST /api/order/orders/{orderNo}/pay`
