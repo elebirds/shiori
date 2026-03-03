@@ -21,21 +21,26 @@ type Hub interface {
 	SendToUser(userID string, payload []byte) (int, error)
 }
 
+type EventStore interface {
+	Save(userID string, env event.Envelope) bool
+}
+
 type Router struct {
-	hub    Hub
-	logger *zerolog.Logger
+	hub        Hub
+	eventStore EventStore
+	logger     *zerolog.Logger
 }
 
 type orderPaidPayload struct {
 	UserID json.RawMessage `json:"userId"`
 }
 
-func New(hub Hub, logger *zerolog.Logger) *Router {
+func New(hub Hub, eventStore EventStore, logger *zerolog.Logger) *Router {
 	if logger == nil {
 		nop := zerolog.Nop()
 		logger = &nop
 	}
-	return &Router{hub: hub, logger: logger}
+	return &Router{hub: hub, eventStore: eventStore, logger: logger}
 }
 
 func (r *Router) Route(ctx context.Context, env event.Envelope) error {
@@ -68,6 +73,16 @@ func (r *Router) routeOrderPaid(ctx context.Context, env event.Envelope) error {
 	if userID == "" {
 		metrics.AddWSPush("missing_user", env.Type, 1)
 		return ErrMissingTargetUser
+	}
+	if r.eventStore != nil {
+		if saved := r.eventStore.Save(userID, env); !saved {
+			metrics.AddWSPush("deduplicated", env.Type, 1)
+			r.logger.Debug().
+				Str("eventId", env.EventID).
+				Str("userId", userID).
+				Msg("检测到重复事件，跳过重复推送")
+			return nil
+		}
 	}
 
 	message, err := json.Marshal(env)

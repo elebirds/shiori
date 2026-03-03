@@ -16,6 +16,10 @@ const (
 	defaultRabbitMQQueue    = "notify.order.paid"
 	defaultRabbitMQRouteKey = "order.paid"
 	defaultMetricsEnabled   = true
+	defaultStoreMaxPerUser  = 1000
+	defaultReplayLimit      = 50
+	defaultReplayMaxLimit   = 200
+	defaultWSReplayLimit    = 100
 )
 
 var (
@@ -33,6 +37,10 @@ type Config struct {
 	WSWriteTimeout     time.Duration
 	WSPingInterval     time.Duration
 	MetricsEnabled     bool
+	StoreMaxPerUser    int
+	ReplayDefaultLimit int
+	ReplayMaxLimit     int
+	WSReplayLimit      int
 }
 
 func Load() Config {
@@ -46,6 +54,10 @@ func Load() Config {
 		WSWriteTimeout:     parseDurationOrDefault("WS_WRITE_TIMEOUT", defaultWSWriteTimeout),
 		WSPingInterval:     parseDurationOrDefault("WS_PING_INTERVAL", defaultWSPingInterval),
 		MetricsEnabled:     parseBoolOrDefault("NOTIFY_METRICS_ENABLED", defaultMetricsEnabled),
+		StoreMaxPerUser:    parseIntOrDefault("NOTIFY_EVENT_STORE_MAX_PER_USER", defaultStoreMaxPerUser),
+		ReplayDefaultLimit: parseIntOrDefault("NOTIFY_REPLAY_DEFAULT_LIMIT", defaultReplayLimit),
+		ReplayMaxLimit:     parseIntOrDefault("NOTIFY_REPLAY_MAX_LIMIT", defaultReplayMaxLimit),
+		WSReplayLimit:      parseIntOrDefault("NOTIFY_WS_REPLAY_DEFAULT_LIMIT", defaultWSReplayLimit),
 	}
 }
 
@@ -88,6 +100,18 @@ func parseBoolOrDefault(key string, fallback bool) bool {
 	}
 	parsed, err := strconv.ParseBool(value)
 	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
+func parseIntOrDefault(key string, fallback int) int {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed <= 0 {
 		return fallback
 	}
 	return parsed

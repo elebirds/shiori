@@ -15,10 +15,12 @@ const labelUnknown = "unknown"
 var (
 	registerOnce sync.Once
 
-	wsConnections   prometheus.Gauge
-	wsPushTotal     *prometheus.CounterVec
-	mqConsumeTotal  *prometheus.CounterVec
-	mqRouteDuration *prometheus.HistogramVec
+	wsConnections     prometheus.Gauge
+	wsPushTotal       *prometheus.CounterVec
+	mqConsumeTotal    *prometheus.CounterVec
+	mqRouteDuration   *prometheus.HistogramVec
+	replayQueryTotal  *prometheus.CounterVec
+	replayEventsTotal *prometheus.CounterVec
 )
 
 func register() {
@@ -40,8 +42,23 @@ func register() {
 			Help:    "MQ event routing duration in seconds grouped by event type",
 			Buckets: prometheus.DefBuckets,
 		}, []string{"event_type"})
+		replayQueryTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "shiori_notify_replay_query_total",
+			Help: "Total replay queries grouped by source and result",
+		}, []string{"source", "result"})
+		replayEventsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "shiori_notify_replay_events_total",
+			Help: "Total replay events delivered grouped by source",
+		}, []string{"source"})
 
-		prometheus.MustRegister(wsConnections, wsPushTotal, mqConsumeTotal, mqRouteDuration)
+		prometheus.MustRegister(
+			wsConnections,
+			wsPushTotal,
+			mqConsumeTotal,
+			mqRouteDuration,
+			replayQueryTotal,
+			replayEventsTotal,
+		)
 	})
 }
 
@@ -71,6 +88,19 @@ func IncMQConsume(result, eventType string) {
 func ObserveMQRouteDuration(eventType string, duration time.Duration) {
 	register()
 	mqRouteDuration.WithLabelValues(sanitizeLabel(eventType)).Observe(duration.Seconds())
+}
+
+func IncReplayQuery(source, result string) {
+	register()
+	replayQueryTotal.WithLabelValues(sanitizeLabel(source), sanitizeLabel(result)).Inc()
+}
+
+func AddReplayEvents(source string, count int) {
+	if count <= 0 {
+		return
+	}
+	register()
+	replayEventsTotal.WithLabelValues(sanitizeLabel(source)).Add(float64(count))
 }
 
 func sanitizeLabel(value string) string {

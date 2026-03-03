@@ -9,6 +9,7 @@ import (
 	notifyhttp "github.com/hhm/shiori/shiori-notify/internal/http"
 	"github.com/hhm/shiori/shiori-notify/internal/mq"
 	"github.com/hhm/shiori/shiori-notify/internal/router"
+	"github.com/hhm/shiori/shiori-notify/internal/store"
 	"github.com/hhm/shiori/shiori-notify/internal/ws"
 	"github.com/rs/zerolog"
 )
@@ -26,8 +27,9 @@ func New(cfg config.Config, logger *zerolog.Logger) *App {
 	}
 
 	hub := ws.NewHub()
-	r := router.New(hub, logger)
-	httpSrv := notifyhttp.NewServer(cfg, hub, logger)
+	eventStore := store.NewMemoryEventStore(cfg.StoreMaxPerUser)
+	r := router.New(hub, eventStore, logger)
+	httpSrv := notifyhttp.NewServer(cfg, hub, eventStore, logger)
 	consumer := mq.NewConsumer(cfg, r, logger)
 
 	return &App{

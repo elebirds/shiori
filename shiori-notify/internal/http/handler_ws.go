@@ -1,6 +1,7 @@
 package notifyhttp
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -24,6 +25,7 @@ func (s *Server) handleWS(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "userId is required"})
 		return
 	}
+	lastEventID := strings.TrimSpace(c.Query("lastEventId"))
 
 	conn, err := wsUpgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
@@ -37,8 +39,11 @@ func (s *Server) handleWS(c *gin.Context) {
 	metrics.SetWSConnections(connections)
 	s.logger.Info().
 		Str("userId", userID).
+		Str("lastEventId", lastEventID).
 		Int("connections", connections).
 		Msg("WebSocket 连接已建立")
+
+	s.replayForWS(userID, lastEventID, client)
 
 	go client.Run(func() {
 		s.hub.Remove(userID, client)
@@ -49,4 +54,51 @@ func (s *Server) handleWS(c *gin.Context) {
 			Int("connections", connections).
 			Msg("WebSocket 连接已断开")
 	})
+}
+
+func (s *Server) replayForWS(userID, afterEventID string, client *ws.Client) {
+	if s.replayStore == nil || client == nil {
+		return
+	}
+
+	limit := s.cfg.WSReplayLimit
+	if limit <= 0 {
+		limit = s.cfg.ReplayDefaultLimit
+	}
+	items, nextEventID, hasMore := s.replayStore.List(userID, afterEventID, limit)
+	metrics.IncReplayQuery("ws", "success")
+	metrics.AddReplayEvents("ws", len(items))
+	if len(items) == 0 {
+		return
+	}
+
+	delivered := 0
+	for i := range items {
+		payload, err := json.Marshal(items[i])
+		if err != nil {
+			metrics.IncReplayQuery("ws", "marshal_error")
+			s.logger.Warn().Err(err).
+				Str("eventId", items[i].EventID).
+				Str("userId", userID).
+				Msg("补偿事件序列化失败，跳过")
+			continue
+		}
+		if err := client.Send(payload); err != nil {
+			metrics.IncReplayQuery("ws", "send_error")
+			s.logger.Warn().Err(err).
+				Str("eventId", items[i].EventID).
+				Str("userId", userID).
+				Msg("补偿事件发送失败")
+			break
+		}
+		delivered++
+	}
+
+	s.logger.Info().
+		Str("userId", userID).
+		Str("afterEventId", afterEventID).
+		Str("nextEventId", nextEventID).
+		Int("delivered", delivered).
+		Bool("hasMore", hasMore).
+		Msg("WebSocket 补偿事件回放完成")
 }
