@@ -173,8 +173,15 @@ shiori/
 
 ```bash
 cd deploy
-cp .env.example .env
+./gen-env.sh
 docker compose up -d
+```
+
+如需手工填写，也可以：
+
+```bash
+cd deploy
+cp .env.example .env
 ```
 
 说明：
@@ -289,8 +296,8 @@ RabbitMQ 与 MinIO 也会通过一次性容器完成最小权限初始化：
 
 ```bash
 cd deploy
-cp .env.example .env
-# 编辑 .env，填入真实密钥
+./gen-env.sh
+# 如需自定义账号/密钥，再编辑 .env
 docker compose up -d
 ```
 
