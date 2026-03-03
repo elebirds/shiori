@@ -9,9 +9,13 @@ APP_DIR="${ROOT_DIR}/shiori-app"
 ADMIN_WEB_DIR="${ROOT_DIR}/shiori-admin-web"
 SMOKE_SCRIPT="${ROOT_DIR}/scripts/smoke/e2e_trade_notify.sh"
 ADMIN_SMOKE_SCRIPT="${ROOT_DIR}/scripts/smoke/e2e_admin_console.sh"
+PERF_BASELINE_SCRIPT="${ROOT_DIR}/scripts/ci/run_perf_baseline.sh"
 CI_LOG_DIR="${ROOT_DIR}/ci-logs"
 SERVICE_READY_TIMEOUT_SECONDS="${SERVICE_READY_TIMEOUT_SECONDS:-300}"
 REDIS_LOCAL_PORT="${REDIS_HOST_PORT:-6379}"
+RUN_PERF_BASELINE="${RUN_PERF_BASELINE:-0}"
+SKIP_APP_PLAYWRIGHT="${SKIP_APP_PLAYWRIGHT:-0}"
+SKIP_ADMIN_PLAYWRIGHT="${SKIP_ADMIN_PLAYWRIGHT:-0}"
 
 SERVICE_NAMES=()
 SERVICE_PIDS=()
@@ -36,6 +40,9 @@ print_key_logs() {
   dump_tail "${CI_LOG_DIR}/gateway-service.log"
   dump_tail "${CI_LOG_DIR}/notify.log"
   dump_tail "${CI_LOG_DIR}/admin-smoke.log"
+  dump_tail "${CI_LOG_DIR}/perf-baseline.log"
+  dump_tail "${CI_LOG_DIR}/perf/k6-order.log"
+  dump_tail "${CI_LOG_DIR}/perf/k6-ws.log"
   dump_tail "${CI_LOG_DIR}/app-e2e.log"
   dump_tail "${CI_LOG_DIR}/admin-web-e2e.log"
 
@@ -278,8 +285,13 @@ main() {
   require_command jq
   require_command curl
   require_command go
-  require_command node
-  require_command pnpm
+  if [[ "${SKIP_APP_PLAYWRIGHT}" != "1" || "${SKIP_ADMIN_PLAYWRIGHT}" != "1" ]]; then
+    require_command node
+    require_command pnpm
+  fi
+  if [[ "${RUN_PERF_BASELINE}" == "1" ]]; then
+    require_command k6
+  fi
 
   export SHIORI_ENV="${SHIORI_ENV:-test}"
   export NACOS_CONFIG_GROUP="${NACOS_CONFIG_GROUP:-SHIORI_TEST}"
@@ -317,6 +329,9 @@ main() {
   docker compose version >/dev/null 2>&1 || fail "docker compose 不可用"
   [[ -x "${SMOKE_SCRIPT}" ]] || fail "烟测脚本不存在或不可执行: ${SMOKE_SCRIPT}"
   [[ -x "${ADMIN_SMOKE_SCRIPT}" ]] || fail "管理端烟测脚本不存在或不可执行: ${ADMIN_SMOKE_SCRIPT}"
+  if [[ "${RUN_PERF_BASELINE}" == "1" ]]; then
+    [[ -x "${PERF_BASELINE_SCRIPT}" ]] || fail "性能脚本不存在或不可执行: ${PERF_BASELINE_SCRIPT}"
+  fi
 
   rm -rf "${CI_LOG_DIR}"
   mkdir -p "${CI_LOG_DIR}"
@@ -365,39 +380,58 @@ main() {
   log "管理端烟测执行成功"
   dump_tail "${CI_LOG_DIR}/admin-smoke.log"
 
-  log "执行前端 Playwright E2E..."
-  if ! (
-    cd "${APP_DIR}"
-    pnpm install --frozen-lockfile
-    pnpm e2e:install
-    E2E_GATEWAY_BASE_URL=http://127.0.0.1:8080 \
-    E2E_NOTIFY_HTTP_BASE_URL=http://127.0.0.1:8090 \
-    pnpm e2e
-  ) >"${CI_LOG_DIR}/app-e2e.log" 2>&1; then
+  if [[ "${RUN_PERF_BASELINE}" == "1" ]]; then
+    log "执行性能基线..."
+    if ! PERF_LOG_DIR="${CI_LOG_DIR}/perf" \
+      GATEWAY_BASE_URL=http://127.0.0.1:8080 \
+      NOTIFY_WS_BASE_URL=ws://127.0.0.1:8090/ws \
+      bash "${PERF_BASELINE_SCRIPT}" >"${CI_LOG_DIR}/perf-baseline.log" 2>&1; then
+      dump_tail "${CI_LOG_DIR}/perf-baseline.log"
+      fail "性能基线执行失败"
+    fi
+    log "性能基线执行成功"
+    dump_tail "${CI_LOG_DIR}/perf-baseline.log"
+  fi
+
+  if [[ "${SKIP_APP_PLAYWRIGHT}" != "1" ]]; then
+    log "执行前端 Playwright E2E..."
+    if ! (
+      cd "${APP_DIR}"
+      pnpm install --frozen-lockfile
+      pnpm e2e:install
+      E2E_GATEWAY_BASE_URL=http://127.0.0.1:8080 \
+      E2E_NOTIFY_HTTP_BASE_URL=http://127.0.0.1:8090 \
+      pnpm e2e
+    ) >"${CI_LOG_DIR}/app-e2e.log" 2>&1; then
+      dump_tail "${CI_LOG_DIR}/app-e2e.log"
+      fail "前端 Playwright E2E 执行失败"
+    fi
+    log "前端 Playwright E2E 执行成功"
     dump_tail "${CI_LOG_DIR}/app-e2e.log"
-    fail "前端 Playwright E2E 执行失败"
+  else
+    log "按配置跳过前端 Playwright E2E"
   fi
 
-  log "前端 Playwright E2E 执行成功"
-  dump_tail "${CI_LOG_DIR}/app-e2e.log"
-
-  log "执行管理端 Playwright E2E..."
-  if ! (
-    cd "${ADMIN_WEB_DIR}"
-    pnpm install --frozen-lockfile
-    pnpm e2e:install
-    E2E_GATEWAY_BASE_URL=http://127.0.0.1:8080 \
-    E2E_MYSQL_CONTAINER=shiori-mysql \
-    E2E_MYSQL_USER="${MYSQL_OPS_USERNAME}" \
-    E2E_MYSQL_PASSWORD="${MYSQL_OPS_PASSWORD}" \
-    pnpm e2e
-  ) >"${CI_LOG_DIR}/admin-web-e2e.log" 2>&1; then
+  if [[ "${SKIP_ADMIN_PLAYWRIGHT}" != "1" ]]; then
+    log "执行管理端 Playwright E2E..."
+    if ! (
+      cd "${ADMIN_WEB_DIR}"
+      pnpm install --frozen-lockfile
+      pnpm e2e:install
+      E2E_GATEWAY_BASE_URL=http://127.0.0.1:8080 \
+      E2E_MYSQL_CONTAINER=shiori-mysql \
+      E2E_MYSQL_USER="${MYSQL_OPS_USERNAME}" \
+      E2E_MYSQL_PASSWORD="${MYSQL_OPS_PASSWORD}" \
+      pnpm e2e
+    ) >"${CI_LOG_DIR}/admin-web-e2e.log" 2>&1; then
+      dump_tail "${CI_LOG_DIR}/admin-web-e2e.log"
+      fail "管理端 Playwright E2E 执行失败"
+    fi
+    log "管理端 Playwright E2E 执行成功"
     dump_tail "${CI_LOG_DIR}/admin-web-e2e.log"
-    fail "管理端 Playwright E2E 执行失败"
+  else
+    log "按配置跳过管理端 Playwright E2E"
   fi
-
-  log "管理端 Playwright E2E 执行成功"
-  dump_tail "${CI_LOG_DIR}/admin-web-e2e.log"
 }
 
 main "$@"

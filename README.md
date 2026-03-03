@@ -524,6 +524,7 @@ go run ./cmd/ws-smoke -base-url ws://localhost:8090/ws -user-id 1001 -expect-typ
 - `.github/workflows/ci.yml`
 - Job 1：`java-test`（`shiori-java` 全量测试）
 - Job 2：`e2e-trade-notify-admin`（基础设施 + 4 个 Java 服务 + notify + 交易通知烟测 + 管理端闭环烟测 + `shiori-app` Playwright E2E + `shiori-admin-web` Playwright E2E）
+- Job 3：`perf-baseline-non-blocking`（交易/通知烟测 + k6 基线，`continue-on-error` 非阻塞）
 
 E2E 编排脚本：
 
@@ -531,10 +532,19 @@ E2E 编排脚本：
 bash scripts/ci/run_e2e_ci.sh
 ```
 
+性能基线脚本（依赖服务已就绪）：
+
+```bash
+bash scripts/ci/run_perf_baseline.sh
+```
+
 可选环境变量：
 
 ```bash
 export SERVICE_READY_TIMEOUT_SECONDS=300
+export RUN_PERF_BASELINE=1
+export SKIP_APP_PLAYWRIGHT=1
+export SKIP_ADMIN_PLAYWRIGHT=1
 ```
 
 必填敏感变量（脚本会校验）：
@@ -559,6 +569,7 @@ export SERVICE_READY_TIMEOUT_SECONDS=300
 - 启动 user/product/order/gateway/notify
 - 执行 `scripts/smoke/e2e_trade_notify.sh`
 - 执行 `scripts/smoke/e2e_admin_console.sh`
+- 可选执行 `scripts/ci/run_perf_baseline.sh`（当 `RUN_PERF_BASELINE=1`）
 - 执行 `shiori-app` 前端 Playwright 端到端用例
 - 执行 `shiori-admin-web` 管理端 Playwright 端到端用例
 - 失败时输出关键日志并自动清理环境
@@ -660,4 +671,10 @@ docker compose --profile app --profile obs up -d --build
 cd perf
 k6 run k6-order.js
 k6 run k6-ws.js
+```
+
+CI/本机一键基线（服务就绪后）：
+
+```bash
+bash scripts/ci/run_perf_baseline.sh
 ```

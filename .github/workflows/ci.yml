@@ -153,3 +153,120 @@ jobs:
             shiori-admin-web/playwright-report/**
             shiori-admin-web/test-results/**
           if-no-files-found: warn
+
+  perf-baseline:
+    name: perf-baseline-non-blocking
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    needs: java-test
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: shiori-notify/go.mod
+          cache-dependency-path: shiori-notify/go.sum
+
+      - name: Setup k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Check runtime dependencies
+        run: |
+          docker --version
+          docker compose version
+          jq --version
+          curl --version | head -n 1
+          go version
+          k6 version
+
+      - name: Prepare perf secrets and env
+        run: |
+          gen_hex() { openssl rand -hex "$1"; }
+          gen_b64() { openssl rand -base64 "$1" | tr -d '\n'; }
+
+          MYSQL_ROOT_PASSWORD="$(gen_hex 16)"
+          MYSQL_OPS_PASSWORD="$(gen_hex 16)"
+          USER_DB_PASSWORD="$(gen_hex 16)"
+          PRODUCT_DB_PASSWORD="$(gen_hex 16)"
+          ORDER_DB_PASSWORD="$(gen_hex 16)"
+          RABBITMQ_DEFAULT_PASS="$(gen_hex 16)"
+          ORDER_RMQ_PASSWORD="$(gen_hex 16)"
+          NOTIFY_RMQ_PASSWORD="$(gen_hex 16)"
+          MINIO_ROOT_PASSWORD="$(gen_hex 24)"
+          MINIO_PRODUCT_SECRET_KEY="$(gen_hex 24)"
+          NACOS_AUTH_TOKEN="$(gen_b64 48)"
+          NACOS_AUTH_IDENTITY_KEY="idk_$(gen_hex 6)"
+          NACOS_AUTH_IDENTITY_VALUE="$(gen_hex 16)"
+          NACOS_IMPORT_PASSWORD="$(gen_hex 16)"
+          JWT_HMAC_SECRET="$(gen_hex 32)"
+          GATEWAY_SIGN_SECRET="$(gen_hex 32)"
+
+          {
+            echo "SHIORI_ENV=test"
+            echo "NACOS_CONFIG_GROUP=SHIORI_TEST"
+            echo "MYSQL_OPS_USERNAME=shiori_ops"
+            echo "MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}"
+            echo "MYSQL_OPS_PASSWORD=${MYSQL_OPS_PASSWORD}"
+            echo "RABBITMQ_DEFAULT_USER=rabbitmq_admin"
+            echo "RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}"
+            echo "ORDER_RMQ_USERNAME=order_service"
+            echo "ORDER_RMQ_PASSWORD=${ORDER_RMQ_PASSWORD}"
+            echo "NOTIFY_RMQ_USERNAME=notify_service"
+            echo "NOTIFY_RMQ_PASSWORD=${NOTIFY_RMQ_PASSWORD}"
+            echo "MINIO_ROOT_USER=minio_admin"
+            echo "MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}"
+            echo "MINIO_PRODUCT_BUCKET=shiori-product"
+            echo "MINIO_PRODUCT_ACCESS_KEY=product_service"
+            echo "MINIO_PRODUCT_SECRET_KEY=${MINIO_PRODUCT_SECRET_KEY}"
+            echo "NACOS_AUTH_TOKEN=${NACOS_AUTH_TOKEN}"
+            echo "NACOS_AUTH_IDENTITY_KEY=${NACOS_AUTH_IDENTITY_KEY}"
+            echo "NACOS_AUTH_IDENTITY_VALUE=${NACOS_AUTH_IDENTITY_VALUE}"
+            echo "NACOS_IMPORT_USERNAME=nacos"
+            echo "NACOS_IMPORT_PASSWORD=${NACOS_IMPORT_PASSWORD}"
+            echo "USER_DB_URL=jdbc:mysql://mysql:3306/shiori_user?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false"
+            echo "USER_DB_USERNAME=user_service"
+            echo "USER_DB_PASSWORD=${USER_DB_PASSWORD}"
+            echo "PRODUCT_DB_URL=jdbc:mysql://mysql:3306/shiori_product?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false"
+            echo "PRODUCT_DB_USERNAME=product_service"
+            echo "PRODUCT_DB_PASSWORD=${PRODUCT_DB_PASSWORD}"
+            echo "ORDER_DB_URL=jdbc:mysql://mysql:3306/shiori_order?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false"
+            echo "ORDER_DB_USERNAME=order_service"
+            echo "ORDER_DB_PASSWORD=${ORDER_DB_PASSWORD}"
+            echo "JWT_HMAC_SECRET=${JWT_HMAC_SECRET}"
+            echo "GATEWAY_SIGN_SECRET=${GATEWAY_SIGN_SECRET}"
+          } >> "$GITHUB_ENV"
+
+      - name: Run perf baseline suite
+        run: |
+          RUN_PERF_BASELINE=1 \
+          SKIP_APP_PLAYWRIGHT=1 \
+          SKIP_ADMIN_PLAYWRIGHT=1 \
+          K6_ORDER_VUS=5 \
+          K6_ORDER_DURATION=45s \
+          K6_WS_VUS=2 \
+          K6_WS_ITERATIONS=10 \
+          K6_WS_TIMEOUT_MS=10000 \
+          bash scripts/ci/run_e2e_ci.sh
+
+      - name: Upload perf logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-logs-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ci-logs/perf/**
+            ci-logs/perf-baseline.log
+            ci-logs/smoke.log
+            ci-logs/admin-smoke.log
+            ci-logs/*.log
+          if-no-files-found: warn
