@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { useMutation } from '@tanstack/vue-query'
-import { reactive, ref } from 'vue'
+import { onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import { presignProductUpload, uploadByPresignedUrl } from '@/api/media'
 import { createProduct, publishProduct, type SkuInput } from '@/api/product'
 import { ApiBizError } from '@/types/result'
 
@@ -31,6 +32,10 @@ const skus = ref<DraftSku[]>([
 const publishDirectly = ref(true)
 const resultMessage = ref('')
 const resultError = ref('')
+const uploadMessage = ref('')
+const uploadingCover = ref(false)
+const coverPreviewUrl = ref('')
+const selectedCoverName = ref('')
 
 const createMutation = useMutation({
   mutationFn: async () => {
@@ -97,6 +102,46 @@ function validate(): string | null {
   return null
 }
 
+async function handleCoverChange(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) {
+    return
+  }
+
+  uploadMessage.value = ''
+  resultError.value = ''
+  uploadingCover.value = true
+
+  try {
+    const presigned = await presignProductUpload({
+      fileName: file.name,
+      contentType: file.type || undefined,
+    })
+
+    await uploadByPresignedUrl(presigned.uploadUrl, file, presigned.requiredHeaders)
+    form.coverObjectKey = presigned.objectKey
+    selectedCoverName.value = file.name
+    uploadMessage.value = '封面上传成功'
+
+    if (coverPreviewUrl.value) {
+      URL.revokeObjectURL(coverPreviewUrl.value)
+    }
+    coverPreviewUrl.value = URL.createObjectURL(file)
+  } catch (error) {
+    if (error instanceof ApiBizError) {
+      resultError.value = error.message
+    } else if (error instanceof Error) {
+      resultError.value = error.message
+    } else {
+      resultError.value = '封面上传失败'
+    }
+  } finally {
+    uploadingCover.value = false
+    input.value = ''
+  }
+}
+
 async function submit(): Promise<void> {
   resultError.value = ''
   resultMessage.value = ''
@@ -121,6 +166,12 @@ async function submit(): Promise<void> {
     }
   }
 }
+
+onUnmounted(() => {
+  if (coverPreviewUrl.value) {
+    URL.revokeObjectURL(coverPreviewUrl.value)
+  }
+})
 </script>
 
 <template>
@@ -152,8 +203,25 @@ async function submit(): Promise<void> {
           />
         </label>
 
+        <div class="space-y-2 sm:col-span-2">
+          <label class="block text-sm text-stone-700">
+            封面图片（OSS 预签名直传）
+            <input
+              type="file"
+              accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+              class="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2 text-sm"
+              :disabled="uploadingCover"
+              @change="handleCoverChange"
+            />
+          </label>
+          <p class="text-xs text-stone-500">支持 jpg/jpeg/png/webp，上传成功后会自动回填 objectKey。</p>
+          <p v-if="selectedCoverName" class="text-xs text-stone-600">已选文件：{{ selectedCoverName }}</p>
+          <p v-if="uploadingCover" class="text-xs text-amber-700">正在上传封面...</p>
+          <p v-if="uploadMessage" class="text-xs text-emerald-700">{{ uploadMessage }}</p>
+        </div>
+
         <label class="text-sm text-stone-700 sm:col-span-2">
-          封面 object key（可选）
+          封面 object key（自动回填，可手工覆盖）
           <input
             v-model.trim="form.coverObjectKey"
             type="text"
@@ -161,6 +229,11 @@ async function submit(): Promise<void> {
             placeholder="product/1001/202603/xxx.jpg"
           />
         </label>
+
+        <div v-if="coverPreviewUrl" class="sm:col-span-2">
+          <p class="mb-1 text-xs text-stone-600">封面预览</p>
+          <img :src="coverPreviewUrl" alt="封面预览" class="h-48 w-full rounded-xl border border-stone-200 object-cover sm:w-72" />
+        </div>
       </div>
 
       <section class="space-y-3">
@@ -251,4 +324,3 @@ async function submit(): Promise<void> {
     </form>
   </section>
 </template>
-
