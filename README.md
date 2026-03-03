@@ -126,7 +126,7 @@
 ### 前端与多端展示 (Frontend)
 
 * **用户端 Web (买/卖家视角):** Vue 3 + TypeScript + Vite + Tailwind CSS + Pinia + Vue Query
-* **管理端 (平台运营视角):** `shiori-admin-web`（当前预留目录，后续初始化）
+* **管理端 (平台运营视角):** Vue 3 + TypeScript + Vite + Tailwind CSS + Pinia + Vue Query
 
 ---
 
@@ -175,6 +175,37 @@ cd deploy
 docker compose up -d
 ```
 
+说明：
+- 默认 `docker compose up -d` 只启动基础设施（MySQL/Redis/RabbitMQ/Nacos/MinIO + 初始化容器）。
+- 如需一键启动“基础设施 + Java/Go 服务”，使用：
+
+```bash
+cd deploy
+docker compose --profile app up -d --build
+```
+
+如需再加上两个前端容器（用户端 + 管理端），使用：
+
+```bash
+cd deploy
+docker compose --profile app --profile web up -d --build
+```
+
+若遇到 Docker Hub 网络抖动（例如 `EOF`）导致 build 失败，可先改用经典构建器重试：
+
+```bash
+cd deploy
+DOCKER_BUILDKIT=0 docker compose --profile app build
+DOCKER_BUILDKIT=0 docker compose --profile app --profile web build
+docker compose --profile app --profile web up -d
+```
+
+全栈容器入口：
+- 用户端 Web: `http://localhost:3000`
+- 管理端 Web: `http://localhost:3001`
+- 网关: `http://localhost:8080`
+- Notify 健康检查: `http://localhost:8090/healthz`
+
 `docker-compose` 会通过 `deploy/sql/mysql-init/` 自动初始化业务数据库：
 - `shiori_user`
 - `shiori_product`
@@ -205,6 +236,8 @@ docker compose run --rm nacos-config-init
 - Console: `http://localhost:9001`
 
 ### 2) Run Core Services (Java)
+
+若你已执行 `docker compose --profile app up -d --build`，可跳过本节手工启动。
 
 ```bash
 cd shiori-java

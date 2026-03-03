@@ -1,0 +1,16 @@
+.git
+.github
+.idea
+.vscode
+.metals
+ci-logs
+**/.DS_Store
+**/node_modules
+**/dist
+**/build
+**/.gradle
+**/.turbo
+**/.cache
+**/coverage
+**/playwright-report
+**/test-results
