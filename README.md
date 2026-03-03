@@ -358,12 +358,18 @@ curl -X POST http://localhost:8080/api/order/orders/<orderNo>/pay \
   -d '{"paymentNo":"pay-demo-001"}'
 ```
 
-### 3.3) 一键端到端烟测（交易 + 通知）
+### 3.3) 一键端到端烟测（交易 + 通知 + 管理端）
 
 当网关、user/product/order、notify 均已启动后，可运行：
 
 ```bash
 bash scripts/smoke/e2e_trade_notify.sh
+```
+
+管理端闭环烟测（管理员角色、用户治理、商品下架、订单取消、审计日志）：
+
+```bash
+bash scripts/smoke/e2e_admin_console.sh
 ```
 
 脚本会自动执行：
@@ -380,6 +386,9 @@ export GATEWAY_BASE_URL=http://localhost:8080
 export NOTIFY_WS_BASE_URL=ws://localhost:8090/ws
 export SMOKE_TIMEOUT_SECONDS=60
 export SMOKE_PREFIX=smoke
+export MYSQL_CONTAINER=shiori-mysql
+export MYSQL_USER=shiori
+export MYSQL_PASSWORD=shiori
 ```
 
 `ws-smoke` 探针命令（脚本内部也会调用）：
@@ -394,7 +403,7 @@ go run ./cmd/ws-smoke -base-url ws://localhost:8090/ws -user-id 1001 -expect-typ
 仓库已提供 CI workflow：
 - `.github/workflows/ci.yml`
 - Job 1：`java-test`（`shiori-java` 全量测试）
-- Job 2：`e2e-trade-notify`（基础设施 + 4 个 Java 服务 + notify + 交易通知烟测 + `shiori-app` Playwright E2E）
+- Job 2：`e2e-trade-notify-admin`（基础设施 + 4 个 Java 服务 + notify + 交易通知烟测 + 管理端闭环烟测 + `shiori-app` Playwright E2E）
 
 E2E 编排脚本：
 
@@ -402,11 +411,18 @@ E2E 编排脚本：
 bash scripts/ci/run_e2e_ci.sh
 ```
 
+可选环境变量：
+
+```bash
+export SERVICE_READY_TIMEOUT_SECONDS=300
+```
+
 脚本执行时会：
 - 自动 `docker compose up -d`
 - 等待 `nacos-config-init` 成功退出
 - 启动 user/product/order/gateway/notify
 - 执行 `scripts/smoke/e2e_trade_notify.sh`
+- 执行 `scripts/smoke/e2e_admin_console.sh`
 - 执行 `shiori-app` 前端 Playwright 端到端用例
 - 失败时输出关键日志并自动清理环境
 

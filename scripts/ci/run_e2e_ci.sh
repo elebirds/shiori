@@ -7,7 +7,9 @@ JAVA_DIR="${ROOT_DIR}/shiori-java"
 NOTIFY_DIR="${ROOT_DIR}/shiori-notify"
 APP_DIR="${ROOT_DIR}/shiori-app"
 SMOKE_SCRIPT="${ROOT_DIR}/scripts/smoke/e2e_trade_notify.sh"
+ADMIN_SMOKE_SCRIPT="${ROOT_DIR}/scripts/smoke/e2e_admin_console.sh"
 CI_LOG_DIR="${ROOT_DIR}/ci-logs"
+SERVICE_READY_TIMEOUT_SECONDS="${SERVICE_READY_TIMEOUT_SECONDS:-300}"
 
 SERVICE_NAMES=()
 SERVICE_PIDS=()
@@ -26,9 +28,12 @@ dump_tail() {
 
 print_key_logs() {
   echo "[ci-e2e] 输出关键日志片段..."
+  dump_tail "${CI_LOG_DIR}/user-service.log"
+  dump_tail "${CI_LOG_DIR}/product-service.log"
   dump_tail "${CI_LOG_DIR}/order-service.log"
   dump_tail "${CI_LOG_DIR}/gateway-service.log"
   dump_tail "${CI_LOG_DIR}/notify.log"
+  dump_tail "${CI_LOG_DIR}/admin-smoke.log"
   dump_tail "${CI_LOG_DIR}/app-e2e.log"
 
   if docker ps -a --format '{{.Names}}' | grep -q '^shiori-nacos-config-init$'; then
@@ -162,6 +167,8 @@ start_product_service() {
     SPRING_DATASOURCE_URL="jdbc:mysql://localhost:3306/shiori_product?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false" \
     SPRING_DATASOURCE_USERNAME=shiori \
     SPRING_DATASOURCE_PASSWORD=shiori \
+    SPRING_DATA_REDIS_HOST=localhost \
+    SPRING_DATA_REDIS_PORT=6380 \
     STORAGE_OSS_ENDPOINT=http://localhost:9000 \
     ./gradlew :shiori-product-service:bootRun --no-daemon
   ) >"${CI_LOG_DIR}/product-service.log" 2>&1 &
@@ -179,6 +186,8 @@ start_order_service() {
     SPRING_RABBITMQ_PORT=5672 \
     SPRING_RABBITMQ_USERNAME=shiori \
     SPRING_RABBITMQ_PASSWORD=shiori \
+    SPRING_DATA_REDIS_HOST=localhost \
+    SPRING_DATA_REDIS_PORT=6380 \
     ORDER_PRODUCT_SERVICE_BASE_URL=http://localhost:8082 \
     ./gradlew :shiori-order-service:bootRun --no-daemon
   ) >"${CI_LOG_DIR}/order-service.log" 2>&1 &
@@ -216,6 +225,7 @@ main() {
 
   docker compose version >/dev/null 2>&1 || fail "docker compose 不可用"
   [[ -x "${SMOKE_SCRIPT}" ]] || fail "烟测脚本不存在或不可执行: ${SMOKE_SCRIPT}"
+  [[ -x "${ADMIN_SMOKE_SCRIPT}" ]] || fail "管理端烟测脚本不存在或不可执行: ${ADMIN_SMOKE_SCRIPT}"
 
   rm -rf "${CI_LOG_DIR}"
   mkdir -p "${CI_LOG_DIR}"
@@ -239,11 +249,11 @@ main() {
   start_gateway_service
   start_notify_service
 
-  wait_http_ready "gateway" "http://localhost:8080/actuator/health" 120
-  wait_http_ready "user-service" "http://localhost:8081/actuator/health" 120
-  wait_http_ready "product-service" "http://localhost:8082/actuator/health" 120
-  wait_http_ready "order-service" "http://localhost:8083/actuator/health" 120
-  wait_http_ready "notify" "http://localhost:8090/healthz" 120
+  wait_http_ready "gateway" "http://localhost:8080/actuator/health" "${SERVICE_READY_TIMEOUT_SECONDS}"
+  wait_http_ready "user-service" "http://localhost:8081/actuator/health" "${SERVICE_READY_TIMEOUT_SECONDS}"
+  wait_http_ready "product-service" "http://localhost:8082/actuator/health" "${SERVICE_READY_TIMEOUT_SECONDS}"
+  wait_http_ready "order-service" "http://localhost:8083/actuator/health" "${SERVICE_READY_TIMEOUT_SECONDS}"
+  wait_http_ready "notify" "http://localhost:8090/healthz" "${SERVICE_READY_TIMEOUT_SECONDS}"
 
   log "执行交易通知 E2E 烟测..."
   if ! bash "${SMOKE_SCRIPT}" >"${CI_LOG_DIR}/smoke.log" 2>&1; then
@@ -251,8 +261,17 @@ main() {
     fail "烟测执行失败"
   fi
 
-  log "烟测执行成功"
+  log "交易通知烟测执行成功"
   dump_tail "${CI_LOG_DIR}/smoke.log"
+
+  log "执行管理端闭环烟测..."
+  if ! bash "${ADMIN_SMOKE_SCRIPT}" >"${CI_LOG_DIR}/admin-smoke.log" 2>&1; then
+    dump_tail "${CI_LOG_DIR}/admin-smoke.log"
+    fail "管理端烟测执行失败"
+  fi
+
+  log "管理端烟测执行成功"
+  dump_tail "${CI_LOG_DIR}/admin-smoke.log"
 
   log "执行前端 Playwright E2E..."
   if ! (
