@@ -6,6 +6,10 @@ const gatewayBaseUrl = __ENV.PERF_GATEWAY_BASE_URL || 'http://localhost:8080';
 const perfPrefix = __ENV.PERF_PREFIX || 'perf';
 const vus = Number(__ENV.K6_ORDER_VUS || 5);
 const duration = __ENV.K6_ORDER_DURATION || '45s';
+const debugFailSample = __ENV.K6_DEBUG_FAIL_SAMPLE === '1';
+const debugFailLimit = Number(__ENV.K6_DEBUG_FAIL_LIMIT || 20);
+
+let failLogCount = 0;
 
 const orderCreateDuration = new Trend('shiori_perf_order_create_duration_ms', true);
 const orderPayDuration = new Trend('shiori_perf_order_pay_duration_ms', true);
@@ -25,7 +29,12 @@ export const options = {
 };
 
 function apiRequest(method, path, token, payload, extraHeaders = {}) {
-  const headers = { 'Content-Type': 'application/json', ...extraHeaders };
+  const headers = { 'Content-Type': 'application/json' };
+  for (const key in extraHeaders) {
+    if (Object.prototype.hasOwnProperty.call(extraHeaders, key)) {
+      headers[key] = extraHeaders[key];
+    }
+  }
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
@@ -55,16 +64,36 @@ function mustOk(result, hint) {
   return result.parsed.data;
 }
 
+function markBizFailure(stage, result) {
+  const statusTag = result && result.res && result.res.status !== undefined ? String(result.res.status) : 'n/a';
+  const codeTag = result && result.parsed && result.parsed.code !== undefined
+    ? String(result.parsed.code)
+    : 'n/a';
+  bizFailedTotal.add(1, { stage, status: statusTag, code: codeTag });
+
+  if (debugFailSample && failLogCount < debugFailLimit) {
+    failLogCount += 1;
+    const body = result && result.res && result.res.body ? String(result.res.body).slice(0, 400) : '';
+    console.error(`[k6-order][${stage}] status=${statusTag} code=${codeTag} body=${body}`);
+  }
+}
+
 function uniqueText(prefix) {
   return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
+}
+
+function uniqueUsername(prefix) {
+  const safePrefix = String(prefix).replace(/[^A-Za-z0-9_]/g, '_');
+  const seed = `${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 1000)}`;
+  return `${safePrefix}_${seed}`.slice(0, 32);
 }
 
 export function setup() {
   const health = http.get(`${gatewayBaseUrl}/actuator/health`);
   check(health, { 'gateway health is UP': (r) => r.status === 200 && r.json('status') === 'UP' });
 
-  const sellerUsername = uniqueText(`${perfPrefix}_seller`);
-  const buyerUsername = uniqueText(`${perfPrefix}_buyer`);
+  const sellerUsername = uniqueUsername(`${perfPrefix}_seller`);
+  const buyerUsername = uniqueUsername(`${perfPrefix}_buyer`);
   const sellerPassword = uniqueText('SellerA');
   const buyerPassword = uniqueText('BuyerA');
 
@@ -148,7 +177,7 @@ export default function (data) {
   );
   orderCreateDuration.add(createOrder.res.timings.duration);
   if (!createOrder.ok) {
-    bizFailedTotal.add(1);
+    markBizFailure('create', createOrder);
     return;
   }
 
@@ -161,7 +190,7 @@ export default function (data) {
   );
   orderPayDuration.add(payOrder.res.timings.duration);
   if (!payOrder.ok) {
-    bizFailedTotal.add(1);
+    markBizFailure('pay', payOrder);
     return;
   }
 
@@ -173,7 +202,7 @@ export default function (data) {
   );
   orderDetailDuration.add(orderDetail.res.timings.duration);
   if (!orderDetail.ok || orderDetail.parsed.data.status !== 'PAID') {
-    bizFailedTotal.add(1);
+    markBizFailure('detail', orderDetail);
   }
 
   sleep(0.2);

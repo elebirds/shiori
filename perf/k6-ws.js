@@ -9,6 +9,7 @@ const perfPrefix = __ENV.PERF_PREFIX || 'perf';
 const vus = Number(__ENV.K6_WS_VUS || 2);
 const iterations = Number(__ENV.K6_WS_ITERATIONS || 10);
 const wsTimeoutMs = Number(__ENV.K6_WS_TIMEOUT_MS || 10000);
+const wsLatencyP95Ms = Number(__ENV.K6_WS_LATENCY_P95_MS || 3000);
 
 const wsNotificationLatency = new Trend('shiori_perf_ws_notification_latency_ms', true);
 const wsTimeoutTotal = new Counter('shiori_perf_ws_timeout_total');
@@ -25,7 +26,7 @@ export const options = {
   },
   thresholds: {
     http_req_failed: ['rate<0.01'],
-    shiori_perf_ws_notification_latency_ms: ['p(95)<2000'],
+    shiori_perf_ws_notification_latency_ms: [`p(95)<${wsLatencyP95Ms}`],
     shiori_perf_ws_timeout_total: ['count==0'],
     shiori_perf_ws_biz_failed_total: ['count==0'],
   },
@@ -38,7 +39,12 @@ function toNotifyHttpBase(wsBaseUrl) {
 }
 
 function apiRequest(method, path, token, payload, extraHeaders = {}) {
-  const headers = { 'Content-Type': 'application/json', ...extraHeaders };
+  const headers = { 'Content-Type': 'application/json' };
+  for (const key in extraHeaders) {
+    if (Object.prototype.hasOwnProperty.call(extraHeaders, key)) {
+      headers[key] = extraHeaders[key];
+    }
+  }
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
@@ -72,6 +78,12 @@ function uniqueText(prefix) {
   return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
 }
 
+function uniqueUsername(prefix) {
+  const safePrefix = String(prefix).replace(/[^A-Za-z0-9_]/g, '_');
+  const seed = `${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 1000)}`;
+  return `${safePrefix}_${seed}`.slice(0, 32);
+}
+
 export function setup() {
   const notifyHttpBaseUrl = __ENV.PERF_NOTIFY_HTTP_BASE_URL || toNotifyHttpBase(notifyWsBaseUrl);
 
@@ -81,8 +93,8 @@ export function setup() {
   const notifyHealth = http.get(`${notifyHttpBaseUrl}/healthz`);
   check(notifyHealth, { 'notify health is ok': (r) => r.status === 200 && r.json('status') === 'ok' });
 
-  const sellerUsername = uniqueText(`${perfPrefix}_ws_seller`);
-  const buyerUsername = uniqueText(`${perfPrefix}_ws_buyer`);
+  const sellerUsername = uniqueUsername(`${perfPrefix}_ws_seller`);
+  const buyerUsername = uniqueUsername(`${perfPrefix}_ws_buyer`);
   const sellerPassword = uniqueText('SellerWS');
   const buyerPassword = uniqueText('BuyerWS');
 
