@@ -84,7 +84,7 @@ upsert_permissions \
 upsert_permissions \
   "${NOTIFY_RMQ_USERNAME}" \
   "^(shiori[.]order[.]event|notify[.]order[.]paid)$" \
-  "^shiori[.]order[.]event$" \
+  "^(shiori[.]order[.]event|notify[.]order[.]paid)$" \
   "^(shiori[.]order[.]event|notify[.]order[.]paid)$"
 
 log "rabbitmq users and permissions initialized"
