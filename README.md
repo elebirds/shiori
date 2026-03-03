@@ -150,6 +150,7 @@ shiori/
 ├── deploy/                           # 🐳 [基础设施部署]
 │   ├── docker-compose.yml            # MySQL, Redis, RabbitMQ, (可选 Nacos/Prom/Grafana)
 │   ├── nacos/                        # Nacos 配置导入脚本与模板（templates/*.yml.tmpl）
+│   ├── observability/                # Prometheus/Grafana 配置与预置 dashboard
 │   ├── rabbitmq/                     # RabbitMQ 最小权限账号初始化脚本
 │   └── sql/                          # MySQL 初始化脚本（创建多库）与后续运维 SQL
 └── perf/                             # ⚡ [压测资产] k6 脚本与结果记录
@@ -200,6 +201,13 @@ cd deploy
 docker compose --profile app --profile web up -d --build
 ```
 
+如需同时拉起可观测性栈（Prometheus + Grafana），使用：
+
+```bash
+cd deploy
+docker compose --profile app --profile obs up -d --build
+```
+
 若遇到 Docker Hub 网络抖动（例如 `EOF`）导致 build 失败，可先改用经典构建器重试：
 
 ```bash
@@ -214,6 +222,8 @@ docker compose --profile app --profile web up -d
 - 管理端 Web: `http://localhost:3001`
 - 网关: `http://localhost:8080`
 - Notify 健康检查: `http://localhost:8090/healthz`
+- Prometheus: `http://localhost:9090`（`PROMETHEUS_HOST_PORT` 可改）
+- Grafana: `http://localhost:3002`（`GRAFANA_HOST_PORT` 可改）
 
 `docker-compose` 会通过 `deploy/sql/mysql-init/` 自动初始化业务数据库：
 - `shiori_user`
@@ -627,6 +637,22 @@ sh sql/manual/grant_admin_role.sh <username>
 * `perf/k6-order.js`：下单/支付/查询链路压测
 * `perf/k6-ws.js`：WebSocket 连接与推送压测
 * Prometheus 抓取 Spring Boot Actuator 与 notify 指标，Grafana 面板展示 p95、错误率、队列堆积与在线连接数
+
+可观测性栈启动（容器）：
+
+```bash
+cd deploy
+docker compose --profile app --profile obs up -d --build
+```
+
+预置入口：
+- Prometheus Targets: `http://localhost:9090/targets`
+- Grafana: `http://localhost:3002`
+- 默认 dashboard: `Shiori / Shiori Overview`
+
+默认 Grafana 账号（可在 `deploy/.env` 覆盖）：
+- 用户名：`GRAFANA_ADMIN_USER`（默认 `admin`）
+- 密码：`GRAFANA_ADMIN_PASSWORD`（默认 `admin`）
 
 运行示例：
 

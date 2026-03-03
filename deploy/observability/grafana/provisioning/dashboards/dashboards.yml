@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: shiori-observability
+    orgId: 1
+    folder: Shiori
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards
