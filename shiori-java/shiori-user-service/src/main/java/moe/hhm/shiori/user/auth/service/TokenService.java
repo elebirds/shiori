@@ -99,6 +99,9 @@ public class TokenService {
     }
 
     private String generateAccessToken(Long userId, String userNo, String username, List<String> roles) {
+        if (!StringUtils.hasText(properties.getHmacSecret())) {
+            throw new IllegalStateException("缺少 security.jwt.hmac-secret 配置");
+        }
         Instant now = Instant.now();
         Instant expiresAt = now.plusSeconds(properties.getAccessTtlSeconds());
         List<String> normalizedRoles = normalizeRoles(roles);

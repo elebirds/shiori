@@ -83,8 +83,12 @@ public class GatewaySecurityConfiguration {
 
     @Bean
     public NimbusReactiveJwtDecoder jwtDecoder(GatewaySecurityProperties properties) {
+        String secret = properties.getJwt().getHmacSecret();
+        if (!StringUtils.hasText(secret)) {
+            throw new IllegalStateException("缺少 security.jwt.hmac-secret 配置");
+        }
         SecretKey secretKey = new SecretKeySpec(
-                properties.getJwt().getHmacSecret().getBytes(StandardCharsets.UTF_8),
+                secret.getBytes(StandardCharsets.UTF_8),
                 "HmacSHA256");
         NimbusReactiveJwtDecoder decoder = NimbusReactiveJwtDecoder.withSecretKey(secretKey).build();
         decoder.setJwtValidator(buildJwtValidator(properties.getJwt().getIssuer()));

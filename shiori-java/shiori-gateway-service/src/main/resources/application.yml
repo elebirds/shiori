@@ -3,16 +3,17 @@ spring:
     name: shiori-gateway-service
   config:
     import:
-      - optional:nacos:${spring.application.name}.yml?group=DEFAULT_GROUP&refreshEnabled=true
-      - optional:nacos:shiori-security.yml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:${spring.application.name}-base.yml?group=${NACOS_CONFIG_GROUP:SHIORI_DEV}&refreshEnabled=true
+      - optional:nacos:shiori-security-base.yml?group=${NACOS_CONFIG_GROUP:SHIORI_DEV}&refreshEnabled=true
+      - optional:nacos:shiori-security-secret.yml?group=${NACOS_CONFIG_GROUP:SHIORI_DEV}&refreshEnabled=true
   cloud:
     nacos:
       discovery:
         server-addr: ${NACOS_ADDR:nacos:8848}
       config:
         server-addr: ${NACOS_ADDR:nacos:8848}
-      username: ${NACOS_USERNAME:nacos}
-      password: ${NACOS_PASSWORD:nacos}
+      username: ${NACOS_USERNAME}
+      password: ${NACOS_PASSWORD}
     gateway:
       server:
         webflux:
@@ -47,11 +48,6 @@ spring:
                 - Path=/api/admin/orders/**
 
 security:
-  jwt:
-    hmac-secret: ${JWT_HMAC_SECRET:change-me-in-nacos-change-me-in-nacos}
-    issuer: ${JWT_ISSUER:shiori}
-    access-ttl-seconds: ${JWT_ACCESS_TTL_SECONDS:900}
-    refresh-ttl-seconds: ${JWT_REFRESH_TTL_SECONDS:604800}
   auth:
     whitelist:
       - /actuator/health/**
@@ -64,9 +60,6 @@ security:
       - /api/user/auth/logout
     anonymous-get-paths:
       - /api/product/**
-  gateway-sign:
-    internal-secret: ${GATEWAY_SIGN_SECRET:change-me-internal-sign-secret-change-me}
-    max-skew-seconds: ${GATEWAY_SIGN_MAX_SKEW_SECONDS:300}
 
 server:
   port: 8080

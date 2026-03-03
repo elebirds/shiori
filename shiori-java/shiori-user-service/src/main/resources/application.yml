@@ -3,16 +3,18 @@ spring:
     name: shiori-user-service
   config:
     import:
-      - optional:nacos:${spring.application.name}.yml?group=DEFAULT_GROUP&refreshEnabled=true
-      - optional:nacos:shiori-security.yml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:${spring.application.name}-base.yml?group=${NACOS_CONFIG_GROUP:SHIORI_DEV}&refreshEnabled=true
+      - optional:nacos:${spring.application.name}-secret.yml?group=${NACOS_CONFIG_GROUP:SHIORI_DEV}&refreshEnabled=true
+      - optional:nacos:shiori-security-base.yml?group=${NACOS_CONFIG_GROUP:SHIORI_DEV}&refreshEnabled=true
+      - optional:nacos:shiori-security-secret.yml?group=${NACOS_CONFIG_GROUP:SHIORI_DEV}&refreshEnabled=true
   cloud:
     nacos:
       discovery:
         server-addr: ${NACOS_ADDR:nacos:8848}
       config:
         server-addr: ${NACOS_ADDR:nacos:8848}
-      username: ${NACOS_USERNAME:nacos}
-      password: ${NACOS_PASSWORD:nacos}
+      username: ${NACOS_USERNAME}
+      password: ${NACOS_PASSWORD}
 
 server:
   port: 8081

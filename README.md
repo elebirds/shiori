@@ -149,7 +149,7 @@ shiori/
 ├── shiori-admin-web/                 # 💻 [管理端后台 Web] 请使用 WebStorm / VSCode 打开
 ├── deploy/                           # 🐳 [基础设施部署]
 │   ├── docker-compose.yml            # MySQL, Redis, RabbitMQ, (可选 Nacos/Prom/Grafana)
-│   ├── nacos/                        # Nacos dataId 配置模板（security / user / product / order）
+│   ├── nacos/                        # Nacos 配置导入脚本与模板（templates/*.yml.tmpl）
 │   └── sql/                          # MySQL 初始化脚本（创建多库）与后续运维 SQL
 └── perf/                             # ⚡ [压测资产] k6 脚本与结果记录
     ├── k6-order.js
@@ -172,6 +172,7 @@ shiori/
 
 ```bash
 cd deploy
+cp .env.example .env
 docker compose up -d
 ```
 
@@ -211,11 +212,23 @@ docker compose --profile app --profile web up -d
 - `shiori_product`
 - `shiori_order`
 
-并通过一次性容器 `nacos-config-init` 自动导入 Nacos 配置（`deploy/nacos/*.yml`）：
-- `shiori-user-service.yml`
-- `shiori-product-service.yml`
-- `shiori-order-service.yml`
-- `shiori-security.yml`
+并通过一次性容器 `nacos-config-init` 自动渲染并导入 Nacos 配置模板（`deploy/nacos/templates/*.yml.tmpl`）。
+导入后的 dataId 规范：
+- `shiori-user-service-base.yml`
+- `shiori-user-service-secret.yml`
+- `shiori-product-service-base.yml`
+- `shiori-product-service-secret.yml`
+- `shiori-order-service-base.yml`
+- `shiori-order-service-secret.yml`
+- `shiori-gateway-service-base.yml`
+- `shiori-security-base.yml`
+- `shiori-security-secret.yml`
+
+Nacos 分组规则：
+- `SHIORI_DEV`（`SHIORI_ENV=dev`）
+- `SHIORI_TEST`（`SHIORI_ENV=test`）
+- `SHIORI_PROD`（`SHIORI_ENV=prod`）
+- 未显式设置 `NACOS_CONFIG_GROUP` 时，`nacos-config-init` 会按 `SHIORI_ENV` 自动推导目标 group。
 
 可用以下命令查看导入日志：
 
@@ -235,6 +248,41 @@ docker compose run --rm nacos-config-init
 - S3 API: `http://localhost:9000`
 - Console: `http://localhost:9001`
 
+### 1.1) 环境配置矩阵（dev/test/prod）
+
+| 配置项 | 敏感 | dev 来源 | test 来源 | prod 来源 | 注入位置 |
+|---|---|---|---|---|---|
+| `NACOS_CONFIG_GROUP` | 否 | `SHIORI_DEV` | `SHIORI_TEST` | `SHIORI_PROD` | Compose/启动环境 |
+| `NACOS_CONFIG_NAMESPACE` | 否 | public 或指定 namespace | 指定 namespace | 指定 namespace | Compose/启动环境 |
+| `JWT_HMAC_SECRET` | 是 | `.env` 本地密钥 | CI 运行时生成/Secret | Secret 管理系统 | `nacos-config-init` 模板渲染 |
+| `GATEWAY_SIGN_SECRET` | 是 | `.env` 本地密钥 | CI 运行时生成/Secret | Secret 管理系统 | `nacos-config-init` 模板渲染 |
+| `USER_DB_USERNAME` | 否（建议最小权限） | `.env` | CI Secret/变量 | Secret 管理系统 | `shiori-user-service-secret.yml` |
+| `USER_DB_PASSWORD` | 是 | `.env` | CI Secret | Secret 管理系统 | `shiori-user-service-secret.yml` |
+| `PRODUCT_DB_USERNAME` | 否（建议最小权限） | `.env` | CI Secret/变量 | Secret 管理系统 | `shiori-product-service-secret.yml` |
+| `PRODUCT_DB_PASSWORD` | 是 | `.env` | CI Secret | Secret 管理系统 | `shiori-product-service-secret.yml` |
+| `ORDER_DB_USERNAME` | 否（建议最小权限） | `.env` | CI Secret/变量 | Secret 管理系统 | `shiori-order-service-secret.yml` |
+| `ORDER_DB_PASSWORD` | 是 | `.env` | CI Secret | Secret 管理系统 | `shiori-order-service-secret.yml` |
+| `ORDER_RMQ_USERNAME` | 否（建议最小权限） | `.env` | CI Secret/变量 | Secret 管理系统 | `shiori-order-service-secret.yml` |
+| `ORDER_RMQ_PASSWORD` | 是 | `.env` | CI Secret | Secret 管理系统 | `shiori-order-service-secret.yml` |
+| `OSS_ACCESS_KEY` | 否（凭证标识） | `.env` | CI Secret/变量 | Secret 管理系统 | `shiori-product-service-secret.yml` |
+| `OSS_SECRET_KEY` | 是 | `.env` | CI Secret | Secret 管理系统 | `shiori-product-service-secret.yml` |
+| `MYSQL_ROOT_PASSWORD` | 是 | `.env` | CI 运行时生成/Secret | Secret 管理系统 | docker compose |
+| `RABBITMQ_DEFAULT_PASS` | 是 | `.env` | CI 运行时生成/Secret | Secret 管理系统 | docker compose |
+| `MINIO_ROOT_PASSWORD` | 是 | `.env` | CI 运行时生成/Secret | Secret 管理系统 | docker compose |
+| `NACOS_AUTH_TOKEN` | 是 | `.env` | CI 运行时生成/Secret | Secret 管理系统 | docker compose |
+| `NACOS_AUTH_IDENTITY_KEY` | 是 | `.env` | CI 运行时生成/Secret | Secret 管理系统 | docker compose / nacos init 请求头 |
+| `NACOS_AUTH_IDENTITY_VALUE` | 是 | `.env` | CI 运行时生成/Secret | Secret 管理系统 | docker compose / nacos init 请求头 |
+| `NACOS_IMPORT_PASSWORD` | 是 | `.env` | CI 运行时生成/Secret | Secret 管理系统 | `nacos-config-init` 登录 |
+
+最小启动方式（不含明文）：
+
+```bash
+cd deploy
+cp .env.example .env
+# 编辑 .env，填入真实密钥
+docker compose up -d
+```
+
 ### 2) Run Core Services (Java)
 
 若你已执行 `docker compose --profile app up -d --build`，可跳过本节手工启动。
@@ -249,16 +297,16 @@ cd shiori-java
 
 ### 2.2) Nacos 数据源配置（必须）
 
-三大业务服务的数据源/Flyway/MyBatis 配置统一由 Nacos 下发：
-- dataId: `shiori-user-service.yml`
-- dataId: `shiori-product-service.yml`
-- dataId: `shiori-order-service.yml`
+三大业务服务的配置统一由 Nacos 下发，按 “base/secret” 拆分：
+- user: `shiori-user-service-base.yml` + `shiori-user-service-secret.yml`
+- product: `shiori-product-service-base.yml` + `shiori-product-service-secret.yml`
+- order: `shiori-order-service-base.yml` + `shiori-order-service-secret.yml`
+- shared: `shiori-security-base.yml` + `shiori-security-secret.yml`
 
-脚手架默认通过 `nacos-config-init` 自动导入，模板仍位于：
-- `deploy/nacos/shiori-user-service.yml`
-- `deploy/nacos/shiori-product-service.yml`
-- `deploy/nacos/shiori-order-service.yml`
-- `deploy/nacos/shiori-security.yml`
+网关额外加载：`shiori-gateway-service-base.yml`。
+
+模板位于：
+- `deploy/nacos/templates/`
 
 ### 2.1) Gateway 鉴权（第二阶段）
 
@@ -271,25 +319,25 @@ cd shiori-java
 - 网关为 `/api/**` 写入 `X-Gateway-Ts`、`X-Gateway-Sign`，业务服务执行签名校验作为第二道防线
 - `GET /api/product/**` 允许匿名读取（商品浏览）
 
-推荐通过 Nacos 配置中心下发密钥（dataId: `shiori-security.yml`，group: `DEFAULT_GROUP`）：
+推荐通过 Nacos 配置中心下发安全配置（group 由 `SHIORI_ENV` 或 `NACOS_CONFIG_GROUP` 决定）：
+- `shiori-security-base.yml`：`issuer`、`ttl`、`max-skew`
+- `shiori-security-secret.yml`：`hmac-secret`、`internal-secret`
 
 ```yaml
 security:
   jwt:
-    hmac-secret: "replace-with-your-32+bytes-secret"
     issuer: "shiori"
     access-ttl-seconds: 900
     refresh-ttl-seconds: 604800
   gateway-sign:
-    internal-secret: "replace-with-your-internal-sign-secret"
     max-skew-seconds: 300
 ```
 
-本地临时调试也可直接使用环境变量：
+密钥通过环境变量注入到模板渲染流程（不在仓库保存明文）：
 
 ```bash
-export JWT_HMAC_SECRET='replace-with-your-32+bytes-secret'
-export JWT_ISSUER='shiori'
+export JWT_HMAC_SECRET='<your-secret>'
+export GATEWAY_SIGN_SECRET='<your-secret>'
 ```
 
 ### 3) Run Edge Notify (Go)
@@ -307,7 +355,7 @@ go run .
 
 ```bash
 export NOTIFY_HTTP_ADDR=:8090
-export RABBITMQ_ADDR=amqp://shiori:shiori@localhost:5672/
+export RABBITMQ_ADDR=amqp://<rmq-username>:<rmq-password>@localhost:5672/
 export RABBITMQ_EXCHANGE=shiori.order.event
 export RABBITMQ_QUEUE=notify.order.paid
 export RABBITMQ_ROUTING_KEY=order.paid
@@ -412,7 +460,7 @@ bash scripts/smoke/e2e_admin_console.sh
 - buyer 支付订单
 - buyer/seller 两端 WebSocket 均收到 `OrderPaid` 事件
 
-可选环境变量：
+可选环境变量（`admin` 烟测依赖 MySQL 账号）：
 
 ```bash
 export GATEWAY_BASE_URL=http://localhost:8080
@@ -420,8 +468,8 @@ export NOTIFY_WS_BASE_URL=ws://localhost:8090/ws
 export SMOKE_TIMEOUT_SECONDS=60
 export SMOKE_PREFIX=smoke
 export MYSQL_CONTAINER=shiori-mysql
-export MYSQL_USER=shiori
-export MYSQL_PASSWORD=shiori
+export MYSQL_USER=<mysql-app-user>
+export MYSQL_PASSWORD=<mysql-app-password>
 ```
 
 `ws-smoke` 探针命令（脚本内部也会调用）：
@@ -449,6 +497,16 @@ bash scripts/ci/run_e2e_ci.sh
 ```bash
 export SERVICE_READY_TIMEOUT_SECONDS=300
 ```
+
+必填敏感变量（脚本会校验）：
+- `MYSQL_ROOT_PASSWORD`
+- `MYSQL_PASSWORD`
+- `RABBITMQ_DEFAULT_PASS`
+- `MINIO_ROOT_PASSWORD`
+- `NACOS_AUTH_TOKEN`
+- `NACOS_IMPORT_PASSWORD`
+- `JWT_HMAC_SECRET`
+- `GATEWAY_SIGN_SECRET`
 
 脚本执行时会：
 - 自动 `docker compose up -d`
@@ -517,7 +575,7 @@ pnpm e2e
 2. 在 MySQL 手工执行脚本授予 `ROLE_ADMIN`：
 
 ```bash
-mysql -h127.0.0.1 -P3306 -ushiori -pshiori < deploy/sql/manual/grant_admin_role.sql
+mysql -h127.0.0.1 -P3306 -u<mysql-user> -p'<mysql-password>' < deploy/sql/manual/grant_admin_role.sql
 ```
 
 脚本路径：

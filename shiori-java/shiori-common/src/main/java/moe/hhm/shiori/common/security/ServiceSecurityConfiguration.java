@@ -14,6 +14,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.util.StringUtils;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -24,6 +25,9 @@ public class ServiceSecurityConfiguration {
     @ConditionalOnMissingBean
     public GatewaySignVerifyFilter gatewaySignVerifyFilter(GatewaySignProperties properties,
                                                            ObjectProvider<ObjectMapper> objectMapperProvider) {
+        if (properties.isEnabled() && !StringUtils.hasText(properties.getInternalSecret())) {
+            throw new IllegalStateException("缺少 security.gateway-sign.internal-secret 配置");
+        }
         return new GatewaySignVerifyFilter(properties, objectMapperProvider.getIfAvailable(ObjectMapper::new));
     }
 

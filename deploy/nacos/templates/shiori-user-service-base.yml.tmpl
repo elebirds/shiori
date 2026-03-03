@@ -1,8 +1,6 @@
 spring:
   datasource:
-    url: jdbc:mysql://mysql:3306/shiori_user?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
-    username: shiori
-    password: shiori
+    url: ${USER_DB_URL}
   flyway:
     enabled: true
     baseline-on-migrate: true

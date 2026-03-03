@@ -54,6 +54,7 @@ class GatewayRequestSignFilterTest {
     @Test
     void shouldSkipNonApiPath() {
         GatewaySecurityProperties properties = new GatewaySecurityProperties();
+        properties.getGatewaySign().setInternalSecret("test-internal-sign-secret-32-bytes-0001");
         GatewayRequestSignFilter filter = new GatewayRequestSignFilter(properties);
 
         MockServerHttpRequest request = MockServerHttpRequest.get("/actuator/health")

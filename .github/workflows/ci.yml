@@ -74,6 +74,56 @@ jobs:
           node --version
           pnpm --version
 
+      - name: Prepare E2E secrets and env
+        run: |
+          gen_hex() { openssl rand -hex "$1"; }
+          gen_b64() { openssl rand -base64 "$1" | tr -d '\n'; }
+
+          MYSQL_ROOT_PASSWORD="$(gen_hex 16)"
+          MYSQL_PASSWORD="$(gen_hex 16)"
+          RABBITMQ_DEFAULT_PASS="$(gen_hex 16)"
+          MINIO_ROOT_PASSWORD="$(gen_hex 24)"
+          NACOS_AUTH_TOKEN="$(gen_b64 48)"
+          NACOS_AUTH_IDENTITY_KEY="idk_$(gen_hex 6)"
+          NACOS_AUTH_IDENTITY_VALUE="$(gen_hex 16)"
+          NACOS_IMPORT_PASSWORD="$(gen_hex 16)"
+          JWT_HMAC_SECRET="$(gen_hex 32)"
+          GATEWAY_SIGN_SECRET="$(gen_hex 32)"
+
+          {
+            echo "SHIORI_ENV=test"
+            echo "NACOS_CONFIG_GROUP=SHIORI_TEST"
+            echo "MYSQL_DATABASE=shiori"
+            echo "MYSQL_USER=shiori"
+            echo "MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}"
+            echo "MYSQL_PASSWORD=${MYSQL_PASSWORD}"
+            echo "RABBITMQ_DEFAULT_USER=shiori"
+            echo "RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}"
+            echo "MINIO_ROOT_USER=shiori"
+            echo "MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}"
+            echo "MINIO_PRODUCT_BUCKET=shiori-product"
+            echo "NACOS_AUTH_TOKEN=${NACOS_AUTH_TOKEN}"
+            echo "NACOS_AUTH_IDENTITY_KEY=${NACOS_AUTH_IDENTITY_KEY}"
+            echo "NACOS_AUTH_IDENTITY_VALUE=${NACOS_AUTH_IDENTITY_VALUE}"
+            echo "NACOS_IMPORT_USERNAME=nacos"
+            echo "NACOS_IMPORT_PASSWORD=${NACOS_IMPORT_PASSWORD}"
+            echo "USER_DB_URL=jdbc:mysql://mysql:3306/shiori_user?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false"
+            echo "USER_DB_USERNAME=shiori"
+            echo "USER_DB_PASSWORD=${MYSQL_PASSWORD}"
+            echo "PRODUCT_DB_URL=jdbc:mysql://mysql:3306/shiori_product?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false"
+            echo "PRODUCT_DB_USERNAME=shiori"
+            echo "PRODUCT_DB_PASSWORD=${MYSQL_PASSWORD}"
+            echo "ORDER_DB_URL=jdbc:mysql://mysql:3306/shiori_order?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false"
+            echo "ORDER_DB_USERNAME=shiori"
+            echo "ORDER_DB_PASSWORD=${MYSQL_PASSWORD}"
+            echo "ORDER_RMQ_USERNAME=shiori"
+            echo "ORDER_RMQ_PASSWORD=${RABBITMQ_DEFAULT_PASS}"
+            echo "OSS_ACCESS_KEY=shiori"
+            echo "OSS_SECRET_KEY=${MINIO_ROOT_PASSWORD}"
+            echo "JWT_HMAC_SECRET=${JWT_HMAC_SECRET}"
+            echo "GATEWAY_SIGN_SECRET=${GATEWAY_SIGN_SECRET}"
+          } >> "$GITHUB_ENV"
+
       - name: Run E2E smoke suite
         run: bash scripts/ci/run_e2e_ci.sh
 

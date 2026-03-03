@@ -4,8 +4,8 @@ set -euo pipefail
 GATEWAY_BASE_URL="${GATEWAY_BASE_URL:-http://localhost:8080}"
 SMOKE_PREFIX="${SMOKE_PREFIX:-adminsmoke}"
 MYSQL_CONTAINER="${MYSQL_CONTAINER:-shiori-mysql}"
-MYSQL_USER="${MYSQL_USER:-shiori}"
-MYSQL_PASSWORD="${MYSQL_PASSWORD:-shiori}"
+MYSQL_USER="${MYSQL_USER:?missing MYSQL_USER}"
+MYSQL_PASSWORD="${MYSQL_PASSWORD:?missing MYSQL_PASSWORD}"
 
 TMP_DIR="$(mktemp -d)"
 START_TS="$(date +%s)"
@@ -159,7 +159,7 @@ safe_prefix="${safe_prefix:0:8}"
 admin_username="${safe_prefix}adm${id_suffix}"
 seller_username="${safe_prefix}sel${id_suffix}"
 buyer_username="${safe_prefix}buy${id_suffix}"
-default_password='Passw0rd123'
+default_password="A${id_suffix}a!"
 
 register_user() {
   local username="$1"

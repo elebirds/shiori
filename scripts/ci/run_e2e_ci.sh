@@ -59,6 +59,13 @@ require_command() {
   fi
 }
 
+require_env() {
+  local var_name="$1"
+  if [[ -z "${!var_name:-}" ]]; then
+    fail "缺少必填环境变量: ${var_name}"
+  fi
+}
+
 add_service_pid() {
   SERVICE_NAMES+=("$1")
   SERVICE_PIDS+=("$2")
@@ -152,11 +159,14 @@ start_user_service() {
   (
     cd "${JAVA_DIR}"
     NACOS_ADDR=localhost:8848 \
+    NACOS_CONFIG_GROUP="${NACOS_CONFIG_GROUP}" \
     SPRING_DATASOURCE_URL="jdbc:mysql://localhost:3306/shiori_user?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false" \
-    SPRING_DATASOURCE_USERNAME=shiori \
-    SPRING_DATASOURCE_PASSWORD=shiori \
+    SPRING_DATASOURCE_USERNAME="${USER_DB_USERNAME}" \
+    SPRING_DATASOURCE_PASSWORD="${USER_DB_PASSWORD}" \
     SPRING_DATA_REDIS_HOST=localhost \
     SPRING_DATA_REDIS_PORT=6380 \
+    NACOS_USERNAME="${NACOS_IMPORT_USERNAME}" \
+    NACOS_PASSWORD="${NACOS_IMPORT_PASSWORD}" \
     ./gradlew :shiori-user-service:bootRun --no-daemon
   ) >"${CI_LOG_DIR}/user-service.log" 2>&1 &
   add_service_pid "user-service" "$!"
@@ -166,12 +176,15 @@ start_product_service() {
   (
     cd "${JAVA_DIR}"
     NACOS_ADDR=localhost:8848 \
+    NACOS_CONFIG_GROUP="${NACOS_CONFIG_GROUP}" \
     SPRING_DATASOURCE_URL="jdbc:mysql://localhost:3306/shiori_product?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false" \
-    SPRING_DATASOURCE_USERNAME=shiori \
-    SPRING_DATASOURCE_PASSWORD=shiori \
+    SPRING_DATASOURCE_USERNAME="${PRODUCT_DB_USERNAME}" \
+    SPRING_DATASOURCE_PASSWORD="${PRODUCT_DB_PASSWORD}" \
     SPRING_DATA_REDIS_HOST=localhost \
     SPRING_DATA_REDIS_PORT=6380 \
     STORAGE_OSS_ENDPOINT=http://localhost:9000 \
+    NACOS_USERNAME="${NACOS_IMPORT_USERNAME}" \
+    NACOS_PASSWORD="${NACOS_IMPORT_PASSWORD}" \
     ./gradlew :shiori-product-service:bootRun --no-daemon
   ) >"${CI_LOG_DIR}/product-service.log" 2>&1 &
   add_service_pid "product-service" "$!"
@@ -181,16 +194,19 @@ start_order_service() {
   (
     cd "${JAVA_DIR}"
     NACOS_ADDR=localhost:8848 \
+    NACOS_CONFIG_GROUP="${NACOS_CONFIG_GROUP}" \
     SPRING_DATASOURCE_URL="jdbc:mysql://localhost:3306/shiori_order?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false" \
-    SPRING_DATASOURCE_USERNAME=shiori \
-    SPRING_DATASOURCE_PASSWORD=shiori \
+    SPRING_DATASOURCE_USERNAME="${ORDER_DB_USERNAME}" \
+    SPRING_DATASOURCE_PASSWORD="${ORDER_DB_PASSWORD}" \
     SPRING_RABBITMQ_HOST=localhost \
     SPRING_RABBITMQ_PORT=5672 \
-    SPRING_RABBITMQ_USERNAME=shiori \
-    SPRING_RABBITMQ_PASSWORD=shiori \
+    SPRING_RABBITMQ_USERNAME="${ORDER_RMQ_USERNAME}" \
+    SPRING_RABBITMQ_PASSWORD="${ORDER_RMQ_PASSWORD}" \
     SPRING_DATA_REDIS_HOST=localhost \
     SPRING_DATA_REDIS_PORT=6380 \
     ORDER_PRODUCT_SERVICE_BASE_URL=http://localhost:8082 \
+    NACOS_USERNAME="${NACOS_IMPORT_USERNAME}" \
+    NACOS_PASSWORD="${NACOS_IMPORT_PASSWORD}" \
     ./gradlew :shiori-order-service:bootRun --no-daemon
   ) >"${CI_LOG_DIR}/order-service.log" 2>&1 &
   add_service_pid "order-service" "$!"
@@ -200,8 +216,11 @@ start_gateway_service() {
   (
     cd "${JAVA_DIR}"
     NACOS_ADDR=localhost:8848 \
+    NACOS_CONFIG_GROUP="${NACOS_CONFIG_GROUP}" \
     SPRING_DATA_REDIS_HOST=localhost \
     SPRING_DATA_REDIS_PORT=6380 \
+    NACOS_USERNAME="${NACOS_IMPORT_USERNAME}" \
+    NACOS_PASSWORD="${NACOS_IMPORT_PASSWORD}" \
     ./gradlew :shiori-gateway-service:bootRun --no-daemon
   ) >"${CI_LOG_DIR}/gateway-service.log" 2>&1 &
   add_service_pid "gateway-service" "$!"
@@ -211,7 +230,7 @@ start_notify_service() {
   (
     cd "${NOTIFY_DIR}"
     NOTIFY_HTTP_ADDR=:8090 \
-    RABBITMQ_ADDR="amqp://shiori:shiori@localhost:5672/" \
+    RABBITMQ_ADDR="amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@localhost:5672/" \
     go run .
   ) >"${CI_LOG_DIR}/notify.log" 2>&1 &
   add_service_pid "notify" "$!"
@@ -224,6 +243,37 @@ main() {
   require_command go
   require_command node
   require_command pnpm
+
+  export SHIORI_ENV="${SHIORI_ENV:-test}"
+  export NACOS_CONFIG_GROUP="${NACOS_CONFIG_GROUP:-SHIORI_TEST}"
+
+  require_env MYSQL_ROOT_PASSWORD
+  require_env MYSQL_USER
+  require_env MYSQL_PASSWORD
+  require_env RABBITMQ_DEFAULT_USER
+  require_env RABBITMQ_DEFAULT_PASS
+  require_env MINIO_ROOT_USER
+  require_env MINIO_ROOT_PASSWORD
+  require_env NACOS_AUTH_TOKEN
+  require_env NACOS_AUTH_IDENTITY_KEY
+  require_env NACOS_AUTH_IDENTITY_VALUE
+  require_env NACOS_IMPORT_USERNAME
+  require_env NACOS_IMPORT_PASSWORD
+  require_env USER_DB_URL
+  require_env USER_DB_USERNAME
+  require_env USER_DB_PASSWORD
+  require_env PRODUCT_DB_URL
+  require_env PRODUCT_DB_USERNAME
+  require_env PRODUCT_DB_PASSWORD
+  require_env ORDER_DB_URL
+  require_env ORDER_DB_USERNAME
+  require_env ORDER_DB_PASSWORD
+  require_env ORDER_RMQ_USERNAME
+  require_env ORDER_RMQ_PASSWORD
+  require_env OSS_ACCESS_KEY
+  require_env OSS_SECRET_KEY
+  require_env JWT_HMAC_SECRET
+  require_env GATEWAY_SIGN_SECRET
 
   docker compose version >/dev/null 2>&1 || fail "docker compose 不可用"
   [[ -x "${SMOKE_SCRIPT}" ]] || fail "烟测脚本不存在或不可执行: ${SMOKE_SCRIPT}"
@@ -298,8 +348,8 @@ main() {
     pnpm e2e:install
     E2E_GATEWAY_BASE_URL=http://127.0.0.1:8080 \
     E2E_MYSQL_CONTAINER=shiori-mysql \
-    E2E_MYSQL_USER=shiori \
-    E2E_MYSQL_PASSWORD=shiori \
+    E2E_MYSQL_USER="${MYSQL_USER}" \
+    E2E_MYSQL_PASSWORD="${MYSQL_PASSWORD}" \
     pnpm e2e
   ) >"${CI_LOG_DIR}/admin-web-e2e.log" 2>&1; then
     dump_tail "${CI_LOG_DIR}/admin-web-e2e.log"

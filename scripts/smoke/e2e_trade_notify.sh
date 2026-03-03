@@ -116,8 +116,8 @@ notify_status="$(echo "${notify_health}" | jq -r '.status // empty')"
 run_id="$(date +%s)$RANDOM"
 seller_username="${SMOKE_PREFIX}_seller_${run_id}"
 buyer_username="${SMOKE_PREFIX}_buyer_${run_id}"
-seller_password='Passw0rd123'
-buyer_password='Passw0rd123'
+seller_password="S${run_id}a!"
+buyer_password="B${run_id}a!"
 
 log "注册 seller 用户: ${seller_username}"
 seller_register_payload="$(jq -nc \

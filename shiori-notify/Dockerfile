@@ -15,7 +15,7 @@ WORKDIR /app
 COPY --from=builder /out/shiori-notify /usr/local/bin/shiori-notify
 
 ENV NOTIFY_HTTP_ADDR=:8090
-ENV RABBITMQ_ADDR=amqp://shiori:shiori@rabbitmq:5672/
+ENV RABBITMQ_ADDR=amqp://rabbitmq:5672/
 
 EXPOSE 8090
 USER app

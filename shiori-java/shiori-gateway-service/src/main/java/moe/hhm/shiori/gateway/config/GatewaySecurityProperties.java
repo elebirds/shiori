@@ -84,7 +84,7 @@ public class GatewaySecurityProperties {
     }
 
     public static class GatewaySign {
-        private String internalSecret = "change-me-internal-sign-secret-change-me";
+        private String internalSecret;
         private long maxSkewSeconds = 300;
 
         public String getInternalSecret() {

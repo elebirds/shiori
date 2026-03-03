@@ -10,7 +10,7 @@ import (
 
 const (
 	defaultHTTPAddr         = ":8090"
-	defaultRabbitMQAddr     = "amqp://shiori:shiori@localhost:5672/"
+	defaultRabbitMQAddr     = "amqp://localhost:5672/"
 	defaultRabbitMQExchange = "shiori.order.event"
 	defaultRabbitMQQueue    = "notify.order.paid"
 	defaultRabbitMQRouteKey = "order.paid"

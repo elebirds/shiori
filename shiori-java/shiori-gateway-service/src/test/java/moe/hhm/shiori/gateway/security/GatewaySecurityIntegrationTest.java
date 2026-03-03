@@ -21,7 +21,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "security.jwt.hmac-secret=test-secret-test-secret-test-secret-1234",
-        "security.jwt.issuer=shiori"
+        "security.jwt.issuer=shiori",
+        "security.gateway-sign.internal-secret=test-gateway-sign-secret-32-bytes-0001"
 })
 class GatewaySecurityIntegrationTest {
 

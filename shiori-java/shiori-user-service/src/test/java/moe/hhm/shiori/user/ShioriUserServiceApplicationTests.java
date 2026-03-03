@@ -8,7 +8,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
-@SpringBootTest
+@SpringBootTest(properties = {
+        "security.gateway-sign.internal-secret=test-gateway-sign-secret-32-bytes-0001"
+})
 class ShioriUserServiceApplicationTests {
 
     @MockitoBean

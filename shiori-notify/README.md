@@ -21,7 +21,7 @@ go run .
 | 变量名 | 默认值 | 说明 |
 |---|---|---|
 | `NOTIFY_HTTP_ADDR` | `:8090` | HTTP 监听地址 |
-| `RABBITMQ_ADDR` | `amqp://shiori:shiori@localhost:5672/` | RabbitMQ 连接串 |
+| `RABBITMQ_ADDR` | `amqp://localhost:5672/` | RabbitMQ 连接串 |
 | `RABBITMQ_EXCHANGE` | `shiori.order.event` | topic exchange 名称 |
 | `RABBITMQ_QUEUE` | `notify.order.paid` | 消费队列名称 |
 | `RABBITMQ_ROUTING_KEY` | `order.paid` | 绑定 routing key |

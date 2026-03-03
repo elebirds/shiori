@@ -7,16 +7,21 @@ import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 @Component
 public class GatewayRequestSignFilter implements GlobalFilter, Ordered {
 
-    private final GatewaySecurityProperties properties;
+    private final String internalSecret;
 
     public GatewayRequestSignFilter(GatewaySecurityProperties properties) {
-        this.properties = properties;
+        String secret = properties.getGatewaySign().getInternalSecret();
+        if (!StringUtils.hasText(secret)) {
+            throw new IllegalStateException("缺少 security.gateway-sign.internal-secret 配置");
+        }
+        this.internalSecret = secret;
     }
 
     @Override
@@ -43,7 +48,7 @@ public class GatewayRequestSignFilter implements GlobalFilter, Ordered {
                 userRoles,
                 timestamp
         );
-        String sign = GatewaySignUtils.hmacSha256Hex(properties.getGatewaySign().getInternalSecret(), canonical);
+        String sign = GatewaySignUtils.hmacSha256Hex(internalSecret, canonical);
 
         ServerWebExchange signedExchange = exchange.mutate()
                 .request(exchange.getRequest().mutate().headers(headers -> {

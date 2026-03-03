@@ -8,7 +8,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class GatewaySignProperties {
 
     private boolean enabled = true;
-    private String internalSecret = "change-me-internal-sign-secret-change-me";
+    private String internalSecret;
     private long maxSkewSeconds = 300;
     private List<String> permitAllPaths = new ArrayList<>(List.of(
             "/actuator/**",

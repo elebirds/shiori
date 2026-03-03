@@ -5,7 +5,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "security.jwt")
 public class UserJwtProperties {
 
-    private String hmacSecret = "change-me-in-nacos-change-me-in-nacos";
+    private String hmacSecret;
     private String issuer = "shiori";
     private long accessTtlSeconds = 900;
     private long refreshTtlSeconds = 604800;
