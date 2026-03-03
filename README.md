@@ -354,7 +354,7 @@ cd shiori-java
 - 业务接口默认受保护：`/api/**`
 - 管理路径：`/api/admin/**` 需要 `ROLE_ADMIN`
 - 网关向下游透传 `X-User-Id`、`X-User-Roles`
-- 网关为 `/api/**` 写入 `X-Gateway-Ts`、`X-Gateway-Sign`，业务服务执行签名校验作为第二道防线
+- 网关为 `/api/**` 写入 `X-Gateway-Ts`、`X-Gateway-Nonce`、`X-Gateway-Sign`，业务服务执行签名校验 + 防重放作为第二道防线
 - `GET /api/product/**` 允许匿名读取（商品浏览）
 
 推荐通过 Nacos 配置中心下发安全配置（group 由 `SHIORI_ENV` 或 `NACOS_CONFIG_GROUP` 决定）：
@@ -369,6 +369,8 @@ security:
     refresh-ttl-seconds: 604800
   gateway-sign:
     max-skew-seconds: 300
+    replay-protection-enabled: true
+    replay-cache-max-entries: 200000
 ```
 
 密钥通过环境变量注入到模板渲染流程（不在仓库保存明文）：
@@ -451,8 +453,8 @@ curl -X POST http://localhost:8080/api/product/media/presign-upload \
 - 下单规则：不允许购买自己发布的商品（违规则返回 `50015 ORDER_SELF_PURCHASE_NOT_ALLOWED`）
 - 我的订单分页：`GET /api/order/orders`
 - 订单详情：`GET /api/order/orders/{orderNo}`
-- 模拟支付：`POST /api/order/orders/{orderNo}/pay`
-- 主动取消：`POST /api/order/orders/{orderNo}/cancel`
+- 模拟支付（幂等）：`POST /api/order/orders/{orderNo}/pay`（必须 `Idempotency-Key`）
+- 主动取消（幂等）：`POST /api/order/orders/{orderNo}/cancel`（必须 `Idempotency-Key`）
 - 卖家履约：`POST /api/order/seller/orders/{orderNo}/deliver|finish`
 - 管理端履约：`POST /api/admin/orders/{orderNo}/deliver|finish`
 - 状态迁移审计查询：`GET /api/admin/orders/{orderNo}/status-audits`
@@ -478,6 +480,7 @@ curl -X POST http://localhost:8080/api/order/orders \
 # 2) 支付订单（模拟）
 curl -X POST http://localhost:8080/api/order/orders/<orderNo>/pay \
   -H "Authorization: Bearer <access-jwt>" \
+  -H "Idempotency-Key: pay-order-demo-001" \
   -H "Content-Type: application/json" \
   -d '{"paymentNo":"pay-demo-001"}'
 ```
@@ -588,6 +591,32 @@ export K6_NOTIFY_HTTP_BASE_URL=http://host.docker.internal:8090
 
 CI 日志默认落盘到仓库根目录：
 - `ci-logs/*.log`
+
+### 3.5) 发布准入与回滚（v0.3）
+
+发布准入（必须满足）：
+- `java-test` 通过
+- `local-regression-blocking` 通过
+- `perf-stress-non-blocking` 已执行并完成趋势评估
+- `e2e_trade_notify` + `e2e_admin_console` 冒烟通过
+
+回滚触发（任一满足即评估回滚）：
+- 核心交易错误率连续 5 分钟 >= 3%
+- 网关限流误伤导致登录/下单/支付成功率显著下降
+- 订单状态迁移出现持续非法流转
+
+发布/回滚演练脚本：
+
+```bash
+# 发布演练
+bash scripts/release/release_drill.sh drill
+
+# 回滚演练
+ROLLBACK_TO_TAG=v0.2.0 bash scripts/release/release_drill.sh rollback
+```
+
+详细排障顺序与准入细则见：
+- `docs/runbooks/release-readiness-v0.3.md`
 
 ### 4) Run Frontend (Web)
 

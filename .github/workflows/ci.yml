@@ -29,7 +29,7 @@ jobs:
         run: ./gradlew clean test --no-daemon
 
   e2e-trade-notify:
-    name: e2e-trade-notify-admin
+    name: local-regression-blocking
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: java-test
@@ -155,7 +155,7 @@ jobs:
           if-no-files-found: warn
 
   perf-baseline:
-    name: perf-baseline-non-blocking
+    name: perf-stress-non-blocking
     runs-on: ubuntu-latest
     timeout-minutes: 35
     needs: java-test
