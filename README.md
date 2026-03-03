@@ -606,13 +606,15 @@ pnpm e2e
 本项目不内置默认管理员账号，请按以下步骤初始化：
 
 1. 先调用注册接口创建普通用户（`/api/user/auth/register`）。
-2. 在 MySQL 手工执行脚本授予 `ROLE_ADMIN`：
+2. 执行仓库脚本授予 `ROLE_ADMIN`（推荐）：
 
 ```bash
-mysql -h127.0.0.1 -P3306 -u<mysql-user> -p'<mysql-password>' < deploy/sql/manual/grant_admin_role.sql
+cd deploy
+sh sql/manual/grant_admin_role.sh <username>
 ```
 
 脚本路径：
+- `deploy/sql/manual/grant_admin_role.sh`
 - `deploy/sql/manual/grant_admin_role.sql`
 
 ---
