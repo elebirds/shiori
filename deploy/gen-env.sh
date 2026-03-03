@@ -58,9 +58,9 @@ rand_hex() {
   openssl rand -hex "${bytes}"
 }
 
-rand_b64url() {
+rand_b64() {
   bytes="$1"
-  openssl rand -base64 "${bytes}" | tr -d '\n' | tr '+/' '-_' | tr -d '='
+  openssl rand -base64 "${bytes}" | tr -d '\n'
 }
 
 gen_value() {
@@ -70,7 +70,8 @@ gen_value() {
       rand_hex 32
       ;;
     NACOS_AUTH_TOKEN)
-      rand_b64url 48
+      # Nacos 要求标准 base64 且解码后长度 >= 32 bytes
+      rand_b64 48
       ;;
     NACOS_AUTH_IDENTITY_KEY)
       printf 'idk_%s' "$(rand_hex 6)"
@@ -107,6 +108,24 @@ while IFS= read -r line || [ -n "${line}" ]; do
       ;;
   esac
 done < "${INPUT_FILE}"
+
+sync_value() {
+  key_from="$1"
+  key_to="$2"
+  from_value="$(grep "^${key_from}=" "${TMP_FILE}" | head -n1 | cut -d= -f2- || true)"
+  if [ -n "${from_value}" ] && grep -q "^${key_to}=" "${TMP_FILE}"; then
+    awk -v key_to="${key_to}" -v value="${from_value}" '
+    BEGIN { prefix = key_to "=" }
+    index($0, prefix) == 1 { print prefix value; next }
+    { print }
+    ' "${TMP_FILE}" > "${TMP_FILE}.sync"
+    mv "${TMP_FILE}.sync" "${TMP_FILE}"
+  fi
+}
+
+# Nacos 本机调试别名变量保持与导入账号一致，避免密码不一致导致认证失败。
+sync_value "NACOS_IMPORT_PASSWORD" "NACOS_PASSWORD"
+sync_value "NACOS_IMPORT_USERNAME" "NACOS_USERNAME"
 
 if [ "${FORCE_OVERWRITE}" -eq 1 ] && [ -f "${OUTPUT_FILE}" ]; then
   rm -f "${OUTPUT_FILE}"
