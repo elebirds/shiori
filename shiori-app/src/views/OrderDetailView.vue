@@ -17,6 +17,10 @@ const query = useQuery({
   queryKey: computed(() => ['order-detail', orderNo.value]),
   queryFn: () => getOrderDetail(orderNo.value),
   enabled: computed(() => orderNo.value.length > 0),
+  refetchInterval: (state) => {
+    const status = state.state.data?.status
+    return status === 'UNPAID' ? 3000 : false
+  },
 })
 
 const payMutation = useMutation({
@@ -91,6 +95,7 @@ async function handleCancel(): Promise<void> {
           <div>
             <h1 class="font-display text-2xl text-stone-900">订单 {{ detail.orderNo }}</h1>
             <p class="mt-1 text-sm text-stone-600">创建于 {{ formatTime(detail.createdAt) }}</p>
+            <p v-if="detail.status === 'UNPAID'" class="mt-1 text-xs text-amber-700">状态自动刷新中（每 3 秒）</p>
           </div>
           <span
             class="w-fit rounded-full px-3 py-1 text-xs font-semibold"
@@ -162,4 +167,3 @@ async function handleCancel(): Promise<void> {
     </ResultState>
   </section>
 </template>
-

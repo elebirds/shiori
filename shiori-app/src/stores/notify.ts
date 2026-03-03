@@ -66,6 +66,11 @@ export const useNotifyStore = defineStore('notify', () => {
           return
         }
 
+        const duplicated = messages.value.some((item) => item.id === envelope.eventId)
+        if (duplicated) {
+          return
+        }
+
         messages.value.unshift({
           id: envelope.eventId,
           type: envelope.type,
@@ -129,6 +134,15 @@ export const useNotifyStore = defineStore('notify', () => {
     messages.value = messages.value.map((item) => ({ ...item, read: true }))
   }
 
+  function markRead(messageId: string): void {
+    messages.value = messages.value.map((item) => {
+      if (item.id === messageId) {
+        return { ...item, read: true }
+      }
+      return item
+    })
+  }
+
   function clearMessages(): void {
     messages.value = []
   }
@@ -141,6 +155,7 @@ export const useNotifyStore = defineStore('notify', () => {
     connect,
     disconnect,
     markAllRead,
+    markRead,
     clearMessages,
   }
 })

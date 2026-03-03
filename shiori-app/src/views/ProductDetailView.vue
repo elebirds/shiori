@@ -15,9 +15,7 @@ const authStore = useAuthStore()
 
 const creatingOrder = ref(false)
 const createError = ref('')
-const createSuccessOrderNo = ref('')
-const selectedSkuId = ref<number | null>(null)
-const quantity = ref(1)
+const skuQuantities = ref<Record<number, number>>({})
 
 const productId = computed(() => Number(route.params.id))
 
@@ -33,17 +31,47 @@ const errorMessage = computed(() => (query.error.value instanceof Error ? query.
 watch(
   () => product.value?.skus,
   (skus) => {
-    if (skus && skus.length > 0 && !selectedSkuId.value) {
-      selectedSkuId.value = skus[0]?.skuId ?? null
+    if (!skus) {
+      return
     }
+    const next: Record<number, number> = {}
+    skus.forEach((sku) => {
+      next[sku.skuId] = skuQuantities.value[sku.skuId] ?? 0
+    })
+    skuQuantities.value = next
   },
   { immediate: true },
 )
 
-const selectedSku = computed(() => product.value?.skus.find((item) => item.skuId === selectedSkuId.value) || null)
+const selectedItems = computed(() => {
+  const skus = product.value?.skus || []
+  return skus
+    .map((sku) => {
+      const rawQuantity = skuQuantities.value[sku.skuId] ?? 0
+      const quantity = Number.isFinite(rawQuantity) ? Math.floor(rawQuantity) : 0
+      return {
+        sku,
+        quantity,
+      }
+    })
+    .filter((item) => item.quantity > 0)
+})
+
+const selectedTotalAmount = computed(() =>
+  selectedItems.value.reduce((sum, item) => sum + item.sku.priceCent * item.quantity, 0),
+)
 
 function formatMoney(priceCent: number): string {
   return `¥ ${(priceCent / 100).toFixed(2)}`
+}
+
+function normalizeQuantity(skuId: number): void {
+  const current = skuQuantities.value[skuId] ?? 0
+  const next = Number.isFinite(current) ? Math.max(0, Math.floor(current)) : 0
+  skuQuantities.value = {
+    ...skuQuantities.value,
+    [skuId]: next,
+  }
 }
 
 async function handleCreateOrder(): Promise<void> {
@@ -52,30 +80,33 @@ async function handleCreateOrder(): Promise<void> {
     return
   }
 
-  if (!selectedSkuId.value || quantity.value <= 0) {
-    createError.value = '请选择 SKU 并设置正确数量'
+  if (selectedItems.value.length === 0) {
+    createError.value = '请至少选择一个 SKU 并填写数量'
+    return
+  }
+
+  const stockInvalidItem = selectedItems.value.find((item) => item.quantity > item.sku.stock)
+  if (stockInvalidItem) {
+    createError.value = `SKU「${stockInvalidItem.sku.skuName}」库存不足`
     return
   }
 
   creatingOrder.value = true
   createError.value = ''
-  createSuccessOrderNo.value = ''
 
   try {
     const idempotencyKey = `web-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     const response = await createOrder(
       {
-        items: [
-          {
-            productId: productId.value,
-            skuId: selectedSkuId.value,
-            quantity: quantity.value,
-          },
-        ],
+        items: selectedItems.value.map((item) => ({
+          productId: productId.value,
+          skuId: item.sku.skuId,
+          quantity: item.quantity,
+        })),
       },
       idempotencyKey,
     )
-    createSuccessOrderNo.value = response.orderNo
+    await router.push(`/orders/${response.orderNo}`)
   } catch (error) {
     if (error instanceof ApiBizError) {
       createError.value = error.message
@@ -113,39 +144,40 @@ async function handleCreateOrder(): Promise<void> {
         <div class="space-y-4 rounded-2xl border border-stone-200 bg-white/95 p-5">
           <div>
             <h2 class="text-base font-semibold text-stone-900">SKU 列表</h2>
-            <p class="mt-1 text-xs text-stone-500">状态：{{ product.status }}，卖家ID：{{ product.ownerUserId }}</p>
+            <p class="mt-1 text-xs text-stone-500">状态：{{ product.status }}，卖家ID：{{ product.ownerUserId }}，支持多 SKU 合并下单</p>
           </div>
 
           <div class="max-h-72 space-y-2 overflow-auto pr-1">
-            <label
+            <article
               v-for="sku in product.skus"
               :key="sku.skuId"
-              class="flex cursor-pointer items-center justify-between rounded-xl border px-3 py-2 text-sm transition"
-              :class="selectedSkuId === sku.skuId ? 'border-amber-400 bg-amber-50' : 'border-stone-200 hover:border-stone-300'"
+              class="grid grid-cols-[1fr_auto] items-center gap-3 rounded-xl border border-stone-200 px-3 py-2 text-sm transition hover:border-stone-300"
             >
               <div>
                 <p class="font-medium text-stone-800">{{ sku.skuName }}</p>
                 <p class="text-xs text-stone-500">{{ sku.specJson || '默认规格' }}</p>
+                <p class="mt-1 text-xs text-stone-500">库存 {{ sku.stock }}</p>
               </div>
-              <div class="text-right">
+              <div class="flex items-center gap-3">
                 <p class="font-semibold text-stone-900">{{ formatMoney(sku.priceCent) }}</p>
-                <p class="text-xs text-stone-500">库存 {{ sku.stock }}</p>
+                <label class="flex items-center gap-1 text-xs text-stone-600">
+                  数量
+                  <input
+                    v-model.number="skuQuantities[sku.skuId]"
+                    type="number"
+                    min="0"
+                    :max="sku.stock"
+                    class="w-20 rounded-lg border border-stone-300 px-2 py-1 text-right"
+                    @blur="normalizeQuantity(sku.skuId)"
+                  />
+                </label>
               </div>
-              <input v-model="selectedSkuId" class="hidden" type="radio" :value="sku.skuId" />
-            </label>
+            </article>
           </div>
 
-          <div class="rounded-xl bg-stone-50 p-3 text-sm">
-            <label class="flex items-center justify-between gap-3">
-              购买数量
-              <input
-                v-model.number="quantity"
-                type="number"
-                min="1"
-                :max="selectedSku?.stock || 1"
-                class="w-24 rounded-lg border border-stone-300 px-2 py-1 text-right"
-              />
-            </label>
+          <div class="rounded-xl bg-stone-50 p-3 text-sm text-stone-700">
+            <p>已选 SKU 数：{{ selectedItems.length }}</p>
+            <p class="mt-1">预估金额：{{ formatMoney(selectedTotalAmount) }}</p>
           </div>
 
           <button
@@ -158,10 +190,6 @@ async function handleCreateOrder(): Promise<void> {
           </button>
 
           <p v-if="createError" class="text-sm text-rose-600">{{ createError }}</p>
-          <p v-if="createSuccessOrderNo" class="text-sm text-emerald-700">
-            下单成功：{{ createSuccessOrderNo }}，
-            <RouterLink class="font-medium text-emerald-800 underline" to="/orders">前往订单列表</RouterLink>
-          </p>
         </div>
       </article>
     </ResultState>

@@ -19,6 +19,7 @@ const secureNav = [
   { path: '/sell', label: '发布' },
   { path: '/my-products', label: '我的商品' },
   { path: '/orders', label: '订单' },
+  { path: '/notifications', label: '通知' },
   { path: '/profile', label: '我的' },
 ]
 
@@ -66,14 +67,19 @@ async function handleLogout(): Promise<void> {
       </nav>
 
       <div class="flex items-center gap-2">
-        <button
-          v-if="notifyStore.unreadCount > 0"
-          class="rounded-full bg-amber-900 px-3 py-1 text-xs font-medium text-amber-50"
-          type="button"
-          @click="notifyStore.markAllRead"
+        <RouterLink
+          v-if="authStore.isAuthenticated"
+          to="/notifications"
+          class="relative rounded-lg border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
         >
-          通知 {{ notifyStore.unreadCount }}
-        </button>
+          通知
+          <span
+            v-if="notifyStore.unreadCount > 0"
+            class="absolute -right-2 -top-2 rounded-full bg-amber-900 px-1.5 py-0.5 text-[10px] font-semibold text-amber-50"
+          >
+            {{ notifyStore.unreadCount }}
+          </span>
+        </RouterLink>
 
         <span class="hidden text-sm text-stone-600 sm:inline">{{ username }}</span>
 
