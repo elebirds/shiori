@@ -59,17 +59,20 @@ public class OrderCommandService {
     private final OrderProperties orderProperties;
     private final OrderMqProperties orderMqProperties;
     private final ObjectMapper objectMapper;
+    private final OrderMetrics orderMetrics;
 
     public OrderCommandService(OrderMapper orderMapper,
                                ProductServiceClient productServiceClient,
                                OrderProperties orderProperties,
                                OrderMqProperties orderMqProperties,
-                               ObjectMapper objectMapper) {
+                               ObjectMapper objectMapper,
+                               OrderMetrics orderMetrics) {
         this.orderMapper = orderMapper;
         this.productServiceClient = productServiceClient;
         this.orderProperties = orderProperties;
         this.orderMqProperties = orderMqProperties;
         this.objectMapper = objectMapper;
+        this.orderMetrics = orderMetrics;
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -119,6 +122,7 @@ public class OrderCommandService {
             persistOrder(orderNo, buyerUserId, lines.getFirst().sellerUserId(), totalAmountCent, itemCount, timeoutAt, lines);
             appendOrderCreatedOutbox(orderNo, buyerUserId, lines.getFirst().sellerUserId(), totalAmountCent, itemCount);
             appendOrderTimeoutOutbox(orderNo, buyerUserId);
+            orderMetrics.incStateTransition("NEW", OrderStatus.UNPAID.name());
             return new CreateOrderResponse(orderNo, OrderStatus.UNPAID.name(), totalAmountCent, itemCount, false);
         } catch (RuntimeException ex) {
             compensateReleased(orderNo, buyerUserId, roles, deducted);
@@ -174,6 +178,7 @@ public class OrderCommandService {
         }
 
         appendOrderPaidOutbox(orderNo, paymentNo, order.buyerUserId(), order.sellerUserId(), order.totalAmountCent());
+        orderMetrics.incStateTransition(OrderStatus.UNPAID.name(), OrderStatus.PAID.name());
         return new OrderOperateResponse(orderNo, OrderStatus.PAID.name(), false);
     }
 
@@ -208,6 +213,7 @@ public class OrderCommandService {
         List<OrderItemRecord> items = orderMapper.listOrderItemsByOrderNo(orderNo);
         releaseOrderItems(orderNo, buyerUserId, roles, items);
         appendOrderCanceledOutbox(orderNo, order.buyerUserId(), order.sellerUserId(), resolveCancelReason(reason));
+        orderMetrics.incStateTransition(OrderStatus.UNPAID.name(), OrderStatus.CANCELED.name());
         return new OrderOperateResponse(orderNo, OrderStatus.CANCELED.name(), false);
     }
 
@@ -246,6 +252,7 @@ public class OrderCommandService {
         List<OrderItemRecord> items = orderMapper.listOrderItemsByOrderNo(orderNo);
         releaseOrderItems(orderNo, operatorUserId, roles, items);
         appendOrderCanceledOutbox(orderNo, before.buyerUserId(), before.sellerUserId(), normalizedReason);
+        orderMetrics.incStateTransition(OrderStatus.UNPAID.name(), OrderStatus.CANCELED.name());
         OrderRecord after = requireOrder(orderNo);
         insertAdminAudit(operatorUserId, orderNo, "ORDER_ADMIN_CANCEL", before, after, normalizedReason);
         return new OrderOperateResponse(orderNo, OrderStatus.CANCELED.name(), false);
@@ -274,6 +281,7 @@ public class OrderCommandService {
         List<OrderItemRecord> items = orderMapper.listOrderItemsByOrderNo(orderNo);
         releaseOrderItems(orderNo, order.buyerUserId(), List.of("ROLE_USER"), items);
         appendOrderCanceledOutbox(orderNo, order.buyerUserId(), order.sellerUserId(), "超时未支付自动取消");
+        orderMetrics.incStateTransition(OrderStatus.UNPAID.name(), OrderStatus.CANCELED.name());
     }
 
     private void persistOrder(String orderNo,

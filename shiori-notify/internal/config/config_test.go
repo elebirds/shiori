@@ -16,6 +16,7 @@ func TestLoadDefaults(t *testing.T) {
 	t.Setenv("LOG_LEVEL", "")
 	t.Setenv("WS_WRITE_TIMEOUT", "")
 	t.Setenv("WS_PING_INTERVAL", "")
+	t.Setenv("NOTIFY_METRICS_ENABLED", "")
 
 	cfg := Load()
 	if cfg.HTTPAddr != defaultHTTPAddr {
@@ -42,6 +43,9 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.WSPingInterval != defaultWSPingInterval {
 		t.Fatalf("unexpected default WSPingInterval: %s", cfg.WSPingInterval)
 	}
+	if cfg.MetricsEnabled != defaultMetricsEnabled {
+		t.Fatalf("unexpected default MetricsEnabled: %t", cfg.MetricsEnabled)
+	}
 }
 
 func TestLoadOverrideAndFallback(t *testing.T) {
@@ -53,6 +57,7 @@ func TestLoadOverrideAndFallback(t *testing.T) {
 	t.Setenv("LOG_LEVEL", "debug")
 	t.Setenv("WS_WRITE_TIMEOUT", "not-a-duration")
 	t.Setenv("WS_PING_INTERVAL", "45s")
+	t.Setenv("NOTIFY_METRICS_ENABLED", "false")
 
 	cfg := Load()
 
@@ -79,5 +84,16 @@ func TestLoadOverrideAndFallback(t *testing.T) {
 	}
 	if cfg.WSPingInterval != 45*time.Second {
 		t.Fatalf("unexpected WSPingInterval: %s", cfg.WSPingInterval)
+	}
+	if cfg.MetricsEnabled {
+		t.Fatalf("unexpected MetricsEnabled: %t", cfg.MetricsEnabled)
+	}
+}
+
+func TestLoadMetricsInvalidFallback(t *testing.T) {
+	t.Setenv("NOTIFY_METRICS_ENABLED", "invalid")
+	cfg := Load()
+	if cfg.MetricsEnabled != defaultMetricsEnabled {
+		t.Fatalf("invalid bool should fallback, got: %t", cfg.MetricsEnabled)
 	}
 }

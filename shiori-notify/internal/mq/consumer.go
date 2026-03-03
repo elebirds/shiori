@@ -9,6 +9,7 @@ import (
 
 	"github.com/hhm/shiori/shiori-notify/internal/config"
 	"github.com/hhm/shiori/shiori-notify/internal/event"
+	"github.com/hhm/shiori/shiori-notify/internal/metrics"
 	"github.com/hhm/shiori/shiori-notify/internal/router"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog"
@@ -119,23 +120,28 @@ func (c *Consumer) consumeOnce(ctx context.Context) error {
 func (c *Consumer) handleDelivery(ctx context.Context, delivery amqp.Delivery) {
 	var env event.Envelope
 	if err := json.Unmarshal(delivery.Body, &env); err != nil {
+		metrics.IncMQConsume("invalid_json", "")
 		c.logger.Warn().Err(err).Msg("事件 JSON 非法，已确认并跳过")
 		c.ack(delivery)
 		return
 	}
 
 	if err := env.Validate(); err != nil {
+		metrics.IncMQConsume("invalid_envelope", env.Type)
 		c.logger.Warn().Err(err).Msg("事件 Envelope 非法，已确认并跳过")
 		c.ack(delivery)
 		return
 	}
 
 	if err := c.router.Route(ctx, env); err != nil {
+		metrics.IncMQConsume("route_failed", env.Type)
 		c.logger.Warn().
 			Err(err).
 			Str("eventId", env.EventID).
 			Str("type", env.Type).
 			Msg("事件路由失败，已确认并跳过")
+	} else {
+		metrics.IncMQConsume("routed", env.Type)
 	}
 
 	c.ack(delivery)

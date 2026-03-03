@@ -3,6 +3,7 @@ package moe.hhm.shiori.order.mq;
 import moe.hhm.shiori.order.event.EventEnvelope;
 import moe.hhm.shiori.order.event.OrderTimeoutPayload;
 import moe.hhm.shiori.order.service.OrderCommandService;
+import moe.hhm.shiori.order.service.OrderMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -20,15 +21,20 @@ public class OrderTimeoutConsumer {
 
     private final ObjectMapper objectMapper;
     private final OrderCommandService orderCommandService;
+    private final OrderMetrics orderMetrics;
 
-    public OrderTimeoutConsumer(ObjectMapper objectMapper, OrderCommandService orderCommandService) {
+    public OrderTimeoutConsumer(ObjectMapper objectMapper,
+                                OrderCommandService orderCommandService,
+                                OrderMetrics orderMetrics) {
         this.objectMapper = objectMapper;
         this.orderCommandService = orderCommandService;
+        this.orderMetrics = orderMetrics;
     }
 
     @RabbitListener(queues = "${order.mq.timeout-consume-queue:q.order.timeout.consume}")
     public void onTimeoutMessage(String message) {
         if (!StringUtils.hasText(message)) {
+            orderMetrics.incTimeoutConsume("empty");
             return;
         }
 
@@ -36,10 +42,12 @@ public class OrderTimeoutConsumer {
         try {
             envelope = objectMapper.readValue(message, EventEnvelope.class);
         } catch (JacksonException ex) {
+            orderMetrics.incTimeoutConsume("invalid_json");
             log.warn("忽略非法超时消息: {}", ex.getMessage());
             return;
         }
         if (envelope == null || !"OrderTimeout".equals(envelope.type())) {
+            orderMetrics.incTimeoutConsume("ignored_type");
             return;
         }
 
@@ -52,14 +60,22 @@ public class OrderTimeoutConsumer {
                 }
             }
         } catch (JacksonException ex) {
+            orderMetrics.incTimeoutConsume("invalid_payload");
             log.warn("忽略无效 OrderTimeout payload: {}", ex.getMessage());
             return;
         }
 
         if (!StringUtils.hasText(orderNo)) {
+            orderMetrics.incTimeoutConsume("missing_order_no");
             log.warn("忽略缺失 orderNo 的 OrderTimeout 事件: {}", envelope.eventId());
             return;
         }
-        orderCommandService.handleTimeout(orderNo);
+        try {
+            orderCommandService.handleTimeout(orderNo);
+            orderMetrics.incTimeoutConsume("handled");
+        } catch (RuntimeException ex) {
+            orderMetrics.incTimeoutConsume("failed");
+            throw ex;
+        }
     }
 }

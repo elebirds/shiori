@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ const (
 	defaultRabbitMQExchange = "shiori.order.event"
 	defaultRabbitMQQueue    = "notify.order.paid"
 	defaultRabbitMQRouteKey = "order.paid"
+	defaultMetricsEnabled   = true
 )
 
 var (
@@ -30,6 +32,7 @@ type Config struct {
 	LogLevel           zerolog.Level
 	WSWriteTimeout     time.Duration
 	WSPingInterval     time.Duration
+	MetricsEnabled     bool
 }
 
 func Load() Config {
@@ -42,6 +45,7 @@ func Load() Config {
 		LogLevel:           parseLogLevel(envOrDefault("LOG_LEVEL", "info")),
 		WSWriteTimeout:     parseDurationOrDefault("WS_WRITE_TIMEOUT", defaultWSWriteTimeout),
 		WSPingInterval:     parseDurationOrDefault("WS_PING_INTERVAL", defaultWSPingInterval),
+		MetricsEnabled:     parseBoolOrDefault("NOTIFY_METRICS_ENABLED", defaultMetricsEnabled),
 	}
 }
 
@@ -75,4 +79,16 @@ func parseLogLevel(value string) zerolog.Level {
 		return zerolog.InfoLevel
 	}
 	return level
+}
+
+func parseBoolOrDefault(key string, fallback bool) bool {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
 }

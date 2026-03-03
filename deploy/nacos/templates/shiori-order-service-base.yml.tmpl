@@ -40,3 +40,12 @@ order:
     timeout-delay-queue: q.order.timeout.delay
     timeout-consume-queue: q.order.timeout.consume
     timeout-ttl-ms: 900000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: never

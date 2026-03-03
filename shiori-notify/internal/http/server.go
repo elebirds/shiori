@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/hhm/shiori/shiori-notify/internal/config"
+	"github.com/hhm/shiori/shiori-notify/internal/metrics"
 	"github.com/hhm/shiori/shiori-notify/internal/ws"
 	"github.com/rs/zerolog"
 )
@@ -76,4 +77,7 @@ func (s *Server) Run(ctx context.Context) error {
 func (s *Server) registerRoutes() {
 	s.engine.GET("/healthz", s.handleHealth)
 	s.engine.GET("/ws", s.handleWS)
+	if s.cfg.MetricsEnabled {
+		s.engine.GET("/metrics", gin.WrapH(metrics.Handler()))
+	}
 }

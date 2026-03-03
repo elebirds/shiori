@@ -1,6 +1,7 @@
 package moe.hhm.shiori.order.service;
 
 import java.util.List;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import moe.hhm.shiori.order.config.OrderProperties;
 import moe.hhm.shiori.order.model.OutboxEventRecord;
 import moe.hhm.shiori.order.repository.OrderMapper;
@@ -30,7 +31,12 @@ class OutboxRelayServiceTest {
     @BeforeEach
     void setUp() {
         OrderProperties orderProperties = new OrderProperties();
-        outboxRelayService = new OutboxRelayService(orderMapper, rabbitTemplate, orderProperties);
+        outboxRelayService = new OutboxRelayService(
+                orderMapper,
+                rabbitTemplate,
+                orderProperties,
+                new OrderMetrics(new SimpleMeterRegistry())
+        );
     }
 
     @Test

@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/hhm/shiori/shiori-notify/internal/metrics"
 	"github.com/hhm/shiori/shiori-notify/internal/ws"
 )
 
@@ -32,16 +33,20 @@ func (s *Server) handleWS(c *gin.Context) {
 
 	client := ws.NewClient(conn, s.cfg.WSWriteTimeout, s.cfg.WSPingInterval)
 	s.hub.Register(userID, client)
+	connections := s.hub.ConnectionCount()
+	metrics.SetWSConnections(connections)
 	s.logger.Info().
 		Str("userId", userID).
-		Int("connections", s.hub.ConnectionCount()).
+		Int("connections", connections).
 		Msg("WebSocket 连接已建立")
 
 	go client.Run(func() {
 		s.hub.Remove(userID, client)
+		connections := s.hub.ConnectionCount()
+		metrics.SetWSConnections(connections)
 		s.logger.Info().
 			Str("userId", userID).
-			Int("connections", s.hub.ConnectionCount()).
+			Int("connections", connections).
 			Msg("WebSocket 连接已断开")
 	})
 }

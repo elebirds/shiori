@@ -1,6 +1,7 @@
 package moe.hhm.shiori.order.service;
 
 import java.util.List;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import moe.hhm.shiori.common.exception.BizException;
 import moe.hhm.shiori.order.client.ProductDetailSnapshot;
 import moe.hhm.shiori.order.client.ProductServiceClient;
@@ -48,7 +49,8 @@ class OrderCommandServiceTest {
                 productServiceClient,
                 orderProperties,
                 orderMqProperties,
-                new ObjectMapper()
+                new ObjectMapper(),
+                new OrderMetrics(new SimpleMeterRegistry())
         );
     }
 

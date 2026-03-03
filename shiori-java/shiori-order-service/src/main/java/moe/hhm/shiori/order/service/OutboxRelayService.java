@@ -22,11 +22,16 @@ public class OutboxRelayService {
     private final OrderMapper orderMapper;
     private final RabbitTemplate rabbitTemplate;
     private final OrderProperties orderProperties;
+    private final OrderMetrics orderMetrics;
 
-    public OutboxRelayService(OrderMapper orderMapper, RabbitTemplate rabbitTemplate, OrderProperties orderProperties) {
+    public OutboxRelayService(OrderMapper orderMapper,
+                              RabbitTemplate rabbitTemplate,
+                              OrderProperties orderProperties,
+                              OrderMetrics orderMetrics) {
         this.orderMapper = orderMapper;
         this.rabbitTemplate = rabbitTemplate;
         this.orderProperties = orderProperties;
+        this.orderMetrics = orderMetrics;
     }
 
     @Scheduled(fixedDelayString = "${order.outbox.relay-fixed-delay-ms:3000}")
@@ -36,6 +41,7 @@ public class OutboxRelayService {
             try {
                 rabbitTemplate.convertAndSend(event.exchangeName(), event.routingKey(), event.payload());
                 orderMapper.markOutboxSent(event.id());
+                orderMetrics.incOutboxRelay("sent", event.type());
             } catch (RuntimeException ex) {
                 int currentRetryCount = event.retryCount() == null ? 0 : event.retryCount();
                 int nextRetryCount = currentRetryCount + 1;
@@ -43,6 +49,7 @@ public class OutboxRelayService {
                 String error = trimError(ex.getMessage());
                 orderMapper.markOutboxFailed(event.id(), nextRetryCount, error,
                         LocalDateTime.now().plusSeconds(backoffSeconds));
+                orderMetrics.incOutboxRelay("failed", event.type());
                 log.warn("outbox 投递失败, eventId={}, retryCount={}, err={}",
                         event.eventId(), nextRetryCount, error);
             }

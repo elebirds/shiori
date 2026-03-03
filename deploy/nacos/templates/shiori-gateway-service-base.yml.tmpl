@@ -17,3 +17,12 @@ security:
       - /api/user/auth/logout
     anonymous-get-paths:
       - /api/product/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: never
