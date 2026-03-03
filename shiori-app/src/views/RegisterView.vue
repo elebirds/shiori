@@ -2,7 +2,7 @@
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { ApiBizError } from '@/types/result'
+import { ApiBizError, extractValidationMessage, isValidationErrorPayload } from '@/types/result'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
@@ -19,19 +19,85 @@ const form = reactive({
   confirmPassword: '',
 })
 
-async function handleSubmit(): Promise<void> {
-  if (!form.username || !form.password) {
-    errorMessage.value = '请填写用户名和密码'
+type RegisterField = 'username' | 'nickname' | 'password' | 'confirmPassword'
+const fieldErrors = reactive<Record<RegisterField, string>>({
+  username: '',
+  nickname: '',
+  password: '',
+  confirmPassword: '',
+})
+
+function clearFieldErrors(): void {
+  fieldErrors.username = ''
+  fieldErrors.nickname = ''
+  fieldErrors.password = ''
+  fieldErrors.confirmPassword = ''
+}
+
+function firstFieldError(): string {
+  return fieldErrors.username || fieldErrors.nickname || fieldErrors.password || fieldErrors.confirmPassword
+}
+
+function validateRegisterForm(): boolean {
+  clearFieldErrors()
+
+  if (!form.username) {
+    fieldErrors.username = '用户名不能为空'
+  } else if (form.username.length < 4 || form.username.length > 32) {
+    fieldErrors.username = '用户名长度必须在4-32之间'
+  } else if (!/^[a-zA-Z0-9_]+$/.test(form.username)) {
+    fieldErrors.username = '用户名仅支持字母数字下划线'
+  }
+
+  if (form.nickname && form.nickname.length > 64) {
+    fieldErrors.nickname = '昵称长度不能超过64'
+  }
+
+  if (!form.password) {
+    fieldErrors.password = '密码不能为空'
+  } else if (form.password.length < 8 || form.password.length > 100) {
+    fieldErrors.password = '密码长度必须在8-100之间'
+  }
+
+  if (!form.confirmPassword) {
+    fieldErrors.confirmPassword = '请再次输入密码'
+  } else if (form.password !== form.confirmPassword) {
+    fieldErrors.confirmPassword = '两次输入的密码不一致'
+  }
+
+  return !firstFieldError()
+}
+
+function applyBackendFieldErrors(data: unknown): void {
+  if (!isValidationErrorPayload(data)) {
     return
   }
-  if (form.password !== form.confirmPassword) {
-    errorMessage.value = '两次输入的密码不一致'
+
+  for (const item of data.errors) {
+    if (item.field === 'username') {
+      fieldErrors.username = item.message
+      continue
+    }
+    if (item.field === 'nickname') {
+      fieldErrors.nickname = item.message
+      continue
+    }
+    if (item.field === 'password') {
+      fieldErrors.password = item.message
+    }
+  }
+}
+
+async function handleSubmit(): Promise<void> {
+  if (!validateRegisterForm()) {
+    errorMessage.value = firstFieldError()
     return
   }
 
   pending.value = true
   errorMessage.value = ''
   successMessage.value = ''
+  clearFieldErrors()
 
   try {
     await authStore.registerAccount({
@@ -45,7 +111,8 @@ async function handleSubmit(): Promise<void> {
     }, 600)
   } catch (error) {
     if (error instanceof ApiBizError) {
-      errorMessage.value = error.message
+      applyBackendFieldErrors(error.data)
+      errorMessage.value = extractValidationMessage(error.data) || error.message
     } else {
       errorMessage.value = '注册失败，请稍后重试'
     }
@@ -67,9 +134,11 @@ async function handleSubmit(): Promise<void> {
           v-model.trim="form.username"
           type="text"
           autocomplete="username"
-          class="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2 text-sm outline-none transition focus:border-amber-500"
+          class="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none transition focus:border-amber-500"
+          :class="fieldErrors.username ? 'border-rose-400' : 'border-stone-300'"
           placeholder="4-32位字母数字下划线"
         />
+        <p v-if="fieldErrors.username" class="mt-1 text-xs text-rose-600">{{ fieldErrors.username }}</p>
       </label>
 
       <label class="block text-sm text-stone-700">
@@ -77,9 +146,11 @@ async function handleSubmit(): Promise<void> {
         <input
           v-model.trim="form.nickname"
           type="text"
-          class="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2 text-sm outline-none transition focus:border-amber-500"
+          class="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none transition focus:border-amber-500"
+          :class="fieldErrors.nickname ? 'border-rose-400' : 'border-stone-300'"
           placeholder="选填"
         />
+        <p v-if="fieldErrors.nickname" class="mt-1 text-xs text-rose-600">{{ fieldErrors.nickname }}</p>
       </label>
 
       <label class="block text-sm text-stone-700">
@@ -88,9 +159,11 @@ async function handleSubmit(): Promise<void> {
           v-model="form.password"
           type="password"
           autocomplete="new-password"
-          class="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2 text-sm outline-none transition focus:border-amber-500"
+          class="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none transition focus:border-amber-500"
+          :class="fieldErrors.password ? 'border-rose-400' : 'border-stone-300'"
           placeholder="至少8位"
         />
+        <p v-if="fieldErrors.password" class="mt-1 text-xs text-rose-600">{{ fieldErrors.password }}</p>
       </label>
 
       <label class="block text-sm text-stone-700">
@@ -99,9 +172,11 @@ async function handleSubmit(): Promise<void> {
           v-model="form.confirmPassword"
           type="password"
           autocomplete="new-password"
-          class="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2 text-sm outline-none transition focus:border-amber-500"
+          class="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none transition focus:border-amber-500"
+          :class="fieldErrors.confirmPassword ? 'border-rose-400' : 'border-stone-300'"
           placeholder="再次输入密码"
         />
+        <p v-if="fieldErrors.confirmPassword" class="mt-1 text-xs text-rose-600">{{ fieldErrors.confirmPassword }}</p>
       </label>
 
       <p v-if="errorMessage" class="text-sm text-rose-600">{{ errorMessage }}</p>

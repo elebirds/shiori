@@ -53,3 +53,29 @@ export function unwrapResult<T>(payload: unknown, status = 200): T {
 
   return payload.data as T
 }
+
+export function isValidationErrorPayload(value: unknown): value is ValidationErrorPayload {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+
+  const candidate = value as Partial<ValidationErrorPayload>
+  if (!Array.isArray(candidate.errors)) {
+    return false
+  }
+
+  return candidate.errors.every((item: unknown) => {
+    if (typeof item !== 'object' || item === null) {
+      return false
+    }
+    const errorItem = item as Partial<ValidationErrorItem>
+    return typeof errorItem.field === 'string' && typeof errorItem.message === 'string'
+  })
+}
+
+export function extractValidationMessage(value: unknown): string | null {
+  if (!isValidationErrorPayload(value) || value.errors.length === 0) {
+    return null
+  }
+  return value.errors[0]?.message || null
+}
