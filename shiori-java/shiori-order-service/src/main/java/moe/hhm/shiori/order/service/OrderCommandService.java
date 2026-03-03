@@ -212,6 +212,46 @@ public class OrderCommandService {
     }
 
     @Transactional(rollbackFor = Exception.class)
+    public OrderOperateResponse cancelOrderAsAdmin(Long operatorUserId,
+                                                   List<String> roles,
+                                                   String orderNo,
+                                                   String reason) {
+        OrderRecord before = requireOrder(orderNo);
+        OrderStatus status = OrderStatus.fromCode(before.status());
+        String normalizedReason = resolveCancelReason(reason);
+
+        if (status == OrderStatus.CANCELED) {
+            insertAdminAudit(operatorUserId, orderNo, "ORDER_ADMIN_CANCEL", before, before, normalizedReason);
+            return new OrderOperateResponse(orderNo, OrderStatus.CANCELED.name(), true);
+        }
+        if (status != OrderStatus.UNPAID) {
+            throw new BizException(OrderErrorCode.ORDER_STATUS_INVALID, HttpStatus.CONFLICT);
+        }
+
+        int affected = orderMapper.cancelOrderByTimeout(
+                orderNo,
+                normalizedReason,
+                OrderStatus.UNPAID.getCode(),
+                OrderStatus.CANCELED.getCode()
+        );
+        if (affected == 0) {
+            OrderRecord latest = requireOrder(orderNo);
+            if (OrderStatus.fromCode(latest.status()) == OrderStatus.CANCELED) {
+                insertAdminAudit(operatorUserId, orderNo, "ORDER_ADMIN_CANCEL", before, latest, normalizedReason);
+                return new OrderOperateResponse(orderNo, OrderStatus.CANCELED.name(), true);
+            }
+            throw new BizException(OrderErrorCode.ORDER_STATUS_INVALID, HttpStatus.CONFLICT);
+        }
+
+        List<OrderItemRecord> items = orderMapper.listOrderItemsByOrderNo(orderNo);
+        releaseOrderItems(orderNo, operatorUserId, roles, items);
+        appendOrderCanceledOutbox(orderNo, before.buyerUserId(), before.sellerUserId(), normalizedReason);
+        OrderRecord after = requireOrder(orderNo);
+        insertAdminAudit(operatorUserId, orderNo, "ORDER_ADMIN_CANCEL", before, after, normalizedReason);
+        return new OrderOperateResponse(orderNo, OrderStatus.CANCELED.name(), false);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
     public void handleTimeout(String orderNo) {
         OrderRecord order = orderMapper.findOrderByOrderNo(orderNo);
         if (order == null || isDeleted(order)) {
@@ -447,6 +487,37 @@ public class OrderCommandService {
 
     private String resolveCancelReason(String reason) {
         return StringUtils.hasText(reason) ? reason.trim() : "用户主动取消";
+    }
+
+    private void insertAdminAudit(Long operatorUserId,
+                                  String orderNo,
+                                  String action,
+                                  OrderRecord before,
+                                  OrderRecord after,
+                                  String reason) {
+        orderMapper.insertAdminAuditLog(
+                operatorUserId,
+                orderNo,
+                action,
+                snapshot(before),
+                snapshot(after),
+                StringUtils.hasText(reason) ? reason.trim() : null
+        );
+    }
+
+    private String snapshot(OrderRecord record) {
+        Map<String, Object> state = Map.of(
+                "status", OrderStatus.fromCode(record.status()).name(),
+                "buyerUserId", record.buyerUserId(),
+                "sellerUserId", record.sellerUserId(),
+                "paymentNo", record.paymentNo() == null ? "" : record.paymentNo(),
+                "totalAmountCent", record.totalAmountCent()
+        );
+        try {
+            return objectMapper.writeValueAsString(state);
+        } catch (JacksonException e) {
+            return "{}";
+        }
     }
 
     private void ensureBuyer(OrderRecord order, Long buyerUserId) {

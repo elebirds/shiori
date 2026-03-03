@@ -7,7 +7,10 @@ public enum UserErrorCode implements ErrorCode {
     ACCOUNT_DISABLED(30003, "账号已禁用"),
     ACCOUNT_LOCKED(30004, "账号已锁定"),
     ROLE_NOT_FOUND(30005, "角色不存在"),
-    PERMISSION_DENIED(30006, "权限不足");
+    PERMISSION_DENIED(30006, "权限不足"),
+    CANNOT_DISABLE_SELF(30007, "不能禁用当前登录账号"),
+    CANNOT_REVOKE_SELF_ADMIN(30008, "不能回收当前登录账号的管理员角色"),
+    ADMIN_MIN_ONE_REQUIRED(30009, "系统至少保留一名启用状态管理员");
 
     private final int code;
     private final String message;

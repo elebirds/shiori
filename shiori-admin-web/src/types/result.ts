@@ -1,0 +1,42 @@
+export interface Result<T> {
+  code: number
+  message: string
+  data: T
+  timestamp: number
+}
+
+export class ApiBizError extends Error {
+  code: number
+  status: number
+  data: unknown
+
+  constructor(code: number, message: string, status = 500, data: unknown = null) {
+    super(message)
+    this.name = 'ApiBizError'
+    this.code = code
+    this.status = status
+    this.data = data
+  }
+}
+
+export function isResultPayload(value: unknown): value is Result<unknown> {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+  const candidate = value as Partial<Result<unknown>>
+  return (
+    typeof candidate.code === 'number' &&
+    typeof candidate.message === 'string' &&
+    Object.prototype.hasOwnProperty.call(candidate, 'timestamp')
+  )
+}
+
+export function unwrapResult<T>(payload: unknown, status = 200): T {
+  if (!isResultPayload(payload)) {
+    throw new ApiBizError(-1, '响应格式不合法', status, payload)
+  }
+  if (payload.code !== 0) {
+    throw new ApiBizError(payload.code, payload.message || '请求失败', status, payload.data)
+  }
+  return payload.data as T
+}

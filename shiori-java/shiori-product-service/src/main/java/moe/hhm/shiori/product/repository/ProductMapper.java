@@ -177,6 +177,61 @@ public interface ProductMapper {
                               @Param("keyword") String keyword,
                               @Param("status") Integer status);
 
+    @Select("""
+            <script>
+            SELECT id,
+                   product_no AS productNo,
+                   owner_user_id AS ownerUserId,
+                   title,
+                   description,
+                   cover_object_key AS coverObjectKey,
+                   status,
+                   is_deleted AS isDeleted
+            FROM p_product
+            WHERE is_deleted = 0
+            <if test="keyword != null and keyword != ''">
+              AND (title LIKE CONCAT('%', #{keyword}, '%')
+                   OR description LIKE CONCAT('%', #{keyword}, '%')
+                   OR product_no LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="status != null">
+              AND status = #{status}
+            </if>
+            <if test="ownerUserId != null">
+              AND owner_user_id = #{ownerUserId}
+            </if>
+            ORDER BY id DESC
+            LIMIT #{size} OFFSET #{offset}
+            </script>
+            """)
+    List<ProductRecord> listProductsForAdmin(@Param("keyword") String keyword,
+                                             @Param("status") Integer status,
+                                             @Param("ownerUserId") Long ownerUserId,
+                                             @Param("size") int size,
+                                             @Param("offset") int offset);
+
+    @Select("""
+            <script>
+            SELECT COUNT(1)
+            FROM p_product
+            WHERE is_deleted = 0
+            <if test="keyword != null and keyword != ''">
+              AND (title LIKE CONCAT('%', #{keyword}, '%')
+                   OR description LIKE CONCAT('%', #{keyword}, '%')
+                   OR product_no LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="status != null">
+              AND status = #{status}
+            </if>
+            <if test="ownerUserId != null">
+              AND owner_user_id = #{ownerUserId}
+            </if>
+            </script>
+            """)
+    long countProductsForAdmin(@Param("keyword") String keyword,
+                               @Param("status") Integer status,
+                               @Param("ownerUserId") Long ownerUserId);
+
     @Update("""
             UPDATE p_product
             SET status = #{status},
@@ -346,4 +401,30 @@ public interface ProductMapper {
     int updateStockTxnSuccess(@Param("bizNo") String bizNo,
                               @Param("opType") String opType,
                               @Param("success") Integer success);
+
+    @Insert("""
+            INSERT INTO p_admin_audit_log (
+                operator_user_id,
+                target_product_id,
+                action,
+                before_json,
+                after_json,
+                reason,
+                created_at
+            ) VALUES (
+                #{operatorUserId},
+                #{targetProductId},
+                #{action},
+                #{beforeJson},
+                #{afterJson},
+                #{reason},
+                CURRENT_TIMESTAMP(3)
+            )
+            """)
+    int insertAdminAuditLog(@Param("operatorUserId") Long operatorUserId,
+                            @Param("targetProductId") Long targetProductId,
+                            @Param("action") String action,
+                            @Param("beforeJson") String beforeJson,
+                            @Param("afterJson") String afterJson,
+                            @Param("reason") String reason);
 }

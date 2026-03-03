@@ -2,6 +2,7 @@
 .DS_Store
 .idea/
 .vscode/
+.metals/
 *.iml
 *.log
 *.swp
@@ -13,6 +14,9 @@
 
 # Node.js
 **/node_modules/
+**/dist/
+**/.vite/
+**/coverage/
 
 # Go
 **/bin/

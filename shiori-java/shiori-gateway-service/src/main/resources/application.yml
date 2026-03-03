@@ -21,14 +21,30 @@ spring:
               uri: lb://shiori-user-service
               predicates:
                 - Path=/api/user/**
+            - id: admin-user-service
+              uri: lb://shiori-user-service
+              predicates:
+                - Path=/api/admin/users/**
+            - id: admin-role-service
+              uri: lb://shiori-user-service
+              predicates:
+                - Path=/api/admin/roles/**
             - id: product-service
               uri: lb://shiori-product-service
               predicates:
                 - Path=/api/product/**
+            - id: admin-product-service
+              uri: lb://shiori-product-service
+              predicates:
+                - Path=/api/admin/products/**
             - id: order-service
               uri: lb://shiori-order-service
               predicates:
                 - Path=/api/order/**
+            - id: admin-order-service
+              uri: lb://shiori-order-service
+              predicates:
+                - Path=/api/admin/orders/**
 
 security:
   jwt:

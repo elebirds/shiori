@@ -214,6 +214,71 @@ public interface OrderMapper {
                                         @Param("size") int size,
                                         @Param("offset") int offset);
 
+    @Select("""
+            <script>
+            SELECT COUNT(1)
+            FROM o_order
+            WHERE is_deleted = 0
+            <if test="orderNo != null and orderNo != ''">
+              AND order_no = #{orderNo}
+            </if>
+            <if test="status != null">
+              AND status = #{status}
+            </if>
+            <if test="buyerUserId != null">
+              AND buyer_user_id = #{buyerUserId}
+            </if>
+            <if test="sellerUserId != null">
+              AND seller_user_id = #{sellerUserId}
+            </if>
+            </script>
+            """)
+    long countOrdersForAdmin(@Param("orderNo") String orderNo,
+                             @Param("status") Integer status,
+                             @Param("buyerUserId") Long buyerUserId,
+                             @Param("sellerUserId") Long sellerUserId);
+
+    @Select("""
+            <script>
+            SELECT id,
+                   order_no AS orderNo,
+                   buyer_user_id AS buyerUserId,
+                   seller_user_id AS sellerUserId,
+                   status,
+                   total_amount_cent AS totalAmountCent,
+                   item_count AS itemCount,
+                   payment_no AS paymentNo,
+                   cancel_reason AS cancelReason,
+                   timeout_at AS timeoutAt,
+                   paid_at AS paidAt,
+                   is_deleted AS isDeleted,
+                   created_at AS createdAt,
+                   updated_at AS updatedAt
+            FROM o_order
+            WHERE is_deleted = 0
+            <if test="orderNo != null and orderNo != ''">
+              AND order_no = #{orderNo}
+            </if>
+            <if test="status != null">
+              AND status = #{status}
+            </if>
+            <if test="buyerUserId != null">
+              AND buyer_user_id = #{buyerUserId}
+            </if>
+            <if test="sellerUserId != null">
+              AND seller_user_id = #{sellerUserId}
+            </if>
+            ORDER BY id DESC
+            LIMIT #{size} OFFSET #{offset}
+            </script>
+            """)
+    List<OrderRecord> listOrdersForAdmin(@Param("orderNo") String orderNo,
+                                         @Param("status") Integer status,
+                                         @Param("buyerUserId") Long buyerUserId,
+                                         @Param("sellerUserId") Long sellerUserId,
+                                         @Param("size") int size,
+                                         @Param("offset") int offset);
+
     @Update("""
             UPDATE o_order
             SET status = #{paidStatus},
@@ -343,4 +408,30 @@ public interface OrderMapper {
                          @Param("retryCount") int retryCount,
                          @Param("lastError") String lastError,
                          @Param("nextRetryAt") LocalDateTime nextRetryAt);
+
+    @Insert("""
+            INSERT INTO o_admin_audit_log (
+                operator_user_id,
+                target_order_no,
+                action,
+                before_json,
+                after_json,
+                reason,
+                created_at
+            ) VALUES (
+                #{operatorUserId},
+                #{targetOrderNo},
+                #{action},
+                #{beforeJson},
+                #{afterJson},
+                #{reason},
+                CURRENT_TIMESTAMP(3)
+            )
+            """)
+    int insertAdminAuditLog(@Param("operatorUserId") Long operatorUserId,
+                            @Param("targetOrderNo") String targetOrderNo,
+                            @Param("action") String action,
+                            @Param("beforeJson") String beforeJson,
+                            @Param("afterJson") String afterJson,
+                            @Param("reason") String reason);
 }

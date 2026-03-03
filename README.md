@@ -434,6 +434,37 @@ pnpm e2e:install
 pnpm e2e
 ```
 
+### 5) Run Admin Web
+
+```bash
+cd shiori-admin-web
+cp .env.example .env
+pnpm install
+pnpm dev
+```
+
+默认地址：`http://localhost:5173`（仅 `ROLE_ADMIN` 可登录）。
+
+管理端 API（统一前缀）：
+- `/api/admin/users/**`
+- `/api/admin/roles/**`
+- `/api/admin/products/**`
+- `/api/admin/orders/**`
+
+### 5.1) 手工初始化管理员
+
+本项目不内置默认管理员账号，请按以下步骤初始化：
+
+1. 先调用注册接口创建普通用户（`/api/user/auth/register`）。
+2. 在 MySQL 手工执行脚本授予 `ROLE_ADMIN`：
+
+```bash
+mysql -h127.0.0.1 -P3306 -ushiori -pshiori < deploy/sql/manual/grant_admin_role.sql
+```
+
+脚本路径：
+- `deploy/sql/manual/grant_admin_role.sql`
+
 ---
 
 ## 📈 压测与可观测性 (Performance & Observability)
