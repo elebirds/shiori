@@ -16,6 +16,7 @@ const commonNav = [
 ]
 
 const secureNav = [
+  { path: '/sell', label: '发布' },
   { path: '/orders', label: '订单' },
   { path: '/profile', label: '我的' },
 ]

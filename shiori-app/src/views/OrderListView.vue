@@ -103,6 +103,12 @@ async function handleCancel(orderNo: string): Promise<void> {
             </div>
 
             <div class="flex items-center gap-2">
+              <RouterLink
+                :to="`/orders/${item.orderNo}`"
+                class="rounded-lg border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
+              >
+                查看详情
+              </RouterLink>
               <span
                 class="rounded-full px-3 py-1 text-xs font-semibold"
                 :class="
