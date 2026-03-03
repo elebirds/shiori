@@ -425,6 +425,14 @@ pnpm dev
 - `VITE_API_BASE_URL=http://localhost:8080`
 - `VITE_NOTIFY_WS_BASE_URL=ws://localhost:8090/ws`
 
+前端 Playwright 冒烟（注册/登录 -> 创建商品 -> 多 SKU 下单 -> 支付 -> 通知）：
+
+```bash
+cd shiori-app
+pnpm e2e:install
+pnpm e2e
+```
+
 ---
 
 ## 📈 压测与可观测性 (Performance & Observability)
