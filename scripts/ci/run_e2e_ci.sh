@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DEPLOY_DIR="${ROOT_DIR}/deploy"
 JAVA_DIR="${ROOT_DIR}/shiori-java"
 NOTIFY_DIR="${ROOT_DIR}/shiori-notify"
+APP_DIR="${ROOT_DIR}/shiori-app"
 SMOKE_SCRIPT="${ROOT_DIR}/scripts/smoke/e2e_trade_notify.sh"
 CI_LOG_DIR="${ROOT_DIR}/ci-logs"
 
@@ -28,6 +29,7 @@ print_key_logs() {
   dump_tail "${CI_LOG_DIR}/order-service.log"
   dump_tail "${CI_LOG_DIR}/gateway-service.log"
   dump_tail "${CI_LOG_DIR}/notify.log"
+  dump_tail "${CI_LOG_DIR}/app-e2e.log"
 
   if docker ps -a --format '{{.Names}}' | grep -q '^shiori-nacos-config-init$'; then
     echo "----- docker logs shiori-nacos-config-init -----"
@@ -209,6 +211,8 @@ main() {
   require_command jq
   require_command curl
   require_command go
+  require_command node
+  require_command pnpm
 
   docker compose version >/dev/null 2>&1 || fail "docker compose 不可用"
   [[ -x "${SMOKE_SCRIPT}" ]] || fail "烟测脚本不存在或不可执行: ${SMOKE_SCRIPT}"
@@ -249,6 +253,22 @@ main() {
 
   log "烟测执行成功"
   dump_tail "${CI_LOG_DIR}/smoke.log"
+
+  log "执行前端 Playwright E2E..."
+  if ! (
+    cd "${APP_DIR}"
+    pnpm install --frozen-lockfile
+    pnpm e2e:install
+    E2E_GATEWAY_BASE_URL=http://127.0.0.1:8080 \
+    E2E_NOTIFY_HTTP_BASE_URL=http://127.0.0.1:8090 \
+    pnpm e2e
+  ) >"${CI_LOG_DIR}/app-e2e.log" 2>&1; then
+    dump_tail "${CI_LOG_DIR}/app-e2e.log"
+    fail "前端 Playwright E2E 执行失败"
+  fi
+
+  log "前端 Playwright E2E 执行成功"
+  dump_tail "${CI_LOG_DIR}/app-e2e.log"
 }
 
 main "$@"

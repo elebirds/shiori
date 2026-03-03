@@ -50,6 +50,18 @@ jobs:
           go-version-file: shiori-notify/go.mod
           cache-dependency-path: shiori-notify/go.sum
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: shiori-app/pnpm-lock.yaml
+
       - name: Check runtime dependencies
         run: |
           docker --version
@@ -57,6 +69,8 @@ jobs:
           jq --version
           curl --version | head -n 1
           go version
+          node --version
+          pnpm --version
 
       - name: Run E2E smoke
         run: bash scripts/ci/run_e2e_ci.sh
@@ -67,4 +81,14 @@ jobs:
         with:
           name: ci-logs-${{ github.run_id }}-${{ github.run_attempt }}
           path: ci-logs/**
+          if-no-files-found: warn
+
+      - name: Upload Playwright artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            shiori-app/playwright-report/**
+            shiori-app/test-results/**
           if-no-files-found: warn

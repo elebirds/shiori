@@ -394,7 +394,7 @@ go run ./cmd/ws-smoke -base-url ws://localhost:8090/ws -user-id 1001 -expect-typ
 仓库已提供 CI workflow：
 - `.github/workflows/ci.yml`
 - Job 1：`java-test`（`shiori-java` 全量测试）
-- Job 2：`e2e-trade-notify`（基础设施 + 4 个 Java 服务 + notify + 交易通知烟测）
+- Job 2：`e2e-trade-notify`（基础设施 + 4 个 Java 服务 + notify + 交易通知烟测 + `shiori-app` Playwright E2E）
 
 E2E 编排脚本：
 
@@ -407,6 +407,7 @@ bash scripts/ci/run_e2e_ci.sh
 - 等待 `nacos-config-init` 成功退出
 - 启动 user/product/order/gateway/notify
 - 执行 `scripts/smoke/e2e_trade_notify.sh`
+- 执行 `shiori-app` 前端 Playwright 端到端用例
 - 失败时输出关键日志并自动清理环境
 
 CI 日志默认落盘到仓库根目录：
