@@ -403,7 +403,7 @@ go run ./cmd/ws-smoke -base-url ws://localhost:8090/ws -user-id 1001 -expect-typ
 仓库已提供 CI workflow：
 - `.github/workflows/ci.yml`
 - Job 1：`java-test`（`shiori-java` 全量测试）
-- Job 2：`e2e-trade-notify-admin`（基础设施 + 4 个 Java 服务 + notify + 交易通知烟测 + 管理端闭环烟测 + `shiori-app` Playwright E2E）
+- Job 2：`e2e-trade-notify-admin`（基础设施 + 4 个 Java 服务 + notify + 交易通知烟测 + 管理端闭环烟测 + `shiori-app` Playwright E2E + `shiori-admin-web` Playwright E2E）
 
 E2E 编排脚本：
 
@@ -424,6 +424,7 @@ export SERVICE_READY_TIMEOUT_SECONDS=300
 - 执行 `scripts/smoke/e2e_trade_notify.sh`
 - 执行 `scripts/smoke/e2e_admin_console.sh`
 - 执行 `shiori-app` 前端 Playwright 端到端用例
+- 执行 `shiori-admin-web` 管理端 Playwright 端到端用例
 - 失败时输出关键日志并自动清理环境
 
 CI 日志默认落盘到仓库根目录：
@@ -460,6 +461,14 @@ pnpm dev
 ```
 
 默认地址：`http://localhost:5173`（仅 `ROLE_ADMIN` 可登录）。
+
+管理端 Playwright 冒烟（登录 -> 用户禁用/启用 -> 商品强制下架 -> 订单取消）：
+
+```bash
+cd shiori-admin-web
+pnpm e2e:install
+pnpm e2e
+```
 
 管理端 API（统一前缀）：
 - `/api/admin/users/**`

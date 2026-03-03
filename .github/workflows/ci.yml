@@ -60,7 +60,9 @@ jobs:
         with:
           node-version: "22"
           cache: pnpm
-          cache-dependency-path: shiori-app/pnpm-lock.yaml
+          cache-dependency-path: |
+            shiori-app/pnpm-lock.yaml
+            shiori-admin-web/pnpm-lock.yaml
 
       - name: Check runtime dependencies
         run: |
@@ -91,4 +93,6 @@ jobs:
           path: |
             shiori-app/playwright-report/**
             shiori-app/test-results/**
+            shiori-admin-web/playwright-report/**
+            shiori-admin-web/test-results/**
           if-no-files-found: warn

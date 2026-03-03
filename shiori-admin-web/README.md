@@ -20,6 +20,20 @@ pnpm test:run
 pnpm build
 ```
 
+## Playwright 端到端
+
+```bash
+pnpm e2e:install
+pnpm e2e
+```
+
+可选环境变量：
+
+- `E2E_GATEWAY_BASE_URL`（默认 `http://127.0.0.1:8080`）
+- `E2E_MYSQL_CONTAINER`（默认 `shiori-mysql`）
+- `E2E_MYSQL_USER`（默认 `shiori`）
+- `E2E_MYSQL_PASSWORD`（默认 `shiori`）
+
 ## 路由
 
 - `/login`

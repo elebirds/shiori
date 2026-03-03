@@ -6,6 +6,7 @@ DEPLOY_DIR="${ROOT_DIR}/deploy"
 JAVA_DIR="${ROOT_DIR}/shiori-java"
 NOTIFY_DIR="${ROOT_DIR}/shiori-notify"
 APP_DIR="${ROOT_DIR}/shiori-app"
+ADMIN_WEB_DIR="${ROOT_DIR}/shiori-admin-web"
 SMOKE_SCRIPT="${ROOT_DIR}/scripts/smoke/e2e_trade_notify.sh"
 ADMIN_SMOKE_SCRIPT="${ROOT_DIR}/scripts/smoke/e2e_admin_console.sh"
 CI_LOG_DIR="${ROOT_DIR}/ci-logs"
@@ -35,6 +36,7 @@ print_key_logs() {
   dump_tail "${CI_LOG_DIR}/notify.log"
   dump_tail "${CI_LOG_DIR}/admin-smoke.log"
   dump_tail "${CI_LOG_DIR}/app-e2e.log"
+  dump_tail "${CI_LOG_DIR}/admin-web-e2e.log"
 
   if docker ps -a --format '{{.Names}}' | grep -q '^shiori-nacos-config-init$'; then
     echo "----- docker logs shiori-nacos-config-init -----"
@@ -288,6 +290,24 @@ main() {
 
   log "前端 Playwright E2E 执行成功"
   dump_tail "${CI_LOG_DIR}/app-e2e.log"
+
+  log "执行管理端 Playwright E2E..."
+  if ! (
+    cd "${ADMIN_WEB_DIR}"
+    pnpm install --frozen-lockfile
+    pnpm e2e:install
+    E2E_GATEWAY_BASE_URL=http://127.0.0.1:8080 \
+    E2E_MYSQL_CONTAINER=shiori-mysql \
+    E2E_MYSQL_USER=shiori \
+    E2E_MYSQL_PASSWORD=shiori \
+    pnpm e2e
+  ) >"${CI_LOG_DIR}/admin-web-e2e.log" 2>&1; then
+    dump_tail "${CI_LOG_DIR}/admin-web-e2e.log"
+    fail "管理端 Playwright E2E 执行失败"
+  fi
+
+  log "管理端 Playwright E2E 执行成功"
+  dump_tail "${CI_LOG_DIR}/admin-web-e2e.log"
 }
 
 main "$@"
