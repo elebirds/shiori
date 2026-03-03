@@ -3,7 +3,6 @@ package moe.hhm.shiori.order.client;
 import java.net.ConnectException;
 import java.net.NoRouteToHostException;
 import java.net.SocketTimeoutException;
-import java.net.URI;
 import java.net.UnknownHostException;
 import java.util.List;
 import moe.hhm.shiori.common.api.Result;
@@ -45,12 +44,9 @@ public class ProductServiceClient {
                                 ProductClientProperties productClientProperties,
                                 GatewaySignProperties gatewaySignProperties,
                                 ObjectMapper objectMapper) {
-        String baseUrl = productClientProperties.getServiceBaseUrl();
-        if (shouldUseDirectClient(baseUrl)) {
-            this.restClient = RestClient.builder().baseUrl(baseUrl).build();
-        } else {
-            this.restClient = loadBalancedRestClientBuilder.baseUrl(baseUrl).build();
-        }
+        this.restClient = loadBalancedRestClientBuilder
+                .baseUrl(productClientProperties.getServiceBaseUrl())
+                .build();
         this.gatewaySignProperties = gatewaySignProperties;
         this.objectMapper = objectMapper;
     }
@@ -224,29 +220,5 @@ public class ProductServiceClient {
             current = current.getCause();
         }
         return false;
-    }
-
-    static boolean shouldUseDirectClient(String baseUrl) {
-        if (!StringUtils.hasText(baseUrl)) {
-            return false;
-        }
-        URI uri;
-        try {
-            uri = URI.create(baseUrl);
-        } catch (IllegalArgumentException ex) {
-            return false;
-        }
-        String host = uri.getHost();
-        if (!StringUtils.hasText(host)) {
-            return false;
-        }
-        String normalizedHost = host.trim().toLowerCase();
-        if ("localhost".equals(normalizedHost) || "127.0.0.1".equals(normalizedHost) || "::1".equals(normalizedHost)) {
-            return true;
-        }
-        if (normalizedHost.matches("\\d+\\.\\d+\\.\\d+\\.\\d+")) {
-            return true;
-        }
-        return normalizedHost.contains(".");
     }
 }

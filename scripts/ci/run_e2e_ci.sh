@@ -241,7 +241,7 @@ start_order_service() {
     SPRING_RABBITMQ_PASSWORD="${ORDER_RMQ_PASSWORD}" \
     SPRING_DATA_REDIS_HOST=localhost \
     SPRING_DATA_REDIS_PORT="${REDIS_LOCAL_PORT}" \
-    ORDER_PRODUCT_SERVICE_BASE_URL=http://localhost:8082 \
+    ORDER_PRODUCT_SERVICE_BASE_URL=http://shiori-product-service \
     NACOS_USERNAME="${NACOS_IMPORT_USERNAME}" \
     NACOS_PASSWORD="${NACOS_IMPORT_PASSWORD}" \
     ./gradlew :shiori-order-service:bootRun --no-daemon

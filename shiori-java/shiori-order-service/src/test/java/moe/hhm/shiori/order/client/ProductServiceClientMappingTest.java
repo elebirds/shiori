@@ -98,17 +98,4 @@ class ProductServiceClientMappingTest {
         assertThat(ex.getHttpStatus()).isEqualTo(HttpStatus.GATEWAY_TIMEOUT);
     }
 
-    @Test
-    void shouldUseDirectClientForLocalAndIpHost() {
-        assertThat(ProductServiceClient.shouldUseDirectClient("http://127.0.0.1:8082")).isTrue();
-        assertThat(ProductServiceClient.shouldUseDirectClient("http://localhost:8082")).isTrue();
-        assertThat(ProductServiceClient.shouldUseDirectClient("http://192.168.1.10:8082")).isTrue();
-        assertThat(ProductServiceClient.shouldUseDirectClient("http://product.internal:8082")).isTrue();
-    }
-
-    @Test
-    void shouldUseLoadBalancerClientForServiceName() {
-        assertThat(ProductServiceClient.shouldUseDirectClient("http://shiori-product-service")).isFalse();
-        assertThat(ProductServiceClient.shouldUseDirectClient("http://product-service")).isFalse();
-    }
 }
