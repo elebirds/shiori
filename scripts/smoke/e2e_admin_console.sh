@@ -280,6 +280,47 @@ buyer_order_detail="$(call_api GET "/api/order/orders/${order_no}" "${buyer_toke
 buyer_order_status="$(extract_required "${buyer_order_detail}" '.data.status' "buyer.order.status")"
 [[ "${buyer_order_status}" == "CANCELED" ]] || fail "买家订单状态异常，expect=CANCELED actual=${buyer_order_status}"
 
+log "seller/订单状态机闭环：PAID -> DELIVERING -> FINISHED..."
+product_c_payload="$(jq -nc \
+  --arg title "Admin Smoke 商品C ${id_suffix}" \
+  --arg description "管理端烟测商品C" \
+  '{
+    title:$title,
+    description:$description,
+    coverObjectKey:null,
+    skus:[{skuName:"履约版",specJson:"{\"edition\":\"ship\"}",priceCent:1699,stock:12}]
+  }')"
+product_c_resp="$(call_api POST "/api/product/products" "${seller_token}" "${product_c_payload}")"
+product_c_id="$(extract_required "${product_c_resp}" '.data.productId | tostring' "productC.id")"
+call_api POST "/api/product/products/${product_c_id}/publish" "${seller_token}" "" >/dev/null
+product_c_detail="$(call_api GET "/api/product/products/${product_c_id}" "" "")"
+product_c_sku_id="$(extract_required "${product_c_detail}" '.data.skus[0].skuId | tostring' "productC.skuId")"
+
+ship_order_payload="$(jq -nc --argjson productId "${product_c_id}" --argjson skuId "${product_c_sku_id}" \
+  '{items:[{productId:$productId,skuId:$skuId,quantity:1}]}')"
+ship_idem_key="admin-ship-${id_suffix}"
+ship_order_create_resp="$(call_api POST "/api/order/orders" "${buyer_token}" "${ship_order_payload}" -H "Idempotency-Key: ${ship_idem_key}")"
+ship_order_no="$(extract_required "${ship_order_create_resp}" '.data.orderNo' "ship.orderNo")"
+
+pay_resp="$(call_api POST "/api/order/orders/${ship_order_no}/pay" "${buyer_token}" "{\"paymentNo\":\"admin-pay-${id_suffix}\"}")"
+[[ "$(extract_required "${pay_resp}" '.data.status' "ship.pay.status")" == "PAID" ]] || fail "支付后状态异常"
+
+deliver_resp="$(call_api POST "/api/order/seller/orders/${ship_order_no}/deliver" "${seller_token}" '{"reason":"卖家发货烟测"}')"
+[[ "$(extract_required "${deliver_resp}" '.data.status' "ship.deliver.status")" == "DELIVERING" ]] || fail "发货状态异常"
+
+finish_resp="$(call_api POST "/api/order/seller/orders/${ship_order_no}/finish" "${seller_token}" '{"reason":"卖家完成烟测"}')"
+[[ "$(extract_required "${finish_resp}" '.data.status' "ship.finish.status")" == "FINISHED" ]] || fail "完结状态异常"
+
+ship_order_detail="$(call_api GET "/api/order/orders/${ship_order_no}" "${buyer_token}" "")"
+ship_order_status="$(extract_required "${ship_order_detail}" '.data.status' "ship.order.status")"
+[[ "${ship_order_status}" == "FINISHED" ]] || fail "订单闭环状态异常，expect=FINISHED actual=${ship_order_status}"
+
+status_audit_resp="$(call_api GET "/api/admin/orders/${ship_order_no}/status-audits?page=1&size=20" "${admin_token}" "")"
+has_paid_to_delivering="$(echo "${status_audit_resp}" | jq -r '.data.items | map((.fromStatus=="PAID") and (.toStatus=="DELIVERING")) | any')"
+has_delivering_to_finished="$(echo "${status_audit_resp}" | jq -r '.data.items | map((.fromStatus=="DELIVERING") and (.toStatus=="FINISHED")) | any')"
+[[ "${has_paid_to_delivering}" == "true" ]] || fail "状态审计缺少 PAID->DELIVERING"
+[[ "${has_delivering_to_finished}" == "true" ]] || fail "状态审计缺少 DELIVERING->FINISHED"
+
 log "admin 执行用户启用/禁用与管理员角色授予/回收..."
 disable_resp="$(call_api POST "/api/admin/users/${buyer_user_id}/status" "${admin_token}" '{"status":"DISABLED","reason":"烟测禁用"}')"
 [[ "$(extract_required "${disable_resp}" '.data.status' "buyer.status.disabled")" == "DISABLED" ]] || fail "禁用用户失败"

@@ -1,11 +1,14 @@
 package moe.hhm.shiori.order.admin.controller;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import moe.hhm.shiori.order.dto.CancelOrderRequest;
 import moe.hhm.shiori.order.dto.OrderDetailResponse;
 import moe.hhm.shiori.order.dto.OrderOperateResponse;
 import moe.hhm.shiori.order.dto.OrderPageResponse;
+import moe.hhm.shiori.order.dto.OrderStatusAuditPageResponse;
+import moe.hhm.shiori.order.dto.OrderTransitionRequest;
 import moe.hhm.shiori.order.security.CurrentUserSupport;
 import moe.hhm.shiori.order.service.OrderCommandService;
 import moe.hhm.shiori.order.service.OrderService;
@@ -59,5 +62,30 @@ public class AdminOrderController {
                 orderNo,
                 reason
         );
+    }
+
+    @PostMapping("/{orderNo}/deliver")
+    public OrderOperateResponse deliverOrder(@PathVariable String orderNo,
+                                             @Valid @RequestBody(required = false) OrderTransitionRequest request,
+                                             Authentication authentication) {
+        Long operatorUserId = CurrentUserSupport.requireUserId(authentication);
+        String reason = request == null ? null : request.reason();
+        return orderCommandService.deliverOrderAsAdmin(operatorUserId, orderNo, reason);
+    }
+
+    @PostMapping("/{orderNo}/finish")
+    public OrderOperateResponse finishOrder(@PathVariable String orderNo,
+                                            @Valid @RequestBody(required = false) OrderTransitionRequest request,
+                                            Authentication authentication) {
+        Long operatorUserId = CurrentUserSupport.requireUserId(authentication);
+        String reason = request == null ? null : request.reason();
+        return orderCommandService.finishOrderAsAdmin(operatorUserId, orderNo, reason);
+    }
+
+    @GetMapping("/{orderNo}/status-audits")
+    public OrderStatusAuditPageResponse listStatusAudits(@PathVariable String orderNo,
+                                                         @RequestParam(defaultValue = "1") @Min(1) int page,
+                                                         @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
+        return orderService.listStatusAuditsForAdmin(orderNo, page, size);
     }
 }

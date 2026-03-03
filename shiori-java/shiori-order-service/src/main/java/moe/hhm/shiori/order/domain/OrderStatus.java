@@ -3,7 +3,9 @@ package moe.hhm.shiori.order.domain;
 public enum OrderStatus {
     UNPAID(1),
     PAID(2),
-    CANCELED(3);
+    CANCELED(3),
+    DELIVERING(4),
+    FINISHED(5);
 
     private final int code;
 

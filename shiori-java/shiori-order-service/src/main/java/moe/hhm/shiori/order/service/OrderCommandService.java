@@ -53,6 +53,10 @@ public class OrderCommandService {
     private static final String EVENT_ORDER_PAID = "OrderPaid";
     private static final String EVENT_ORDER_TIMEOUT = "OrderTimeout";
     private static final String EVENT_ORDER_CANCELED = "OrderCanceled";
+    private static final String SOURCE_BUYER = "BUYER";
+    private static final String SOURCE_SELLER = "SELLER";
+    private static final String SOURCE_ADMIN = "ADMIN";
+    private static final String SOURCE_SYSTEM = "SYSTEM";
 
     private final OrderMapper orderMapper;
     private final ProductServiceClient productServiceClient;
@@ -179,6 +183,8 @@ public class OrderCommandService {
 
         appendOrderPaidOutbox(orderNo, paymentNo, order.buyerUserId(), order.sellerUserId(), order.totalAmountCent());
         orderMetrics.incStateTransition(OrderStatus.UNPAID.name(), OrderStatus.PAID.name());
+        insertStatusAudit(orderNo, buyerUserId, SOURCE_BUYER, OrderStatus.UNPAID, OrderStatus.PAID,
+                "买家支付成功, paymentNo=" + paymentNo);
         return new OrderOperateResponse(orderNo, OrderStatus.PAID.name(), false);
     }
 
@@ -214,6 +220,8 @@ public class OrderCommandService {
         releaseOrderItems(orderNo, buyerUserId, roles, items);
         appendOrderCanceledOutbox(orderNo, order.buyerUserId(), order.sellerUserId(), resolveCancelReason(reason));
         orderMetrics.incStateTransition(OrderStatus.UNPAID.name(), OrderStatus.CANCELED.name());
+        insertStatusAudit(orderNo, buyerUserId, SOURCE_BUYER, OrderStatus.UNPAID, OrderStatus.CANCELED,
+                resolveCancelReason(reason));
         return new OrderOperateResponse(orderNo, OrderStatus.CANCELED.name(), false);
     }
 
@@ -253,9 +261,147 @@ public class OrderCommandService {
         releaseOrderItems(orderNo, operatorUserId, roles, items);
         appendOrderCanceledOutbox(orderNo, before.buyerUserId(), before.sellerUserId(), normalizedReason);
         orderMetrics.incStateTransition(OrderStatus.UNPAID.name(), OrderStatus.CANCELED.name());
+        insertStatusAudit(orderNo, operatorUserId, SOURCE_ADMIN, OrderStatus.UNPAID, OrderStatus.CANCELED,
+                normalizedReason);
         OrderRecord after = requireOrder(orderNo);
         insertAdminAudit(operatorUserId, orderNo, "ORDER_ADMIN_CANCEL", before, after, normalizedReason);
         return new OrderOperateResponse(orderNo, OrderStatus.CANCELED.name(), false);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public OrderOperateResponse deliverOrderAsSeller(Long sellerUserId, String orderNo, String reason) {
+        OrderRecord order = requireOrder(orderNo);
+        ensureSeller(order, sellerUserId);
+        String normalizedReason = resolveDeliverReason(reason, false);
+
+        OrderStatus status = OrderStatus.fromCode(order.status());
+        if (status == OrderStatus.DELIVERING) {
+            return new OrderOperateResponse(orderNo, OrderStatus.DELIVERING.name(), true);
+        }
+        if (status != OrderStatus.PAID) {
+            throw new BizException(OrderErrorCode.ORDER_STATUS_INVALID, HttpStatus.CONFLICT);
+        }
+
+        int affected = orderMapper.markOrderDeliveringBySeller(
+                orderNo,
+                sellerUserId,
+                OrderStatus.PAID.getCode(),
+                OrderStatus.DELIVERING.getCode()
+        );
+        if (affected == 0) {
+            OrderRecord latest = requireOrder(orderNo);
+            if (OrderStatus.fromCode(latest.status()) == OrderStatus.DELIVERING) {
+                return new OrderOperateResponse(orderNo, OrderStatus.DELIVERING.name(), true);
+            }
+            throw new BizException(OrderErrorCode.ORDER_STATUS_INVALID, HttpStatus.CONFLICT);
+        }
+
+        orderMetrics.incStateTransition(OrderStatus.PAID.name(), OrderStatus.DELIVERING.name());
+        insertStatusAudit(orderNo, sellerUserId, SOURCE_SELLER, OrderStatus.PAID, OrderStatus.DELIVERING, normalizedReason);
+        return new OrderOperateResponse(orderNo, OrderStatus.DELIVERING.name(), false);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public OrderOperateResponse finishOrderAsSeller(Long sellerUserId, String orderNo, String reason) {
+        OrderRecord order = requireOrder(orderNo);
+        ensureSeller(order, sellerUserId);
+        String normalizedReason = resolveFinishReason(reason, false);
+
+        OrderStatus status = OrderStatus.fromCode(order.status());
+        if (status == OrderStatus.FINISHED) {
+            return new OrderOperateResponse(orderNo, OrderStatus.FINISHED.name(), true);
+        }
+        if (status != OrderStatus.DELIVERING) {
+            throw new BizException(OrderErrorCode.ORDER_STATUS_INVALID, HttpStatus.CONFLICT);
+        }
+
+        int affected = orderMapper.markOrderFinishedBySeller(
+                orderNo,
+                sellerUserId,
+                OrderStatus.DELIVERING.getCode(),
+                OrderStatus.FINISHED.getCode()
+        );
+        if (affected == 0) {
+            OrderRecord latest = requireOrder(orderNo);
+            if (OrderStatus.fromCode(latest.status()) == OrderStatus.FINISHED) {
+                return new OrderOperateResponse(orderNo, OrderStatus.FINISHED.name(), true);
+            }
+            throw new BizException(OrderErrorCode.ORDER_STATUS_INVALID, HttpStatus.CONFLICT);
+        }
+
+        orderMetrics.incStateTransition(OrderStatus.DELIVERING.name(), OrderStatus.FINISHED.name());
+        insertStatusAudit(orderNo, sellerUserId, SOURCE_SELLER, OrderStatus.DELIVERING, OrderStatus.FINISHED, normalizedReason);
+        return new OrderOperateResponse(orderNo, OrderStatus.FINISHED.name(), false);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public OrderOperateResponse deliverOrderAsAdmin(Long operatorUserId, String orderNo, String reason) {
+        OrderRecord before = requireOrder(orderNo);
+        String normalizedReason = resolveDeliverReason(reason, true);
+
+        OrderStatus status = OrderStatus.fromCode(before.status());
+        if (status == OrderStatus.DELIVERING) {
+            insertAdminAudit(operatorUserId, orderNo, "ORDER_ADMIN_DELIVER", before, before, normalizedReason);
+            return new OrderOperateResponse(orderNo, OrderStatus.DELIVERING.name(), true);
+        }
+        if (status != OrderStatus.PAID) {
+            throw new BizException(OrderErrorCode.ORDER_STATUS_INVALID, HttpStatus.CONFLICT);
+        }
+
+        int affected = orderMapper.markOrderDeliveringAsAdmin(
+                orderNo,
+                OrderStatus.PAID.getCode(),
+                OrderStatus.DELIVERING.getCode()
+        );
+        if (affected == 0) {
+            OrderRecord latest = requireOrder(orderNo);
+            if (OrderStatus.fromCode(latest.status()) == OrderStatus.DELIVERING) {
+                insertAdminAudit(operatorUserId, orderNo, "ORDER_ADMIN_DELIVER", before, latest, normalizedReason);
+                return new OrderOperateResponse(orderNo, OrderStatus.DELIVERING.name(), true);
+            }
+            throw new BizException(OrderErrorCode.ORDER_STATUS_INVALID, HttpStatus.CONFLICT);
+        }
+
+        orderMetrics.incStateTransition(OrderStatus.PAID.name(), OrderStatus.DELIVERING.name());
+        insertStatusAudit(orderNo, operatorUserId, SOURCE_ADMIN, OrderStatus.PAID, OrderStatus.DELIVERING, normalizedReason);
+        OrderRecord after = requireOrder(orderNo);
+        insertAdminAudit(operatorUserId, orderNo, "ORDER_ADMIN_DELIVER", before, after, normalizedReason);
+        return new OrderOperateResponse(orderNo, OrderStatus.DELIVERING.name(), false);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public OrderOperateResponse finishOrderAsAdmin(Long operatorUserId, String orderNo, String reason) {
+        OrderRecord before = requireOrder(orderNo);
+        String normalizedReason = resolveFinishReason(reason, true);
+
+        OrderStatus status = OrderStatus.fromCode(before.status());
+        if (status == OrderStatus.FINISHED) {
+            insertAdminAudit(operatorUserId, orderNo, "ORDER_ADMIN_FINISH", before, before, normalizedReason);
+            return new OrderOperateResponse(orderNo, OrderStatus.FINISHED.name(), true);
+        }
+        if (status != OrderStatus.DELIVERING) {
+            throw new BizException(OrderErrorCode.ORDER_STATUS_INVALID, HttpStatus.CONFLICT);
+        }
+
+        int affected = orderMapper.markOrderFinishedAsAdmin(
+                orderNo,
+                OrderStatus.DELIVERING.getCode(),
+                OrderStatus.FINISHED.getCode()
+        );
+        if (affected == 0) {
+            OrderRecord latest = requireOrder(orderNo);
+            if (OrderStatus.fromCode(latest.status()) == OrderStatus.FINISHED) {
+                insertAdminAudit(operatorUserId, orderNo, "ORDER_ADMIN_FINISH", before, latest, normalizedReason);
+                return new OrderOperateResponse(orderNo, OrderStatus.FINISHED.name(), true);
+            }
+            throw new BizException(OrderErrorCode.ORDER_STATUS_INVALID, HttpStatus.CONFLICT);
+        }
+
+        orderMetrics.incStateTransition(OrderStatus.DELIVERING.name(), OrderStatus.FINISHED.name());
+        insertStatusAudit(orderNo, operatorUserId, SOURCE_ADMIN, OrderStatus.DELIVERING, OrderStatus.FINISHED, normalizedReason);
+        OrderRecord after = requireOrder(orderNo);
+        insertAdminAudit(operatorUserId, orderNo, "ORDER_ADMIN_FINISH", before, after, normalizedReason);
+        return new OrderOperateResponse(orderNo, OrderStatus.FINISHED.name(), false);
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -282,6 +428,7 @@ public class OrderCommandService {
         releaseOrderItems(orderNo, order.buyerUserId(), List.of("ROLE_USER"), items);
         appendOrderCanceledOutbox(orderNo, order.buyerUserId(), order.sellerUserId(), "超时未支付自动取消");
         orderMetrics.incStateTransition(OrderStatus.UNPAID.name(), OrderStatus.CANCELED.name());
+        insertStatusAudit(orderNo, null, SOURCE_SYSTEM, OrderStatus.UNPAID, OrderStatus.CANCELED, "超时未支付自动取消");
     }
 
     private void persistOrder(String orderNo,
@@ -500,6 +647,20 @@ public class OrderCommandService {
         return StringUtils.hasText(reason) ? reason.trim() : "用户主动取消";
     }
 
+    private String resolveDeliverReason(String reason, boolean adminSource) {
+        if (StringUtils.hasText(reason)) {
+            return reason.trim();
+        }
+        return adminSource ? "管理员标记发货" : "卖家标记发货";
+    }
+
+    private String resolveFinishReason(String reason, boolean adminSource) {
+        if (StringUtils.hasText(reason)) {
+            return reason.trim();
+        }
+        return adminSource ? "管理员标记完成" : "卖家标记完成";
+    }
+
     private void insertAdminAudit(Long operatorUserId,
                                   String orderNo,
                                   String action,
@@ -535,6 +696,28 @@ public class OrderCommandService {
         if (!order.buyerUserId().equals(buyerUserId)) {
             throw new BizException(OrderErrorCode.ORDER_NO_PERMISSION, HttpStatus.FORBIDDEN);
         }
+    }
+
+    private void ensureSeller(OrderRecord order, Long sellerUserId) {
+        if (!order.sellerUserId().equals(sellerUserId)) {
+            throw new BizException(OrderErrorCode.ORDER_NO_PERMISSION, HttpStatus.FORBIDDEN);
+        }
+    }
+
+    private void insertStatusAudit(String orderNo,
+                                   Long operatorUserId,
+                                   String source,
+                                   OrderStatus fromStatus,
+                                   OrderStatus toStatus,
+                                   String reason) {
+        orderMapper.insertStatusAuditLog(
+                orderNo,
+                operatorUserId,
+                source,
+                fromStatus.getCode(),
+                toStatus.getCode(),
+                StringUtils.hasText(reason) ? reason.trim() : null
+        );
     }
 
     private OrderRecord requireOrder(String orderNo) {

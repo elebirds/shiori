@@ -453,8 +453,12 @@ curl -X POST http://localhost:8080/api/product/media/presign-upload \
 - 订单详情：`GET /api/order/orders/{orderNo}`
 - 模拟支付：`POST /api/order/orders/{orderNo}/pay`
 - 主动取消：`POST /api/order/orders/{orderNo}/cancel`
+- 卖家履约：`POST /api/order/seller/orders/{orderNo}/deliver|finish`
+- 管理端履约：`POST /api/admin/orders/{orderNo}/deliver|finish`
+- 状态迁移审计查询：`GET /api/admin/orders/{orderNo}/status-audits`
 - 超时关单：通过 `OrderTimeout` 延迟消息（TTL + DLX）自动触发，消费时二次校验状态
 - Outbox 事件投递：`OrderCreated` / `OrderPaid` / `OrderCanceled`（`OrderPaid` 会分别给买家和卖家写事件）
+- 状态机：`UNPAID -> PAID -> DELIVERING -> FINISHED`（`UNPAID` 可取消为 `CANCELED`）
 
 最小调用示例：
 
@@ -630,6 +634,8 @@ pnpm e2e
 - `/api/admin/roles/**`
 - `/api/admin/products/**`
 - `/api/admin/orders/**`
+  - 订单履约：`/api/admin/orders/{orderNo}/deliver|finish`
+  - 状态审计：`/api/admin/orders/{orderNo}/status-audits`
 
 ### 5.1) 手工初始化管理员
 

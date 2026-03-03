@@ -6,6 +6,7 @@ import moe.hhm.shiori.order.model.OrderEntity;
 import moe.hhm.shiori.order.model.OrderItemEntity;
 import moe.hhm.shiori.order.model.OrderItemRecord;
 import moe.hhm.shiori.order.model.OrderRecord;
+import moe.hhm.shiori.order.model.OrderStatusAuditRecord;
 import moe.hhm.shiori.order.model.OutboxEventEntity;
 import moe.hhm.shiori.order.model.OutboxEventRecord;
 import org.apache.ibatis.annotations.Insert;
@@ -330,6 +331,62 @@ public interface OrderMapper {
                              @Param("expectStatus") Integer expectStatus,
                              @Param("canceledStatus") Integer canceledStatus);
 
+    @Update("""
+            UPDATE o_order
+            SET status = #{deliveringStatus},
+                updated_at = CURRENT_TIMESTAMP(3),
+                version = version + 1
+            WHERE order_no = #{orderNo}
+              AND seller_user_id = #{sellerUserId}
+              AND status = #{expectStatus}
+              AND is_deleted = 0
+            """)
+    int markOrderDeliveringBySeller(@Param("orderNo") String orderNo,
+                                    @Param("sellerUserId") Long sellerUserId,
+                                    @Param("expectStatus") Integer expectStatus,
+                                    @Param("deliveringStatus") Integer deliveringStatus);
+
+    @Update("""
+            UPDATE o_order
+            SET status = #{deliveringStatus},
+                updated_at = CURRENT_TIMESTAMP(3),
+                version = version + 1
+            WHERE order_no = #{orderNo}
+              AND status = #{expectStatus}
+              AND is_deleted = 0
+            """)
+    int markOrderDeliveringAsAdmin(@Param("orderNo") String orderNo,
+                                   @Param("expectStatus") Integer expectStatus,
+                                   @Param("deliveringStatus") Integer deliveringStatus);
+
+    @Update("""
+            UPDATE o_order
+            SET status = #{finishedStatus},
+                updated_at = CURRENT_TIMESTAMP(3),
+                version = version + 1
+            WHERE order_no = #{orderNo}
+              AND seller_user_id = #{sellerUserId}
+              AND status = #{expectStatus}
+              AND is_deleted = 0
+            """)
+    int markOrderFinishedBySeller(@Param("orderNo") String orderNo,
+                                  @Param("sellerUserId") Long sellerUserId,
+                                  @Param("expectStatus") Integer expectStatus,
+                                  @Param("finishedStatus") Integer finishedStatus);
+
+    @Update("""
+            UPDATE o_order
+            SET status = #{finishedStatus},
+                updated_at = CURRENT_TIMESTAMP(3),
+                version = version + 1
+            WHERE order_no = #{orderNo}
+              AND status = #{expectStatus}
+              AND is_deleted = 0
+            """)
+    int markOrderFinishedAsAdmin(@Param("orderNo") String orderNo,
+                                 @Param("expectStatus") Integer expectStatus,
+                                 @Param("finishedStatus") Integer finishedStatus);
+
     @Insert("""
             INSERT INTO o_outbox_event (
                 event_id,
@@ -434,4 +491,55 @@ public interface OrderMapper {
                             @Param("beforeJson") String beforeJson,
                             @Param("afterJson") String afterJson,
                             @Param("reason") String reason);
+
+    @Insert("""
+            INSERT INTO o_order_status_audit_log (
+                target_order_no,
+                operator_user_id,
+                source,
+                from_status,
+                to_status,
+                reason,
+                created_at
+            ) VALUES (
+                #{targetOrderNo},
+                #{operatorUserId},
+                #{source},
+                #{fromStatus},
+                #{toStatus},
+                #{reason},
+                CURRENT_TIMESTAMP(3)
+            )
+            """)
+    int insertStatusAuditLog(@Param("targetOrderNo") String targetOrderNo,
+                             @Param("operatorUserId") Long operatorUserId,
+                             @Param("source") String source,
+                             @Param("fromStatus") Integer fromStatus,
+                             @Param("toStatus") Integer toStatus,
+                             @Param("reason") String reason);
+
+    @Select("""
+            SELECT COUNT(1)
+            FROM o_order_status_audit_log
+            WHERE target_order_no = #{orderNo}
+            """)
+    long countStatusAuditByOrderNo(@Param("orderNo") String orderNo);
+
+    @Select("""
+            SELECT id,
+                   target_order_no AS orderNo,
+                   operator_user_id AS operatorUserId,
+                   source,
+                   from_status AS fromStatus,
+                   to_status AS toStatus,
+                   reason,
+                   created_at AS createdAt
+            FROM o_order_status_audit_log
+            WHERE target_order_no = #{orderNo}
+            ORDER BY id DESC
+            LIMIT #{size} OFFSET #{offset}
+            """)
+    List<OrderStatusAuditRecord> listStatusAuditByOrderNo(@Param("orderNo") String orderNo,
+                                                          @Param("size") int size,
+                                                          @Param("offset") int offset);
 }

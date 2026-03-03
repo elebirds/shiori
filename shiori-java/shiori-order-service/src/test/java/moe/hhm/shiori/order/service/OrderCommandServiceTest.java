@@ -22,10 +22,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import tools.jackson.databind.ObjectMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -131,6 +133,57 @@ class OrderCommandServiceTest {
         assertThat(response.idempotent()).isTrue();
         assertThat(response.status()).isEqualTo("PAID");
         verify(orderMapper, never()).markOrderPaid(anyString(), anyLong(), anyString(), any(), any(), any());
+    }
+
+    @Test
+    void shouldDeliverOrderAsSeller() {
+        when(orderMapper.findOrderByOrderNo("O202603040001"))
+                .thenReturn(new OrderRecord(
+                        10L, "O202603040001", 1001L, 2001L, 2, 1999L, 1,
+                        "PAY-1", null, null, null, 0, null, null
+                ));
+        when(orderMapper.markOrderDeliveringBySeller("O202603040001", 2001L, 2, 4)).thenReturn(1);
+
+        OrderOperateResponse response = orderCommandService.deliverOrderAsSeller(2001L, "O202603040001", "ship");
+
+        assertThat(response.idempotent()).isFalse();
+        assertThat(response.status()).isEqualTo("DELIVERING");
+        verify(orderMapper).insertStatusAuditLog("O202603040001", 2001L, "SELLER", 2, 4, "ship");
+    }
+
+    @Test
+    void shouldRejectFinishWhenStatusInvalidForSeller() {
+        when(orderMapper.findOrderByOrderNo("O202603040002"))
+                .thenReturn(new OrderRecord(
+                        11L, "O202603040002", 1001L, 2001L, 2, 2999L, 1,
+                        "PAY-2", null, null, null, 0, null, null
+                ));
+
+        assertThatThrownBy(() -> orderCommandService.finishOrderAsSeller(2001L, "O202603040002", "done"))
+                .isInstanceOf(BizException.class)
+                .matches(ex -> ((BizException) ex).getErrorCode().code() == 50004);
+
+        verify(orderMapper, never()).markOrderFinishedBySeller(anyString(), anyLong(), any(), any());
+    }
+
+    @Test
+    void shouldFinishOrderAsAdmin() {
+        when(orderMapper.findOrderByOrderNo("O202603040003"))
+                .thenReturn(
+                        new OrderRecord(12L, "O202603040003", 1001L, 2001L, 4, 3999L, 1,
+                                "PAY-3", null, null, null, 0, null, null),
+                        new OrderRecord(12L, "O202603040003", 1001L, 2001L, 5, 3999L, 1,
+                                "PAY-3", null, null, null, 0, null, null)
+                );
+        when(orderMapper.markOrderFinishedAsAdmin("O202603040003", 4, 5)).thenReturn(1);
+
+        OrderOperateResponse response = orderCommandService.finishOrderAsAdmin(9001L, "O202603040003", "close");
+
+        assertThat(response.idempotent()).isFalse();
+        assertThat(response.status()).isEqualTo("FINISHED");
+        verify(orderMapper).insertStatusAuditLog("O202603040003", 9001L, "ADMIN", 4, 5, "close");
+        verify(orderMapper).insertAdminAuditLog(eq(9001L), eq("O202603040003"), eq("ORDER_ADMIN_FINISH"),
+                anyString(), anyString(), eq("close"));
     }
 
     private ProductDetailSnapshot product(Long productId, String productNo, Long ownerUserId,

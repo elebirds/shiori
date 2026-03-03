@@ -7,6 +7,8 @@ import moe.hhm.shiori.order.dto.OrderDetailResponse;
 import moe.hhm.shiori.order.dto.OrderItemResponse;
 import moe.hhm.shiori.order.dto.OrderOperateResponse;
 import moe.hhm.shiori.order.dto.OrderPageResponse;
+import moe.hhm.shiori.order.dto.OrderStatusAuditItemResponse;
+import moe.hhm.shiori.order.dto.OrderStatusAuditPageResponse;
 import moe.hhm.shiori.order.dto.OrderSummaryResponse;
 import moe.hhm.shiori.order.service.OrderCommandService;
 import moe.hhm.shiori.order.service.OrderService;
@@ -113,5 +115,64 @@ class AdminOrderControllerMvcTest {
                 .andExpect(jsonPath("$.data.status").value("CANCELED"));
 
         verify(orderCommandService).cancelOrderAsAdmin(eq(99L), any(), eq("O001"), eq("manual"));
+    }
+
+    @Test
+    void shouldDeliverOrderByAdmin() throws Exception {
+        when(orderCommandService.deliverOrderAsAdmin(99L, "O001", "ship"))
+                .thenReturn(new OrderOperateResponse("O001", "DELIVERING", false));
+
+        mockMvc.perform(post("/api/admin/orders/O001/deliver")
+                        .principal(new UsernamePasswordAuthenticationToken(
+                                "99", "N/A", List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))
+                        ))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason":"ship"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.status").value("DELIVERING"));
+
+        verify(orderCommandService).deliverOrderAsAdmin(99L, "O001", "ship");
+    }
+
+    @Test
+    void shouldFinishOrderByAdmin() throws Exception {
+        when(orderCommandService.finishOrderAsAdmin(99L, "O001", "done"))
+                .thenReturn(new OrderOperateResponse("O001", "FINISHED", false));
+
+        mockMvc.perform(post("/api/admin/orders/O001/finish")
+                        .principal(new UsernamePasswordAuthenticationToken(
+                                "99", "N/A", List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))
+                        ))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason":"done"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.status").value("FINISHED"));
+
+        verify(orderCommandService).finishOrderAsAdmin(99L, "O001", "done");
+    }
+
+    @Test
+    void shouldListStatusAudits() throws Exception {
+        when(orderService.listStatusAuditsForAdmin("O001", 1, 20))
+                .thenReturn(new OrderStatusAuditPageResponse(
+                        1L,
+                        1,
+                        20,
+                        List.of(new OrderStatusAuditItemResponse(99L, "ADMIN", "PAID", "DELIVERING", "ship",
+                                java.time.LocalDateTime.now()))
+                ));
+
+        mockMvc.perform(get("/api/admin/orders/O001/status-audits")
+                        .param("page", "1")
+                        .param("size", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.items[0].toStatus").value("DELIVERING"));
     }
 }

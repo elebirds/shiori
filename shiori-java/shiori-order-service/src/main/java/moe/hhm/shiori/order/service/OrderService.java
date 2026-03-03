@@ -7,9 +7,12 @@ import moe.hhm.shiori.order.domain.OrderStatus;
 import moe.hhm.shiori.order.dto.OrderDetailResponse;
 import moe.hhm.shiori.order.dto.OrderItemResponse;
 import moe.hhm.shiori.order.dto.OrderPageResponse;
+import moe.hhm.shiori.order.dto.OrderStatusAuditItemResponse;
+import moe.hhm.shiori.order.dto.OrderStatusAuditPageResponse;
 import moe.hhm.shiori.order.dto.OrderSummaryResponse;
 import moe.hhm.shiori.order.model.OrderItemRecord;
 import moe.hhm.shiori.order.model.OrderRecord;
+import moe.hhm.shiori.order.model.OrderStatusAuditRecord;
 import moe.hhm.shiori.order.repository.OrderMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -114,8 +117,37 @@ public class OrderService {
         return new OrderPageResponse(total, normalizedPage, normalizedSize, items);
     }
 
+    public OrderStatusAuditPageResponse listStatusAuditsForAdmin(String orderNo, int page, int size) {
+        requireOrderExists(orderNo);
+
+        int normalizedPage = Math.max(page, 1);
+        int normalizedSize = Math.min(Math.max(size, 1), 100);
+        int offset = (normalizedPage - 1) * normalizedSize;
+
+        long total = orderMapper.countStatusAuditByOrderNo(orderNo);
+        List<OrderStatusAuditRecord> records = orderMapper.listStatusAuditByOrderNo(orderNo, normalizedSize, offset);
+        List<OrderStatusAuditItemResponse> items = records.stream()
+                .map(record -> new OrderStatusAuditItemResponse(
+                        record.operatorUserId(),
+                        record.source(),
+                        OrderStatus.fromCode(record.fromStatus()).name(),
+                        OrderStatus.fromCode(record.toStatus()).name(),
+                        record.reason(),
+                        record.createdAt()
+                ))
+                .toList();
+        return new OrderStatusAuditPageResponse(total, normalizedPage, normalizedSize, items);
+    }
+
     private boolean isDeleted(OrderRecord record) {
         return record.isDeleted() != null && record.isDeleted() == 1;
+    }
+
+    private void requireOrderExists(String orderNo) {
+        OrderRecord order = orderMapper.findOrderByOrderNo(orderNo);
+        if (order == null || isDeleted(order)) {
+            throw new BizException(OrderErrorCode.ORDER_NOT_FOUND, HttpStatus.NOT_FOUND);
+        }
     }
 
     private Integer parseStatusCode(String status) {
