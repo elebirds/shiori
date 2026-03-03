@@ -14,6 +14,12 @@ public final class GatewaySignUtils {
 
     public static String buildCanonicalString(String method, String path, String rawQuery,
                                               String userId, String userRoles, String timestamp) {
+        return buildCanonicalString(method, path, rawQuery, userId, userRoles, timestamp, "");
+    }
+
+    public static String buildCanonicalString(String method, String path, String rawQuery,
+                                              String userId, String userRoles, String timestamp,
+                                              String nonce) {
         String safeQuery = rawQuery == null ? "" : rawQuery;
         String safeUserId = userId == null ? "" : userId;
         String safeUserRoles = userRoles == null ? "" : userRoles;
@@ -23,7 +29,8 @@ public final class GatewaySignUtils {
                 safeQuery,
                 safeUserId,
                 safeUserRoles,
-                timestamp == null ? "" : timestamp);
+                timestamp == null ? "" : timestamp,
+                nonce == null ? "" : nonce);
     }
 
     public static String hmacSha256Hex(String secret, String data) {

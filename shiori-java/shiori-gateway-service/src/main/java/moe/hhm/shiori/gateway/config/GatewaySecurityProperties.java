@@ -10,6 +10,7 @@ public class GatewaySecurityProperties {
     private final Jwt jwt = new Jwt();
     private final Auth auth = new Auth();
     private final GatewaySign gatewaySign = new GatewaySign();
+    private final RateLimit rateLimit = new RateLimit();
 
     public Jwt getJwt() {
         return jwt;
@@ -21,6 +22,10 @@ public class GatewaySecurityProperties {
 
     public GatewaySign getGatewaySign() {
         return gatewaySign;
+    }
+
+    public RateLimit getRateLimit() {
+        return rateLimit;
     }
 
     public static class Jwt {
@@ -101,6 +106,45 @@ public class GatewaySecurityProperties {
 
         public void setMaxSkewSeconds(long maxSkewSeconds) {
             this.maxSkewSeconds = maxSkewSeconds;
+        }
+    }
+
+    public static class RateLimit {
+        private boolean enabled = true;
+        private int loginPerSecond = 8;
+        private int orderCreatePerSecond = 10;
+        private int orderPayPerSecond = 15;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public int getLoginPerSecond() {
+            return loginPerSecond;
+        }
+
+        public void setLoginPerSecond(int loginPerSecond) {
+            this.loginPerSecond = loginPerSecond;
+        }
+
+        public int getOrderCreatePerSecond() {
+            return orderCreatePerSecond;
+        }
+
+        public void setOrderCreatePerSecond(int orderCreatePerSecond) {
+            this.orderCreatePerSecond = orderCreatePerSecond;
+        }
+
+        public int getOrderPayPerSecond() {
+            return orderPayPerSecond;
+        }
+
+        public void setOrderPayPerSecond(int orderPayPerSecond) {
+            this.orderPayPerSecond = orderPayPerSecond;
         }
     }
 }

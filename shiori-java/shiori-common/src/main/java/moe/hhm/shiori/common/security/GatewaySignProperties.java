@@ -10,6 +10,8 @@ public class GatewaySignProperties {
     private boolean enabled = true;
     private String internalSecret;
     private long maxSkewSeconds = 300;
+    private boolean replayProtectionEnabled = true;
+    private int replayCacheMaxEntries = 200000;
     private List<String> permitAllPaths = new ArrayList<>(List.of(
             "/actuator/**",
             "/v3/api-docs/**",
@@ -46,6 +48,22 @@ public class GatewaySignProperties {
 
     public void setMaxSkewSeconds(long maxSkewSeconds) {
         this.maxSkewSeconds = maxSkewSeconds;
+    }
+
+    public boolean isReplayProtectionEnabled() {
+        return replayProtectionEnabled;
+    }
+
+    public void setReplayProtectionEnabled(boolean replayProtectionEnabled) {
+        this.replayProtectionEnabled = replayProtectionEnabled;
+    }
+
+    public int getReplayCacheMaxEntries() {
+        return replayCacheMaxEntries;
+    }
+
+    public void setReplayCacheMaxEntries(int replayCacheMaxEntries) {
+        this.replayCacheMaxEntries = replayCacheMaxEntries;
     }
 
     public List<String> getPermitAllPaths() {

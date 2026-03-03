@@ -12,6 +12,7 @@ import moe.hhm.shiori.order.dto.CreateOrderItem;
 import moe.hhm.shiori.order.dto.CreateOrderRequest;
 import moe.hhm.shiori.order.dto.CreateOrderResponse;
 import moe.hhm.shiori.order.dto.OrderOperateResponse;
+import moe.hhm.shiori.order.model.OrderOperateIdempotencyRecord;
 import moe.hhm.shiori.order.model.OrderRecord;
 import moe.hhm.shiori.order.repository.OrderMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -129,7 +130,7 @@ class OrderCommandServiceTest {
                         "PAY-001", null, null, null, 0, null, null
                 ));
 
-        OrderOperateResponse response = orderCommandService.payOrder(1001L, "O202603030009", "PAY-001");
+        OrderOperateResponse response = orderCommandService.payOrder(1001L, "O202603030009", "PAY-001", "idem-pay-1");
         assertThat(response.idempotent()).isTrue();
         assertThat(response.status()).isEqualTo("PAID");
         verify(orderMapper, never()).markOrderPaid(anyString(), anyLong(), anyString(), any(), any(), any());
@@ -184,6 +185,21 @@ class OrderCommandServiceTest {
         verify(orderMapper).insertStatusAuditLog("O202603040003", 9001L, "ADMIN", 4, 5, "close");
         verify(orderMapper).insertAdminAuditLog(eq(9001L), eq("O202603040003"), eq("ORDER_ADMIN_FINISH"),
                 anyString(), anyString(), eq("close"));
+    }
+
+    @Test
+    void shouldRejectPayWhenIdempotencyKeyConflictsOrder() {
+        when(orderMapper.findOrderByOrderNo("O202603040004"))
+                .thenReturn(new OrderRecord(
+                        13L, "O202603040004", 1001L, 2001L, 1, 1999L, 1,
+                        null, null, null, null, 0, null, null
+                ));
+        when(orderMapper.findOperateIdempotency(1001L, "PAY", "idem-pay-conflict"))
+                .thenReturn(new OrderOperateIdempotencyRecord(1001L, "PAY", "idem-pay-conflict", "O-OTHER"));
+
+        assertThatThrownBy(() -> orderCommandService.payOrder(1001L, "O202603040004", "PAY-004", "idem-pay-conflict"))
+                .isInstanceOf(BizException.class)
+                .matches(ex -> ((BizException) ex).getErrorCode().code() == 50016);
     }
 
     private ProductDetailSnapshot product(Long productId, String productNo, Long ownerUserId,

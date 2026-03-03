@@ -32,6 +32,7 @@ import moe.hhm.shiori.order.event.OrderTimeoutPayload;
 import moe.hhm.shiori.order.model.OrderEntity;
 import moe.hhm.shiori.order.model.OrderItemEntity;
 import moe.hhm.shiori.order.model.OrderItemRecord;
+import moe.hhm.shiori.order.model.OrderOperateIdempotencyRecord;
 import moe.hhm.shiori.order.model.OrderRecord;
 import moe.hhm.shiori.order.model.OutboxEventEntity;
 import moe.hhm.shiori.order.repository.OrderMapper;
@@ -57,6 +58,9 @@ public class OrderCommandService {
     private static final String SOURCE_SELLER = "SELLER";
     private static final String SOURCE_ADMIN = "ADMIN";
     private static final String SOURCE_SYSTEM = "SYSTEM";
+    private static final String OP_CREATE = "CREATE";
+    private static final String OP_PAY = "PAY";
+    private static final String OP_CANCEL = "CANCEL";
 
     private final OrderMapper orderMapper;
     private final ProductServiceClient productServiceClient;
@@ -84,14 +88,14 @@ public class OrderCommandService {
                                            List<String> roles,
                                            String idempotencyKey,
                                            CreateOrderRequest request) {
-        if (!StringUtils.hasText(idempotencyKey)) {
-            throw new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST);
-        }
+        String normalizedIdempotencyKey = requireIdempotencyKey(idempotencyKey);
 
-        String existedOrderNo = orderMapper.findOrderNoByBuyerAndIdempotencyKey(buyerUserId, idempotencyKey);
+        String existedOrderNo = orderMapper.findOrderNoByBuyerAndIdempotencyKey(buyerUserId, normalizedIdempotencyKey);
         if (StringUtils.hasText(existedOrderNo)) {
+            orderMetrics.incIdempotency(OP_CREATE, "hit");
             return buildIdempotentCreateResponse(existedOrderNo);
         }
+        orderMetrics.incIdempotency(OP_CREATE, "miss");
 
         List<PreparedOrderLine> lines = prepareOrderLines(buyerUserId, roles, request);
         long totalAmountCent = lines.stream().mapToLong(PreparedOrderLine::subtotalCent).sum();
@@ -116,10 +120,11 @@ public class OrderCommandService {
         }
 
         try {
-            orderMapper.insertCreateIdempotency(buyerUserId, idempotencyKey, orderNo);
+            orderMapper.insertCreateIdempotency(buyerUserId, normalizedIdempotencyKey, orderNo);
         } catch (DuplicateKeyException ex) {
             compensateReleased(orderNo, buyerUserId, roles, deducted);
-            return buildIdempotentCreateResponseFromKey(buyerUserId, idempotencyKey);
+            orderMetrics.incIdempotency(OP_CREATE, "hit");
+            return buildIdempotentCreateResponseFromKey(buyerUserId, normalizedIdempotencyKey);
         }
 
         try {
@@ -135,19 +140,32 @@ public class OrderCommandService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public OrderOperateResponse payOrder(Long buyerUserId, String orderNo, String paymentNo) {
+    public OrderOperateResponse payOrder(Long buyerUserId, String orderNo, String paymentNo, String idempotencyKey) {
         if (!StringUtils.hasText(paymentNo)) {
             throw new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST);
         }
+        String normalizedIdempotencyKey = requireIdempotencyKey(idempotencyKey);
 
         OrderRecord order = requireOrder(orderNo);
         ensureBuyer(order, buyerUserId);
+        if (hasOperateIdempotencyHit(buyerUserId, OP_PAY, normalizedIdempotencyKey, orderNo)) {
+            OrderStatus hitStatus = OrderStatus.fromCode(order.status());
+            if (hitStatus == OrderStatus.PAID && Objects.equals(order.paymentNo(), paymentNo)) {
+                return new OrderOperateResponse(orderNo, OrderStatus.PAID.name(), true);
+            }
+            if (hitStatus == OrderStatus.PAID) {
+                throw new BizException(OrderErrorCode.ORDER_PAYMENT_CONFLICT, HttpStatus.CONFLICT);
+            }
+            throw new BizException(OrderErrorCode.ORDER_STATUS_INVALID, HttpStatus.CONFLICT);
+        }
 
         OrderStatus status = OrderStatus.fromCode(order.status());
         if (status == OrderStatus.PAID) {
             if (Objects.equals(order.paymentNo(), paymentNo)) {
+                saveOperateIdempotency(buyerUserId, OP_PAY, normalizedIdempotencyKey, orderNo);
                 return new OrderOperateResponse(orderNo, OrderStatus.PAID.name(), true);
             }
+            orderMetrics.incIdempotency(OP_PAY, "conflict");
             throw new BizException(OrderErrorCode.ORDER_PAYMENT_CONFLICT, HttpStatus.CONFLICT);
         }
         if (status != OrderStatus.UNPAID) {
@@ -167,8 +185,10 @@ public class OrderCommandService {
         } catch (DuplicateKeyException ex) {
             OrderRecord paymentOrder = orderMapper.findOrderByPaymentNo(paymentNo);
             if (paymentOrder != null && orderNo.equals(paymentOrder.orderNo())) {
+                saveOperateIdempotency(buyerUserId, OP_PAY, normalizedIdempotencyKey, orderNo);
                 return new OrderOperateResponse(orderNo, OrderStatus.PAID.name(), true);
             }
+            orderMetrics.incIdempotency(OP_PAY, "conflict");
             throw new BizException(OrderErrorCode.ORDER_PAYMENT_CONFLICT, HttpStatus.CONFLICT);
         }
 
@@ -176,6 +196,7 @@ public class OrderCommandService {
             OrderRecord latest = requireOrder(orderNo);
             if (OrderStatus.fromCode(latest.status()) == OrderStatus.PAID
                     && Objects.equals(latest.paymentNo(), paymentNo)) {
+                saveOperateIdempotency(buyerUserId, OP_PAY, normalizedIdempotencyKey, orderNo);
                 return new OrderOperateResponse(orderNo, OrderStatus.PAID.name(), true);
             }
             throw new BizException(OrderErrorCode.ORDER_STATUS_INVALID, HttpStatus.CONFLICT);
@@ -185,16 +206,29 @@ public class OrderCommandService {
         orderMetrics.incStateTransition(OrderStatus.UNPAID.name(), OrderStatus.PAID.name());
         insertStatusAudit(orderNo, buyerUserId, SOURCE_BUYER, OrderStatus.UNPAID, OrderStatus.PAID,
                 "买家支付成功, paymentNo=" + paymentNo);
+        saveOperateIdempotency(buyerUserId, OP_PAY, normalizedIdempotencyKey, orderNo);
         return new OrderOperateResponse(orderNo, OrderStatus.PAID.name(), false);
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public OrderOperateResponse cancelOrder(Long buyerUserId, List<String> roles, String orderNo, String reason) {
+    public OrderOperateResponse cancelOrder(Long buyerUserId,
+                                            List<String> roles,
+                                            String orderNo,
+                                            String reason,
+                                            String idempotencyKey) {
+        String normalizedIdempotencyKey = requireIdempotencyKey(idempotencyKey);
         OrderRecord order = requireOrder(orderNo);
         ensureBuyer(order, buyerUserId);
+        if (hasOperateIdempotencyHit(buyerUserId, OP_CANCEL, normalizedIdempotencyKey, orderNo)) {
+            if (OrderStatus.fromCode(order.status()) == OrderStatus.CANCELED) {
+                return new OrderOperateResponse(orderNo, OrderStatus.CANCELED.name(), true);
+            }
+            throw new BizException(OrderErrorCode.ORDER_STATUS_INVALID, HttpStatus.CONFLICT);
+        }
 
         OrderStatus status = OrderStatus.fromCode(order.status());
         if (status == OrderStatus.CANCELED) {
+            saveOperateIdempotency(buyerUserId, OP_CANCEL, normalizedIdempotencyKey, orderNo);
             return new OrderOperateResponse(orderNo, OrderStatus.CANCELED.name(), true);
         }
         if (status != OrderStatus.UNPAID) {
@@ -211,6 +245,7 @@ public class OrderCommandService {
         if (affected == 0) {
             OrderRecord latest = requireOrder(orderNo);
             if (OrderStatus.fromCode(latest.status()) == OrderStatus.CANCELED) {
+                saveOperateIdempotency(buyerUserId, OP_CANCEL, normalizedIdempotencyKey, orderNo);
                 return new OrderOperateResponse(orderNo, OrderStatus.CANCELED.name(), true);
             }
             throw new BizException(OrderErrorCode.ORDER_STATUS_INVALID, HttpStatus.CONFLICT);
@@ -222,6 +257,7 @@ public class OrderCommandService {
         orderMetrics.incStateTransition(OrderStatus.UNPAID.name(), OrderStatus.CANCELED.name());
         insertStatusAudit(orderNo, buyerUserId, SOURCE_BUYER, OrderStatus.UNPAID, OrderStatus.CANCELED,
                 resolveCancelReason(reason));
+        saveOperateIdempotency(buyerUserId, OP_CANCEL, normalizedIdempotencyKey, orderNo);
         return new OrderOperateResponse(orderNo, OrderStatus.CANCELED.name(), false);
     }
 
@@ -718,6 +754,49 @@ public class OrderCommandService {
                 toStatus.getCode(),
                 StringUtils.hasText(reason) ? reason.trim() : null
         );
+    }
+
+    private String requireIdempotencyKey(String idempotencyKey) {
+        if (!StringUtils.hasText(idempotencyKey)) {
+            throw new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST);
+        }
+        return idempotencyKey.trim();
+    }
+
+    private boolean hasOperateIdempotencyHit(Long operatorUserId,
+                                             String operationType,
+                                             String idempotencyKey,
+                                             String orderNo) {
+        OrderOperateIdempotencyRecord existed = orderMapper.findOperateIdempotency(operatorUserId, operationType,
+                idempotencyKey);
+        if (existed == null) {
+            orderMetrics.incIdempotency(operationType, "miss");
+            return false;
+        }
+        if (!orderNo.equals(existed.orderNo())) {
+            orderMetrics.incIdempotency(operationType, "conflict");
+            throw new BizException(OrderErrorCode.ORDER_IDEMPOTENCY_CONFLICT, HttpStatus.CONFLICT);
+        }
+        orderMetrics.incIdempotency(operationType, "hit");
+        return true;
+    }
+
+    private void saveOperateIdempotency(Long operatorUserId,
+                                        String operationType,
+                                        String idempotencyKey,
+                                        String orderNo) {
+        try {
+            orderMapper.insertOperateIdempotency(operatorUserId, operationType, idempotencyKey, orderNo);
+        } catch (DuplicateKeyException ex) {
+            OrderOperateIdempotencyRecord existed =
+                    orderMapper.findOperateIdempotency(operatorUserId, operationType, idempotencyKey);
+            if (existed != null && orderNo.equals(existed.orderNo())) {
+                orderMetrics.incIdempotency(operationType, "hit");
+                return;
+            }
+            orderMetrics.incIdempotency(operationType, "conflict");
+            throw new BizException(OrderErrorCode.ORDER_IDEMPOTENCY_CONFLICT, HttpStatus.CONFLICT);
+        }
     }
 
     private OrderRecord requireOrder(String orderNo) {

@@ -11,6 +11,7 @@ dependencies {
     compileOnly 'org.springframework:spring-web'
     compileOnly 'org.springframework:spring-webmvc'
     compileOnly 'org.springframework:spring-webflux'
+    compileOnly 'io.micrometer:micrometer-core'
     compileOnly 'jakarta.servlet:jakarta.servlet-api'
     compileOnly 'jakarta.validation:jakarta.validation-api'
     compileOnly 'tools.jackson.core:jackson-databind'

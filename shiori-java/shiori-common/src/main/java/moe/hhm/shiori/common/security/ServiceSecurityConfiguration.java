@@ -2,6 +2,7 @@ package moe.hhm.shiori.common.security;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import io.micrometer.core.instrument.MeterRegistry;
 import moe.hhm.shiori.common.api.Result;
 import moe.hhm.shiori.common.error.CommonErrorCode;
 import org.springframework.beans.factory.ObjectProvider;
@@ -24,11 +25,16 @@ public class ServiceSecurityConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public GatewaySignVerifyFilter gatewaySignVerifyFilter(GatewaySignProperties properties,
-                                                           ObjectProvider<ObjectMapper> objectMapperProvider) {
+                                                           ObjectProvider<ObjectMapper> objectMapperProvider,
+                                                           ObjectProvider<MeterRegistry> meterRegistryProvider) {
         if (properties.isEnabled() && !StringUtils.hasText(properties.getInternalSecret())) {
             throw new IllegalStateException("缺少 security.gateway-sign.internal-secret 配置");
         }
-        return new GatewaySignVerifyFilter(properties, objectMapperProvider.getIfAvailable(ObjectMapper::new));
+        return new GatewaySignVerifyFilter(
+                properties,
+                objectMapperProvider.getIfAvailable(ObjectMapper::new),
+                meterRegistryProvider.getIfAvailable()
+        );
     }
 
     @Bean

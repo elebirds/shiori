@@ -5,6 +5,7 @@ import java.net.NoRouteToHostException;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.util.List;
+import java.util.UUID;
 import moe.hhm.shiori.common.api.Result;
 import moe.hhm.shiori.common.error.CommonErrorCode;
 import moe.hhm.shiori.common.error.OrderErrorCode;
@@ -92,13 +93,15 @@ public class ProductServiceClient {
         String userIdValue = userId == null ? "" : String.valueOf(userId);
         String rolesValue = normalizeRoles(roles);
         String ts = String.valueOf(System.currentTimeMillis());
-        String canonical = GatewaySignUtils.buildCanonicalString(method, path, rawQuery, userIdValue, rolesValue, ts);
+        String nonce = UUID.randomUUID().toString().replace("-", "");
+        String canonical = GatewaySignUtils.buildCanonicalString(method, path, rawQuery, userIdValue, rolesValue, ts, nonce);
         String sign = buildSign(canonical);
 
         headers.set(GatewaySignVerifyFilter.HEADER_USER_ID, userIdValue);
         headers.set(GatewaySignVerifyFilter.HEADER_USER_ROLES, rolesValue);
         headers.set(GatewaySignVerifyFilter.HEADER_GATEWAY_TS, ts);
         headers.set(GatewaySignVerifyFilter.HEADER_GATEWAY_SIGN, sign);
+        headers.set(GatewaySignVerifyFilter.HEADER_GATEWAY_NONCE, nonce);
     }
 
     String buildSign(String canonical) {

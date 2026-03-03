@@ -5,6 +5,7 @@ import java.util.List;
 import moe.hhm.shiori.order.model.OrderEntity;
 import moe.hhm.shiori.order.model.OrderItemEntity;
 import moe.hhm.shiori.order.model.OrderItemRecord;
+import moe.hhm.shiori.order.model.OrderOperateIdempotencyRecord;
 import moe.hhm.shiori.order.model.OrderRecord;
 import moe.hhm.shiori.order.model.OrderStatusAuditRecord;
 import moe.hhm.shiori.order.model.OutboxEventEntity;
@@ -119,6 +120,41 @@ public interface OrderMapper {
             """)
     String findOrderNoByBuyerAndIdempotencyKey(@Param("buyerUserId") Long buyerUserId,
                                                @Param("idempotencyKey") String idempotencyKey);
+
+    @Insert("""
+            INSERT INTO o_order_operate_idempotency (
+                operator_user_id,
+                operation_type,
+                idempotency_key,
+                order_no,
+                created_at
+            ) VALUES (
+                #{operatorUserId},
+                #{operationType},
+                #{idempotencyKey},
+                #{orderNo},
+                CURRENT_TIMESTAMP(3)
+            )
+            """)
+    int insertOperateIdempotency(@Param("operatorUserId") Long operatorUserId,
+                                 @Param("operationType") String operationType,
+                                 @Param("idempotencyKey") String idempotencyKey,
+                                 @Param("orderNo") String orderNo);
+
+    @Select("""
+            SELECT operator_user_id AS operatorUserId,
+                   operation_type AS operationType,
+                   idempotency_key AS idempotencyKey,
+                   order_no AS orderNo
+            FROM o_order_operate_idempotency
+            WHERE operator_user_id = #{operatorUserId}
+              AND operation_type = #{operationType}
+              AND idempotency_key = #{idempotencyKey}
+            LIMIT 1
+            """)
+    OrderOperateIdempotencyRecord findOperateIdempotency(@Param("operatorUserId") Long operatorUserId,
+                                                         @Param("operationType") String operationType,
+                                                         @Param("idempotencyKey") String idempotencyKey);
 
     @Select("""
             SELECT id,

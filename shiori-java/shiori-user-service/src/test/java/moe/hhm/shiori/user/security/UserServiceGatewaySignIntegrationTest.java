@@ -55,8 +55,9 @@ class UserServiceGatewaySignIntegrationTest {
         String userId = "u1001";
         String roles = "ROLE_USER";
         String ts = String.valueOf(System.currentTimeMillis() - 600_000);
-        String sign = sign("GET", "/api/user/me", null, userId, roles, ts);
-        HttpHeaders headers = signedHeaders(userId, roles, ts, sign);
+        String nonce = "nonce-expired";
+        String sign = sign("GET", "/api/user/me", null, userId, roles, ts, nonce);
+        HttpHeaders headers = signedHeaders(userId, roles, ts, nonce, sign);
 
         mockMvc.perform(get("/api/user/me")
                         .headers(headers))
@@ -69,8 +70,9 @@ class UserServiceGatewaySignIntegrationTest {
         String userId = "u1001";
         String roles = "ROLE_USER";
         String ts = String.valueOf(System.currentTimeMillis());
-        String sign = sign("GET", "/api/admin/demo", null, userId, roles, ts);
-        HttpHeaders headers = signedHeaders(userId, roles, ts, sign);
+        String nonce = "nonce-admin";
+        String sign = sign("GET", "/api/admin/demo", null, userId, roles, ts, nonce);
+        HttpHeaders headers = signedHeaders(userId, roles, ts, nonce, sign);
 
         mockMvc.perform(get("/api/admin/demo")
                         .headers(headers))
@@ -83,24 +85,27 @@ class UserServiceGatewaySignIntegrationTest {
         String userId = "1001";
         String roles = "ROLE_USER";
         String ts = String.valueOf(System.currentTimeMillis());
-        String sign = sign("GET", "/api/user/me", null, userId, roles, ts);
-        HttpHeaders headers = signedHeaders(userId, roles, ts, sign);
+        String nonce = "nonce-valid";
+        String sign = sign("GET", "/api/user/me", null, userId, roles, ts, nonce);
+        HttpHeaders headers = signedHeaders(userId, roles, ts, nonce, sign);
 
         mockMvc.perform(get("/api/user/me")
                         .headers(headers))
                 .andExpect(result -> assertThat(result.getResponse().getStatus()).isNotIn(401, 403));
     }
 
-    private String sign(String method, String path, String rawQuery, String userId, String userRoles, String ts) {
-        String canonical = GatewaySignUtils.buildCanonicalString(method, path, rawQuery, userId, userRoles, ts);
+    private String sign(String method, String path, String rawQuery, String userId, String userRoles,
+                        String ts, String nonce) {
+        String canonical = GatewaySignUtils.buildCanonicalString(method, path, rawQuery, userId, userRoles, ts, nonce);
         return GatewaySignUtils.hmacSha256Hex(SECRET, canonical);
     }
 
-    private HttpHeaders signedHeaders(String userId, String userRoles, String ts, String sign) {
+    private HttpHeaders signedHeaders(String userId, String userRoles, String ts, String nonce, String sign) {
         HttpHeaders headers = new HttpHeaders();
         headers.set(GatewaySignVerifyFilter.HEADER_USER_ID, userId);
         headers.set(GatewaySignVerifyFilter.HEADER_USER_ROLES, userRoles);
         headers.set(GatewaySignVerifyFilter.HEADER_GATEWAY_TS, ts);
+        headers.set(GatewaySignVerifyFilter.HEADER_GATEWAY_NONCE, nonce);
         headers.set(GatewaySignVerifyFilter.HEADER_GATEWAY_SIGN, sign);
         return headers;
     }

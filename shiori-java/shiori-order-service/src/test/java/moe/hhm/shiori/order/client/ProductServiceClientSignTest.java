@@ -32,13 +32,15 @@ class ProductServiceClientSignTest {
 
         String ts = headers.getFirst(GatewaySignVerifyFilter.HEADER_GATEWAY_TS);
         String sign = headers.getFirst(GatewaySignVerifyFilter.HEADER_GATEWAY_SIGN);
+        String nonce = headers.getFirst(GatewaySignVerifyFilter.HEADER_GATEWAY_NONCE);
         assertThat(headers.getFirst(GatewaySignVerifyFilter.HEADER_USER_ID)).isEqualTo("1001");
         assertThat(headers.getFirst(GatewaySignVerifyFilter.HEADER_USER_ROLES)).isEqualTo("ROLE_USER");
         assertThat(ts).isNotBlank();
         assertThat(sign).isNotBlank();
+        assertThat(nonce).isNotBlank();
 
         String canonical = GatewaySignUtils.buildCanonicalString(
-                "GET", "/api/product/products/1", "foo=bar", "1001", "ROLE_USER", ts);
+                "GET", "/api/product/products/1", "foo=bar", "1001", "ROLE_USER", ts, nonce);
         String expected = GatewaySignUtils.hmacSha256Hex(gatewaySignProperties.getInternalSecret(), canonical);
         assertThat(sign).isEqualTo(expected);
     }

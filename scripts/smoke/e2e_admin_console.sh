@@ -302,7 +302,7 @@ ship_idem_key="admin-ship-${id_suffix}"
 ship_order_create_resp="$(call_api POST "/api/order/orders" "${buyer_token}" "${ship_order_payload}" -H "Idempotency-Key: ${ship_idem_key}")"
 ship_order_no="$(extract_required "${ship_order_create_resp}" '.data.orderNo' "ship.orderNo")"
 
-pay_resp="$(call_api POST "/api/order/orders/${ship_order_no}/pay" "${buyer_token}" "{\"paymentNo\":\"admin-pay-${id_suffix}\"}")"
+pay_resp="$(call_api POST "/api/order/orders/${ship_order_no}/pay" "${buyer_token}" "{\"paymentNo\":\"admin-pay-${id_suffix}\"}" -H "Idempotency-Key: admin-pay-idem-${id_suffix}")"
 [[ "$(extract_required "${pay_resp}" '.data.status' "ship.pay.status")" == "PAID" ]] || fail "支付后状态异常"
 
 deliver_resp="$(call_api POST "/api/order/seller/orders/${ship_order_no}/deliver" "${seller_token}" '{"reason":"卖家发货烟测"}')"

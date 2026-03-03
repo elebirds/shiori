@@ -74,15 +74,45 @@ class OrderControllerMvcTest {
                 .andExpect(jsonPath("$.code").value(10000));
     }
 
+    @Test
+    void shouldReturn400WhenPayIdempotencyKeyMissing() throws Exception {
+        HttpHeaders headers = signedHeaders("POST", "/api/order/orders/O001/pay", null, "1001", "ROLE_USER");
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        mockMvc.perform(post("/api/order/orders/O001/pay")
+                        .headers(headers)
+                        .content("""
+                                {"paymentNo":"PAY-001"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(10000));
+    }
+
+    @Test
+    void shouldReturn400WhenCancelIdempotencyKeyMissing() throws Exception {
+        HttpHeaders headers = signedHeaders("POST", "/api/order/orders/O001/cancel", null, "1001", "ROLE_USER");
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        mockMvc.perform(post("/api/order/orders/O001/cancel")
+                        .headers(headers)
+                        .content("""
+                                {"reason":"manual"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(10000));
+    }
+
     private HttpHeaders signedHeaders(String method, String path, String rawQuery, String userId, String roles) {
         String ts = String.valueOf(System.currentTimeMillis());
-        String canonical = GatewaySignUtils.buildCanonicalString(method, path, rawQuery, userId, roles, ts);
+        String nonce = "nonce-" + System.nanoTime();
+        String canonical = GatewaySignUtils.buildCanonicalString(method, path, rawQuery, userId, roles, ts, nonce);
         String sign = GatewaySignUtils.hmacSha256Hex(SECRET, canonical);
 
         HttpHeaders headers = new HttpHeaders();
         headers.set(GatewaySignVerifyFilter.HEADER_USER_ID, userId);
         headers.set(GatewaySignVerifyFilter.HEADER_USER_ROLES, roles);
         headers.set(GatewaySignVerifyFilter.HEADER_GATEWAY_TS, ts);
+        headers.set(GatewaySignVerifyFilter.HEADER_GATEWAY_NONCE, nonce);
         headers.set(GatewaySignVerifyFilter.HEADER_GATEWAY_SIGN, sign);
         return headers;
     }

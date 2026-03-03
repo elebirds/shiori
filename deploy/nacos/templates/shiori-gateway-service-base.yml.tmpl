@@ -17,6 +17,11 @@ security:
       - /api/user/auth/logout
     anonymous-get-paths:
       - /api/product/**
+  rate-limit:
+    enabled: true
+    login-per-second: 8
+    order-create-per-second: 10
+    order-pay-per-second: 15
 
 management:
   endpoints:

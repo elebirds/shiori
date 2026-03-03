@@ -1,5 +1,6 @@
 package moe.hhm.shiori.gateway.filter;
 
+import java.util.UUID;
 import moe.hhm.shiori.common.security.GatewaySignUtils;
 import moe.hhm.shiori.common.security.GatewaySignVerifyFilter;
 import moe.hhm.shiori.gateway.config.GatewaySecurityProperties;
@@ -39,6 +40,7 @@ public class GatewayRequestSignFilter implements GlobalFilter, Ordered {
         String userId = firstHeader(exchange, GatewaySignVerifyFilter.HEADER_USER_ID);
         String userRoles = firstHeader(exchange, GatewaySignVerifyFilter.HEADER_USER_ROLES);
         String timestamp = String.valueOf(System.currentTimeMillis());
+        String nonce = UUID.randomUUID().toString().replace("-", "");
 
         String canonical = GatewaySignUtils.buildCanonicalString(
                 exchange.getRequest().getMethod() == null ? "" : exchange.getRequest().getMethod().name(),
@@ -46,7 +48,8 @@ public class GatewayRequestSignFilter implements GlobalFilter, Ordered {
                 exchange.getRequest().getURI().getRawQuery(),
                 userId,
                 userRoles,
-                timestamp
+                timestamp,
+                nonce
         );
         String sign = GatewaySignUtils.hmacSha256Hex(internalSecret, canonical);
 
@@ -54,8 +57,10 @@ public class GatewayRequestSignFilter implements GlobalFilter, Ordered {
                 .request(exchange.getRequest().mutate().headers(headers -> {
                     headers.remove(GatewaySignVerifyFilter.HEADER_GATEWAY_TS);
                     headers.remove(GatewaySignVerifyFilter.HEADER_GATEWAY_SIGN);
+                    headers.remove(GatewaySignVerifyFilter.HEADER_GATEWAY_NONCE);
                     headers.set(GatewaySignVerifyFilter.HEADER_GATEWAY_TS, timestamp);
                     headers.set(GatewaySignVerifyFilter.HEADER_GATEWAY_SIGN, sign);
+                    headers.set(GatewaySignVerifyFilter.HEADER_GATEWAY_NONCE, nonce);
                 }).build())
                 .build();
 

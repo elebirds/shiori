@@ -35,9 +35,11 @@ class GatewayRequestSignFilterTest {
         ServerHttpRequest forwarded = chain.exchange.getRequest();
         String ts = forwarded.getHeaders().getFirst(GatewaySignVerifyFilter.HEADER_GATEWAY_TS);
         String sign = forwarded.getHeaders().getFirst(GatewaySignVerifyFilter.HEADER_GATEWAY_SIGN);
+        String nonce = forwarded.getHeaders().getFirst(GatewaySignVerifyFilter.HEADER_GATEWAY_NONCE);
 
         assertThat(ts).isNotBlank();
         assertThat(sign).isNotBlank().isNotEqualTo("forged-sign");
+        assertThat(nonce).isNotBlank();
 
         String canonical = GatewaySignUtils.buildCanonicalString(
                 "GET",
@@ -45,7 +47,8 @@ class GatewayRequestSignFilterTest {
                 "id=o1",
                 "u1001",
                 "ROLE_USER",
-                ts
+                ts,
+                nonce
         );
         String expected = GatewaySignUtils.hmacSha256Hex(properties.getGatewaySign().getInternalSecret(), canonical);
         assertThat(sign).isEqualTo(expected);
@@ -67,6 +70,7 @@ class GatewayRequestSignFilterTest {
         ServerHttpRequest forwarded = chain.exchange.getRequest();
         assertThat(forwarded.getHeaders().containsHeader(GatewaySignVerifyFilter.HEADER_GATEWAY_TS)).isFalse();
         assertThat(forwarded.getHeaders().containsHeader(GatewaySignVerifyFilter.HEADER_GATEWAY_SIGN)).isFalse();
+        assertThat(forwarded.getHeaders().containsHeader(GatewaySignVerifyFilter.HEADER_GATEWAY_NONCE)).isFalse();
     }
 
     private static class CapturingChain implements GatewayFilterChain {

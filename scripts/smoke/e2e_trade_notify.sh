@@ -214,8 +214,10 @@ sleep 1
 
 payment_no="${SMOKE_PREFIX}-pay-${run_id}"
 pay_order_payload="$(jq -nc --arg paymentNo "${payment_no}" '{paymentNo:$paymentNo}')"
+pay_idempotency_key="${SMOKE_PREFIX}-pay-idem-${run_id}"
 log "buyer 支付订单: orderNo=${order_no_1}"
-call_api POST "/api/order/orders/${order_no_1}/pay" "${buyer_access_token}" "${pay_order_payload}" >/dev/null
+call_api POST "/api/order/orders/${order_no_1}/pay" "${buyer_access_token}" "${pay_order_payload}" \
+  -H "Idempotency-Key: ${pay_idempotency_key}" >/dev/null
 
 if ! wait "${BUYER_WS_PID}"; then
   cat "${buyer_ws_log}" >&2 || true

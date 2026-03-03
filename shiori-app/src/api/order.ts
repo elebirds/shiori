@@ -77,6 +77,11 @@ export interface OrderQuery {
   size?: number
 }
 
+function buildOperateIdempotencyKey(prefix: string, orderNo: string): string {
+  const randomPart = Math.random().toString(36).slice(2, 10)
+  return `${prefix}-${orderNo}-${Date.now()}-${randomPart}`
+}
+
 export function createOrder(payload: CreateOrderRequest, idempotencyKey: string): Promise<CreateOrderResponse> {
   return httpPost<CreateOrderResponse>('/api/order/orders', payload, {
     headers: {
@@ -93,10 +98,20 @@ export function getOrderDetail(orderNo: string): Promise<OrderDetailResponse> {
   return httpGet<OrderDetailResponse>(`/api/order/orders/${orderNo}`)
 }
 
-export function payOrder(orderNo: string, payload: PayOrderRequest): Promise<OrderOperateResponse> {
-  return httpPost<OrderOperateResponse>(`/api/order/orders/${orderNo}/pay`, payload)
+export function payOrder(orderNo: string, payload: PayOrderRequest, idempotencyKey?: string): Promise<OrderOperateResponse> {
+  const key = idempotencyKey || buildOperateIdempotencyKey('pay', orderNo)
+  return httpPost<OrderOperateResponse>(`/api/order/orders/${orderNo}/pay`, payload, {
+    headers: {
+      'Idempotency-Key': key,
+    },
+  })
 }
 
-export function cancelOrder(orderNo: string, payload?: CancelOrderRequest): Promise<OrderOperateResponse> {
-  return httpPost<OrderOperateResponse>(`/api/order/orders/${orderNo}/cancel`, payload)
+export function cancelOrder(orderNo: string, payload?: CancelOrderRequest, idempotencyKey?: string): Promise<OrderOperateResponse> {
+  const key = idempotencyKey || buildOperateIdempotencyKey('cancel', orderNo)
+  return httpPost<OrderOperateResponse>(`/api/order/orders/${orderNo}/cancel`, payload, {
+    headers: {
+      'Idempotency-Key': key,
+    },
+  })
 }

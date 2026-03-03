@@ -74,22 +74,31 @@ public class OrderController {
     @PostMapping("/{orderNo}/pay")
     public OrderOperateResponse pay(@PathVariable String orderNo,
                                     @Valid @RequestBody PayOrderRequest request,
+                                    @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
                                     Authentication authentication) {
+        if (!StringUtils.hasText(idempotencyKey)) {
+            throw new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST);
+        }
         Long userId = CurrentUserSupport.requireUserId(authentication);
-        return orderCommandService.payOrder(userId, orderNo, request.paymentNo().trim());
+        return orderCommandService.payOrder(userId, orderNo, request.paymentNo().trim(), idempotencyKey.trim());
     }
 
     @PostMapping("/{orderNo}/cancel")
     public OrderOperateResponse cancel(@PathVariable String orderNo,
                                        @Valid @RequestBody(required = false) CancelOrderRequest request,
+                                       @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
                                        Authentication authentication) {
+        if (!StringUtils.hasText(idempotencyKey)) {
+            throw new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST);
+        }
         Long userId = CurrentUserSupport.requireUserId(authentication);
         String reason = request == null ? null : request.reason();
         return orderCommandService.cancelOrder(
                 userId,
                 CurrentUserSupport.resolveRoles(authentication),
                 orderNo,
-                reason
+                reason,
+                idempotencyKey.trim()
         );
     }
 }
