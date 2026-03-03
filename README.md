@@ -125,8 +125,8 @@
 
 ### 前端与多端展示 (Frontend)
 
-* **移动端 (买/卖家视角):** Uni-app (Vue3 + TypeScript + Vite) 编译微信小程序
-* **管理端 (平台运营视角):** Vue3 + Element Plus (RBAC 动态路由管理)
+* **用户端 Web (买/卖家视角):** Vue 3 + TypeScript + Vite + Tailwind CSS + Pinia + Vue Query
+* **管理端 (平台运营视角):** `shiori-admin-web`（当前预留目录，后续初始化）
 
 ---
 
@@ -145,7 +145,7 @@ shiori/
 │   └── shiori-order-service/         # 订单交易服务（Outbox + 超时关单）
 ├── shiori-notify/                    # 🐹 [推送边缘服务] 请使用 GoLand 打开
 │   └── main.go                       # 监听 MQ 并通过 WebSocket 推送前端
-├── shiori-app/                       # 📱 [用户端小程序] 请使用 HBuilderX / VSCode 打开
+├── shiori-app/                       # 🌐 [用户端 Web] 请使用 VSCode / WebStorm 打开
 ├── shiori-admin-web/                 # 💻 [管理端后台 Web] 请使用 WebStorm / VSCode 打开
 ├── deploy/                           # 🐳 [基础设施部署]
 │   ├── docker-compose.yml            # MySQL, Redis, RabbitMQ, (可选 Nacos/Prom/Grafana)
@@ -166,7 +166,7 @@ shiori/
 * Docker & Docker Compose
 * JDK 21 + Gradle
 * Go 1.26
-* Node.js（前端）
+* Node.js + pnpm（前端）
 
 ### 1) Start Infrastructure
 
@@ -412,17 +412,18 @@ bash scripts/ci/run_e2e_ci.sh
 CI 日志默认落盘到仓库根目录：
 - `ci-logs/*.log`
 
-### 4) Run Frontend
+### 4) Run Frontend (Web)
 
 ```bash
-# mini-program
 cd shiori-app
-npm i && npm run dev
-
-# admin web
-cd shiori-admin-web
-npm i && npm run dev
+cp .env.example .env
+pnpm install
+pnpm dev
 ```
+
+默认配置：
+- `VITE_API_BASE_URL=http://localhost:8080`
+- `VITE_NOTIFY_WS_BASE_URL=ws://localhost:8090/ws`
 
 ---
 
