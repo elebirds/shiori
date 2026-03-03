@@ -1,6 +1,10 @@
 spring:
   datasource:
     url: ${PRODUCT_DB_URL}
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
   flyway:
     enabled: true
     baseline-on-migrate: true
@@ -14,7 +18,7 @@ mybatis:
 storage:
   oss:
     enabled: true
-    endpoint: http://minio:9000
+    endpoint: ${PRODUCT_OSS_ENDPOINT}
     region: us-east-1
     bucket: shiori-product
     path-style-access: true

@@ -43,7 +43,7 @@ docker compose ps
    - `minio/minio:RELEASE.2025-09-07T16-13-09Z-cpuv1`
    - `minio/mc:RELEASE.2025-08-13T08-35-41Z-cpuv1`
 2. Redis 端口改为可配置并默认避冲突：
-   - `${REDIS_HOST_PORT:-6380}:6379`
+   - `${REDIS_HOST_PORT:-6379}:6379`
 
 ---
 
@@ -207,4 +207,3 @@ bash /Users/hhm/code/shiori/scripts/smoke/e2e_trade_notify.sh
    - 查 `o_outbox_event` 是否 `SENT`
    - 若 `PENDING`：看 order relay
    - 若 `SENT`：看 notify 消费反序列化错误
-

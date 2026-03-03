@@ -220,7 +220,9 @@ docker compose --profile app --profile web up -d
 - `shiori_product`
 - `shiori_order`
 
-并通过一次性容器 `nacos-config-init` 自动渲染并导入 Nacos 配置模板（`deploy/nacos/templates/*.yml.tmpl`）。
+并通过一次性容器自动渲染并导入 Nacos 配置模板（`deploy/nacos/templates/*.yml.tmpl`）：
+- `nacos-config-init`：导入容器网络地址配置（默认 group 为 `SHIORI_DEV_DOCKER`，或按 `SHIORI_ENV`/`NACOS_CONFIG_GROUP` 覆盖）。
+- `nacos-config-init-local`：导入本机调试地址配置（默认 group 为 `SHIORI_DEV_LOCAL`）。
 导入后的 dataId 规范：
 - `shiori-user-service-base.yml`
 - `shiori-user-service-secret.yml`
@@ -233,16 +235,18 @@ docker compose --profile app --profile web up -d
 - `shiori-security-secret.yml`
 
 Nacos 分组规则：
-- `SHIORI_DEV`（`SHIORI_ENV=dev`）
+- `SHIORI_DEV_DOCKER`（容器内服务互调）
+- `SHIORI_DEV_LOCAL`（IDEA/本机直启服务）
 - `SHIORI_TEST`（`SHIORI_ENV=test`）
 - `SHIORI_PROD`（`SHIORI_ENV=prod`）
-- 未显式设置 `NACOS_CONFIG_GROUP` 时，`nacos-config-init` 会按 `SHIORI_ENV` 自动推导目标 group。
+- 未显式设置 `NACOS_CONFIG_GROUP` 时，`nacos-config-init` 会按 `SHIORI_ENV` 自动推导目标 group（`dev -> SHIORI_DEV_DOCKER`）。
 
 可用以下命令查看导入日志：
 
 ```bash
 cd deploy
 docker compose logs nacos-config-init
+docker compose logs nacos-config-init-local
 ```
 
 如需手工重跑导入：
@@ -264,7 +268,8 @@ RabbitMQ 与 MinIO 也会通过一次性容器完成最小权限初始化：
 
 | 配置项 | 敏感 | dev 来源 | test 来源 | prod 来源 | 注入位置 |
 |---|---|---|---|---|---|
-| `NACOS_CONFIG_GROUP` | 否 | `SHIORI_DEV` | `SHIORI_TEST` | `SHIORI_PROD` | Compose/启动环境 |
+| `NACOS_CONFIG_GROUP` | 否 | `SHIORI_DEV_DOCKER`（容器）或 `SHIORI_DEV_LOCAL`（本机） | `SHIORI_TEST` | `SHIORI_PROD` | Compose/启动环境 |
+| `NACOS_CONFIG_GROUP_LOCAL` | 否 | `SHIORI_DEV_LOCAL` | 通常不用 | 通常不用 | `nacos-config-init-local` |
 | `NACOS_CONFIG_NAMESPACE` | 否 | public 或指定 namespace | 指定 namespace | 指定 namespace | Compose/启动环境 |
 | `JWT_HMAC_SECRET` | 是 | `.env` 本地密钥 | CI 运行时生成/Secret | Secret 管理系统 | `nacos-config-init` 模板渲染 |
 | `GATEWAY_SIGN_SECRET` | 是 | `.env` 本地密钥 | CI 运行时生成/Secret | Secret 管理系统 | `nacos-config-init` 模板渲染 |
@@ -300,6 +305,11 @@ cd deploy
 # 如需自定义账号/密钥，再编辑 .env
 docker compose up -d
 ```
+
+IDEA / 本机调试时建议：
+- `NACOS_ADDR=127.0.0.1:8848`
+- `NACOS_CONFIG_GROUP=SHIORI_DEV_LOCAL`
+- Redis 默认端口使用 `6379`（由 `REDIS_HOST_PORT` 控制）
 
 ### 2) Run Core Services (Java)
 

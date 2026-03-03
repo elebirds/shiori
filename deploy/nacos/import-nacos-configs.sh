@@ -32,7 +32,7 @@ resolve_group_by_env() {
   env_name="$(printf '%s' "${SHIORI_ENV}" | tr '[:upper:]' '[:lower:]')"
   case "${env_name}" in
     dev)
-      printf '%s' "SHIORI_DEV"
+      printf '%s' "SHIORI_DEV_DOCKER"
       ;;
     test)
       printf '%s' "SHIORI_TEST"

@@ -1,6 +1,10 @@
 spring:
   datasource:
     url: ${USER_DB_URL}
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
   flyway:
     enabled: true
     baseline-on-migrate: true
