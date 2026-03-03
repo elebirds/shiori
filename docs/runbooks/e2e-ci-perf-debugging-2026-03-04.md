@@ -150,3 +150,56 @@ RUN_PERF_BASELINE=1 SKIP_APP_PLAYWRIGHT=1 SKIP_ADMIN_PLAYWRIGHT=1 bash scripts/c
    - 本地回归基线（稳态、低噪声、可重复）
    - 独立性能环境基线（更高并发、更严格阈值）
 2. 若要把 WS 阈值收紧到 `<2000ms`，需同步评估并调整 outbox relay 周期、队列拓扑和服务资源，而不只是改 k6 参数。
+
+---
+
+## 6. 阈值治理规则（M4 固化）
+
+避免再次出现“功能通过但阈值误杀”，采用以下统一规则：
+
+1. `local-regression`（本地回归）
+   - 目标：稳定复现与快速回归。
+   - 建议参数：`K6_ORDER_VUS=1`、`K6_WS_VUS=1`、`K6_WS_LATENCY_P95_MS=3000`。
+   - CI 策略：可作为阻塞门槛。
+
+2. `perf-stress`（独立性能环境）
+   - 目标：评估容量与退化趋势。
+   - 参数策略：先提升并发，再收紧阈值，不一次性双向收紧。
+   - CI 策略：先非阻塞观察，稳定后再转阻塞。
+
+3. 阈值调整顺序
+   1. 先确认功能正确（业务失败数为 0）。
+   2. 再确认错误率（`http_req_failed`）。
+   3. 最后收紧时延阈值（`p95`）。
+
+4. 收紧阈值的前提
+   1. 最近多次基线结果稳定，无显著抖动。
+   2. 环境资源与部署形态固定（避免容量漂移）。
+   3. 关键链路（order -> notify）无已知异步积压。
+
+---
+
+## 7. `50013`（商品服务异常）快速排查顺序
+
+当 `k6-order` 出现 `status=502, code=50013`，按以下顺序排查：
+
+1. 确认是否为地址问题
+   - 检查 `K6_GATEWAY_BASE_URL` 是否指向宿主机可达地址。
+   - 在 macOS dockerized k6 场景优先使用 `host.docker.internal`。
+
+2. 确认是否为并发容量问题
+   - 先把 `K6_ORDER_VUS` 降到 `1` 重跑。
+   - 若 `VUS=1` 稳定而高 VU 失败，优先判定为容量/抖动问题，不是功能错误。
+
+3. 定位失败阶段
+   - 开启 `K6_DEBUG_FAIL_SAMPLE=1`。
+   - 查看 `ci-logs/perf/k6-order.log` 中 `[k6-order][create|pay|detail]` 样本。
+
+4. 对齐服务日志窗口
+   - 对照 `order-service.log`、`product-service.log` 同时间段异常。
+   - 优先关注 `connect timeout`、`resource access`、`下游 5xx`。
+
+5. 分流处置
+   - 地址/网络问题：修正 `K6_*` 与服务可达性。
+   - 并发容量问题：先下调本地阈值与 VU，后续在独立环境压测。
+   - 功能问题：回到业务代码修复并补测试。

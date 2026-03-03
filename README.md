@@ -545,6 +545,14 @@ export SERVICE_READY_TIMEOUT_SECONDS=300
 export RUN_PERF_BASELINE=1
 export SKIP_APP_PLAYWRIGHT=1
 export SKIP_ADMIN_PLAYWRIGHT=1
+# 可选：覆盖 perf 目标地址（健康检查）
+export PERF_GATEWAY_BASE_URL=http://127.0.0.1:8080
+export PERF_NOTIFY_WS_BASE_URL=ws://127.0.0.1:8090/ws
+export PERF_NOTIFY_HTTP_BASE_URL=http://127.0.0.1:8090
+# 可选：覆盖 k6 压测地址（容器化 k6 与宿主机地址不一致时使用）
+export K6_GATEWAY_BASE_URL=http://host.docker.internal:8080
+export K6_NOTIFY_WS_BASE_URL=ws://host.docker.internal:8090/ws
+export K6_NOTIFY_HTTP_BASE_URL=http://host.docker.internal:8090
 ```
 
 必填敏感变量（脚本会校验）：
@@ -678,3 +686,44 @@ CI/本机一键基线（服务就绪后）：
 ```bash
 bash scripts/ci/run_perf_baseline.sh
 ```
+
+### 基线模式（M4 固化）
+
+为避免“本地回归验证”和“性能门禁压测”互相干扰，建议区分两套参数：
+
+| 模式 | 目标 | 推荐参数 |
+| --- | --- | --- |
+| `local-regression` | 本机稳定回归、低噪声 | `K6_ORDER_VUS=1` `K6_WS_VUS=1` `K6_WS_LATENCY_P95_MS=3000` |
+| `perf-stress` | 独立性能环境压测 | 按环境容量上调 `K6_ORDER_VUS`/`K6_WS_VUS`，再逐步收紧 `K6_WS_LATENCY_P95_MS` |
+
+本地默认即 `local-regression`；如需覆盖：
+
+```bash
+K6_ORDER_VUS=5 \
+K6_WS_VUS=2 \
+K6_WS_LATENCY_P95_MS=2000 \
+bash scripts/ci/run_perf_baseline.sh
+```
+
+### 性能变量速查
+
+`scripts/ci/run_perf_baseline.sh` 支持以下关键变量：
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `GATEWAY_BASE_URL` | `http://localhost:8080` | 健康检查/脚本层基础地址 |
+| `NOTIFY_WS_BASE_URL` | `ws://localhost:8090/ws` | 健康检查与 WS 基础地址 |
+| `PERF_NOTIFY_HTTP_BASE_URL` | 自动从 WS 推导 | notify HTTP 健康检查地址 |
+| `K6_GATEWAY_BASE_URL` | 继承 `GATEWAY_BASE_URL` | k6 实际压测目标（可单独覆盖） |
+| `K6_NOTIFY_WS_BASE_URL` | 继承 `NOTIFY_WS_BASE_URL` | k6 WS 压测目标 |
+| `K6_NOTIFY_HTTP_BASE_URL` | 继承 `PERF_NOTIFY_HTTP_BASE_URL` | k6 notify HTTP 目标 |
+| `K6_ORDER_VUS` | `1` | 订单压测并发 |
+| `K6_ORDER_DURATION` | `45s` | 订单压测时长 |
+| `K6_WS_VUS` | `1` | WS 压测并发 |
+| `K6_WS_ITERATIONS` | `10` | WS 每 VU 迭代次数 |
+| `K6_WS_TIMEOUT_MS` | `10000` | WS 单次等待超时 |
+| `K6_WS_LATENCY_P95_MS` | `3000` | WS p95 阈值 |
+| `K6_DEBUG_FAIL_SAMPLE` | `0` | 是否打印失败样本（1 开启） |
+| `K6_DEBUG_FAIL_LIMIT` | `20` | 失败样本最多打印条数 |
+
+> 说明：在 macOS 使用 dockerized `k6` 时，脚本会自动把 `localhost/127.0.0.1` 改写为 `host.docker.internal`，避免容器内回环地址误指向自身。
