@@ -31,8 +31,8 @@ pnpm e2e
 
 - `E2E_GATEWAY_BASE_URL`（默认 `http://127.0.0.1:8080`）
 - `E2E_MYSQL_CONTAINER`（默认 `shiori-mysql`）
-- `E2E_MYSQL_USER`（默认 `shiori`）
-- `E2E_MYSQL_PASSWORD`（默认 `shiori`）
+- `E2E_MYSQL_USER`（必填，建议使用 `MYSQL_OPS_USERNAME`）
+- `E2E_MYSQL_PASSWORD`（必填，建议使用 `MYSQL_OPS_PASSWORD`）
 
 ## 路由
 

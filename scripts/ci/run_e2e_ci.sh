@@ -42,6 +42,10 @@ print_key_logs() {
     echo "----- docker logs shiori-nacos-config-init -----"
     docker logs shiori-nacos-config-init || true
   fi
+  if docker ps -a --format '{{.Names}}' | grep -q '^shiori-rabbitmq-auth-init$'; then
+    echo "----- docker logs shiori-rabbitmq-auth-init -----"
+    docker logs shiori-rabbitmq-auth-init || true
+  fi
 
   echo "----- docker compose ps -----"
   docker compose -f "${DEPLOY_DIR}/docker-compose.yml" ps || true
@@ -124,6 +128,38 @@ wait_nacos_init() {
 
   docker logs shiori-nacos-config-init >"${CI_LOG_DIR}/nacos-config-init.log" 2>&1 || true
   fail "等待 nacos-config-init 超时(${timeout_seconds}s)"
+}
+
+wait_rabbitmq_auth_init() {
+  local timeout_seconds=180
+  local elapsed=0
+  local status=""
+  local exit_code=""
+
+  log "等待 rabbitmq-auth-init 执行完成..."
+  while (( elapsed < timeout_seconds )); do
+    if docker inspect shiori-rabbitmq-auth-init >/dev/null 2>&1; then
+      status="$(docker inspect -f '{{.State.Status}}' shiori-rabbitmq-auth-init 2>/dev/null || true)"
+      exit_code="$(docker inspect -f '{{.State.ExitCode}}' shiori-rabbitmq-auth-init 2>/dev/null || true)"
+
+      if [[ "${status}" == "exited" && "${exit_code}" == "0" ]]; then
+        docker logs shiori-rabbitmq-auth-init >"${CI_LOG_DIR}/rabbitmq-auth-init.log" 2>&1 || true
+        log "rabbitmq-auth-init 成功退出"
+        return 0
+      fi
+
+      if [[ "${status}" == "exited" && "${exit_code}" != "0" ]]; then
+        docker logs shiori-rabbitmq-auth-init >"${CI_LOG_DIR}/rabbitmq-auth-init.log" 2>&1 || true
+        fail "rabbitmq-auth-init 执行失败，exitCode=${exit_code}"
+      fi
+    fi
+
+    sleep 2
+    elapsed=$((elapsed + 2))
+  done
+
+  docker logs shiori-rabbitmq-auth-init >"${CI_LOG_DIR}/rabbitmq-auth-init.log" 2>&1 || true
+  fail "等待 rabbitmq-auth-init 超时(${timeout_seconds}s)"
 }
 
 assert_container_running() {
@@ -230,7 +266,7 @@ start_notify_service() {
   (
     cd "${NOTIFY_DIR}"
     NOTIFY_HTTP_ADDR=:8090 \
-    RABBITMQ_ADDR="amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@localhost:5672/" \
+    RABBITMQ_ADDR="amqp://${NOTIFY_RMQ_USERNAME}:${NOTIFY_RMQ_PASSWORD}@localhost:5672/" \
     go run .
   ) >"${CI_LOG_DIR}/notify.log" 2>&1 &
   add_service_pid "notify" "$!"
@@ -248,12 +284,18 @@ main() {
   export NACOS_CONFIG_GROUP="${NACOS_CONFIG_GROUP:-SHIORI_TEST}"
 
   require_env MYSQL_ROOT_PASSWORD
-  require_env MYSQL_USER
-  require_env MYSQL_PASSWORD
+  require_env MYSQL_OPS_USERNAME
+  require_env MYSQL_OPS_PASSWORD
   require_env RABBITMQ_DEFAULT_USER
   require_env RABBITMQ_DEFAULT_PASS
+  require_env ORDER_RMQ_USERNAME
+  require_env ORDER_RMQ_PASSWORD
+  require_env NOTIFY_RMQ_USERNAME
+  require_env NOTIFY_RMQ_PASSWORD
   require_env MINIO_ROOT_USER
   require_env MINIO_ROOT_PASSWORD
+  require_env MINIO_PRODUCT_ACCESS_KEY
+  require_env MINIO_PRODUCT_SECRET_KEY
   require_env NACOS_AUTH_TOKEN
   require_env NACOS_AUTH_IDENTITY_KEY
   require_env NACOS_AUTH_IDENTITY_VALUE
@@ -268,10 +310,6 @@ main() {
   require_env ORDER_DB_URL
   require_env ORDER_DB_USERNAME
   require_env ORDER_DB_PASSWORD
-  require_env ORDER_RMQ_USERNAME
-  require_env ORDER_RMQ_PASSWORD
-  require_env OSS_ACCESS_KEY
-  require_env OSS_SECRET_KEY
   require_env JWT_HMAC_SECRET
   require_env GATEWAY_SIGN_SECRET
 
@@ -287,6 +325,7 @@ main() {
   docker compose -f "${DEPLOY_DIR}/docker-compose.yml" ps >"${CI_LOG_DIR}/docker-compose-ps-initial.log" 2>&1 || true
 
   wait_nacos_init
+  wait_rabbitmq_auth_init
 
   assert_container_running shiori-mysql
   assert_container_running shiori-rabbitmq
@@ -348,8 +387,8 @@ main() {
     pnpm e2e:install
     E2E_GATEWAY_BASE_URL=http://127.0.0.1:8080 \
     E2E_MYSQL_CONTAINER=shiori-mysql \
-    E2E_MYSQL_USER="${MYSQL_USER}" \
-    E2E_MYSQL_PASSWORD="${MYSQL_PASSWORD}" \
+    E2E_MYSQL_USER="${MYSQL_OPS_USERNAME}" \
+    E2E_MYSQL_PASSWORD="${MYSQL_OPS_PASSWORD}" \
     pnpm e2e
   ) >"${CI_LOG_DIR}/admin-web-e2e.log" 2>&1; then
     dump_tail "${CI_LOG_DIR}/admin-web-e2e.log"

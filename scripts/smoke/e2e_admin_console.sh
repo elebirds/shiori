@@ -4,8 +4,10 @@ set -euo pipefail
 GATEWAY_BASE_URL="${GATEWAY_BASE_URL:-http://localhost:8080}"
 SMOKE_PREFIX="${SMOKE_PREFIX:-adminsmoke}"
 MYSQL_CONTAINER="${MYSQL_CONTAINER:-shiori-mysql}"
-MYSQL_USER="${MYSQL_USER:?missing MYSQL_USER}"
-MYSQL_PASSWORD="${MYSQL_PASSWORD:?missing MYSQL_PASSWORD}"
+MYSQL_OPS_USER="${MYSQL_OPS_USER:-${MYSQL_OPS_USERNAME:-${MYSQL_USER:-}}}"
+MYSQL_OPS_PASSWORD="${MYSQL_OPS_PASSWORD:-${MYSQL_PASSWORD:-}}"
+MYSQL_OPS_USER="${MYSQL_OPS_USER:?missing MYSQL_OPS_USER}"
+MYSQL_OPS_PASSWORD="${MYSQL_OPS_PASSWORD:?missing MYSQL_OPS_PASSWORD}"
 
 TMP_DIR="$(mktemp -d)"
 START_TS="$(date +%s)"
@@ -116,7 +118,7 @@ call_api_expect_status() {
 grant_admin_role_by_sql() {
   local username="$1"
   docker exec -i "${MYSQL_CONTAINER}" \
-    mysql "-u${MYSQL_USER}" "-p${MYSQL_PASSWORD}" shiori_user <<SQL >/dev/null
+    mysql "-u${MYSQL_OPS_USER}" "-p${MYSQL_OPS_PASSWORD}" shiori_user <<SQL >/dev/null
 INSERT INTO u_user_role (user_id, role_id, created_at)
 SELECT u.id, r.id, CURRENT_TIMESTAMP(3)
 FROM u_user u
@@ -131,7 +133,7 @@ query_mysql_scalar() {
   local database="$1"
   local sql="$2"
   docker exec "${MYSQL_CONTAINER}" \
-    mysql "-u${MYSQL_USER}" "-p${MYSQL_PASSWORD}" -D "${database}" -Nse "${sql}"
+    mysql "-u${MYSQL_OPS_USER}" "-p${MYSQL_OPS_PASSWORD}" -D "${database}" -Nse "${sql}"
 }
 
 require_command curl

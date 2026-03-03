@@ -3,8 +3,16 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 
 const GATEWAY_BASE_URL = process.env.E2E_GATEWAY_BASE_URL || 'http://127.0.0.1:8080'
 const MYSQL_CONTAINER = process.env.E2E_MYSQL_CONTAINER || 'shiori-mysql'
-const MYSQL_USER = process.env.E2E_MYSQL_USER || 'shiori'
-const MYSQL_PASSWORD = process.env.E2E_MYSQL_PASSWORD || 'shiori'
+const MYSQL_USER = mustEnv('E2E_MYSQL_USER')
+const MYSQL_PASSWORD = mustEnv('E2E_MYSQL_PASSWORD')
+
+function mustEnv(name: string): string {
+  const value = process.env[name]
+  if (!value) {
+    throw new Error(`missing env: ${name}`)
+  }
+  return value
+}
 
 interface TokenPairResponse {
   accessToken: string

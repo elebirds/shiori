@@ -150,6 +150,7 @@ shiori/
 ├── deploy/                           # 🐳 [基础设施部署]
 │   ├── docker-compose.yml            # MySQL, Redis, RabbitMQ, (可选 Nacos/Prom/Grafana)
 │   ├── nacos/                        # Nacos 配置导入脚本与模板（templates/*.yml.tmpl）
+│   ├── rabbitmq/                     # RabbitMQ 最小权限账号初始化脚本
 │   └── sql/                          # MySQL 初始化脚本（创建多库）与后续运维 SQL
 └── perf/                             # ⚡ [压测资产] k6 脚本与结果记录
     ├── k6-order.js
@@ -244,6 +245,10 @@ cd deploy
 docker compose run --rm nacos-config-init
 ```
 
+RabbitMQ 与 MinIO 也会通过一次性容器完成最小权限初始化：
+- `rabbitmq-auth-init`：创建 `order-service` 与 `notify-service` 独立账号并写入受限权限。
+- `minio-init`：创建商品桶、商品服务专用访问账号与桶级读写策略。
+
 并启动 MinIO（商品图片对象存储）：
 - S3 API: `http://localhost:9000`
 - Console: `http://localhost:9001`
@@ -264,10 +269,16 @@ docker compose run --rm nacos-config-init
 | `ORDER_DB_PASSWORD` | 是 | `.env` | CI Secret | Secret 管理系统 | `shiori-order-service-secret.yml` |
 | `ORDER_RMQ_USERNAME` | 否（建议最小权限） | `.env` | CI Secret/变量 | Secret 管理系统 | `shiori-order-service-secret.yml` |
 | `ORDER_RMQ_PASSWORD` | 是 | `.env` | CI Secret | Secret 管理系统 | `shiori-order-service-secret.yml` |
-| `OSS_ACCESS_KEY` | 否（凭证标识） | `.env` | CI Secret/变量 | Secret 管理系统 | `shiori-product-service-secret.yml` |
-| `OSS_SECRET_KEY` | 是 | `.env` | CI Secret | Secret 管理系统 | `shiori-product-service-secret.yml` |
+| `NOTIFY_RMQ_USERNAME` | 否（建议最小权限） | `.env` | CI Secret/变量 | Secret 管理系统 | notify 运行时环境 |
+| `NOTIFY_RMQ_PASSWORD` | 是 | `.env` | CI Secret | Secret 管理系统 | notify 运行时环境 |
+| `MINIO_PRODUCT_ACCESS_KEY` | 否（凭证标识） | `.env` | CI Secret/变量 | Secret 管理系统 | `shiori-product-service-secret.yml` |
+| `MINIO_PRODUCT_SECRET_KEY` | 是 | `.env` | CI Secret | Secret 管理系统 | `shiori-product-service-secret.yml` |
+| `MYSQL_OPS_USERNAME` | 否（运维/烟测账号） | `.env` | CI Secret/变量 | Secret 管理系统 | MySQL 初始化与烟测 |
+| `MYSQL_OPS_PASSWORD` | 是 | `.env` | CI Secret | Secret 管理系统 | MySQL 初始化与烟测 |
 | `MYSQL_ROOT_PASSWORD` | 是 | `.env` | CI 运行时生成/Secret | Secret 管理系统 | docker compose |
+| `RABBITMQ_DEFAULT_USER` | 否（RabbitMQ 管理账号） | `.env` | CI Secret/变量 | Secret 管理系统 | docker compose |
 | `RABBITMQ_DEFAULT_PASS` | 是 | `.env` | CI 运行时生成/Secret | Secret 管理系统 | docker compose |
+| `MINIO_ROOT_USER` | 否（MinIO 管理账号） | `.env` | CI Secret/变量 | Secret 管理系统 | docker compose |
 | `MINIO_ROOT_PASSWORD` | 是 | `.env` | CI 运行时生成/Secret | Secret 管理系统 | docker compose |
 | `NACOS_AUTH_TOKEN` | 是 | `.env` | CI 运行时生成/Secret | Secret 管理系统 | docker compose |
 | `NACOS_AUTH_IDENTITY_KEY` | 是 | `.env` | CI 运行时生成/Secret | Secret 管理系统 | docker compose / nacos init 请求头 |
@@ -468,8 +479,8 @@ export NOTIFY_WS_BASE_URL=ws://localhost:8090/ws
 export SMOKE_TIMEOUT_SECONDS=60
 export SMOKE_PREFIX=smoke
 export MYSQL_CONTAINER=shiori-mysql
-export MYSQL_USER=<mysql-app-user>
-export MYSQL_PASSWORD=<mysql-app-password>
+export MYSQL_OPS_USERNAME=<mysql-ops-user>
+export MYSQL_OPS_PASSWORD=<mysql-ops-password>
 ```
 
 `ws-smoke` 探针命令（脚本内部也会调用）：
@@ -500,9 +511,15 @@ export SERVICE_READY_TIMEOUT_SECONDS=300
 
 必填敏感变量（脚本会校验）：
 - `MYSQL_ROOT_PASSWORD`
-- `MYSQL_PASSWORD`
+- `MYSQL_OPS_PASSWORD`
+- `USER_DB_PASSWORD`
+- `PRODUCT_DB_PASSWORD`
+- `ORDER_DB_PASSWORD`
 - `RABBITMQ_DEFAULT_PASS`
+- `ORDER_RMQ_PASSWORD`
+- `NOTIFY_RMQ_PASSWORD`
 - `MINIO_ROOT_PASSWORD`
+- `MINIO_PRODUCT_SECRET_KEY`
 - `NACOS_AUTH_TOKEN`
 - `NACOS_IMPORT_PASSWORD`
 - `JWT_HMAC_SECRET`
