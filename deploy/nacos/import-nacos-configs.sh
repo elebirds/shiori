@@ -138,44 +138,86 @@ nacos_login_with_retry() {
 publish_config() {
   rendered_file="$1"
   data_id="$(basename "${rendered_file}")"
+  published=0
 
-  if [ -n "${NACOS_CONFIG_NAMESPACE}" ]; then
-    response="$(curl -sS -w '\n%{http_code}' -X POST "${NACOS_URL}/nacos/v3/admin/cs/config" \
-      -H "accessToken: ${ACCESS_TOKEN}" \
-      -H "${NACOS_AUTH_IDENTITY_KEY}: ${NACOS_AUTH_IDENTITY_VALUE}" \
-      --data-urlencode "dataId=${data_id}" \
-      --data-urlencode "groupName=${TARGET_GROUP}" \
-      --data-urlencode "namespaceId=${NACOS_CONFIG_NAMESPACE}" \
-      --data-urlencode "type=yaml" \
-      --data-urlencode "content@${rendered_file}")"
-  else
-    response="$(curl -sS -w '\n%{http_code}' -X POST "${NACOS_URL}/nacos/v3/admin/cs/config" \
-      -H "accessToken: ${ACCESS_TOKEN}" \
-      -H "${NACOS_AUTH_IDENTITY_KEY}: ${NACOS_AUTH_IDENTITY_VALUE}" \
-      --data-urlencode "dataId=${data_id}" \
-      --data-urlencode "groupName=${TARGET_GROUP}" \
-      --data-urlencode "type=yaml" \
-      --data-urlencode "content@${rendered_file}")"
-  fi
+  publish_with_v3() {
+    http_method="$1"
+    if [ -n "${NACOS_CONFIG_NAMESPACE}" ]; then
+      curl -sS -w '\n%{http_code}' -X "${http_method}" "${NACOS_URL}/nacos/v3/admin/cs/config" \
+        -H "accessToken: ${ACCESS_TOKEN}" \
+        -H "${NACOS_AUTH_IDENTITY_KEY}: ${NACOS_AUTH_IDENTITY_VALUE}" \
+        --data-urlencode "dataId=${data_id}" \
+        --data-urlencode "groupName=${TARGET_GROUP}" \
+        --data-urlencode "namespaceId=${NACOS_CONFIG_NAMESPACE}" \
+        --data-urlencode "type=yaml" \
+        --data-urlencode "content@${rendered_file}"
+    else
+      curl -sS -w '\n%{http_code}' -X "${http_method}" "${NACOS_URL}/nacos/v3/admin/cs/config" \
+        -H "accessToken: ${ACCESS_TOKEN}" \
+        -H "${NACOS_AUTH_IDENTITY_KEY}: ${NACOS_AUTH_IDENTITY_VALUE}" \
+        --data-urlencode "dataId=${data_id}" \
+        --data-urlencode "groupName=${TARGET_GROUP}" \
+        --data-urlencode "type=yaml" \
+        --data-urlencode "content@${rendered_file}"
+    fi
+  }
 
+  publish_with_v1_upsert() {
+    if [ -n "${NACOS_CONFIG_NAMESPACE}" ]; then
+      curl -sS -w '\n%{http_code}' -X POST "${NACOS_URL}/nacos/v1/cs/configs" \
+        -H "accessToken: ${ACCESS_TOKEN}" \
+        -H "${NACOS_AUTH_IDENTITY_KEY}: ${NACOS_AUTH_IDENTITY_VALUE}" \
+        --data-urlencode "accessToken=${ACCESS_TOKEN}" \
+        --data-urlencode "dataId=${data_id}" \
+        --data-urlencode "group=${TARGET_GROUP}" \
+        --data-urlencode "tenant=${NACOS_CONFIG_NAMESPACE}" \
+        --data-urlencode "type=yaml" \
+        --data-urlencode "content@${rendered_file}"
+    else
+      curl -sS -w '\n%{http_code}' -X POST "${NACOS_URL}/nacos/v1/cs/configs" \
+        -H "accessToken: ${ACCESS_TOKEN}" \
+        -H "${NACOS_AUTH_IDENTITY_KEY}: ${NACOS_AUTH_IDENTITY_VALUE}" \
+        --data-urlencode "accessToken=${ACCESS_TOKEN}" \
+        --data-urlencode "dataId=${data_id}" \
+        --data-urlencode "group=${TARGET_GROUP}" \
+        --data-urlencode "type=yaml" \
+        --data-urlencode "content@${rendered_file}"
+    fi
+  }
+
+  response="$(publish_with_v3 POST)"
   http_status="$(printf '%s' "${response}" | tail -n1)"
   body="$(printf '%s' "${response}" | sed '$d')"
-  if [ "${http_status#2}" = "${http_status}" ]; then
-    die "导入失败 dataId=${data_id}, status=${http_status}, body=${body}"
-  fi
-  if printf '%s' "${body}" | grep -Eq '"code"[[:space:]]*:[[:space:]]*0'; then
-    log "导入成功 group=${TARGET_GROUP} dataId=${data_id}"
-    return 0
+  if [ "${http_status#2}" != "${http_status}" ]; then
+    if printf '%s' "${body}" | grep -Eq '"code"[[:space:]]*:[[:space:]]*0|true|\"true\"|ok|OK'; then
+      published=1
+    fi
+  elif [ "${http_status}" = "410" ] && printf '%s' "${body}" | grep -Eqi 'already|exist'; then
+    log "配置已存在，尝试更新 group=${TARGET_GROUP} dataId=${data_id}"
+    response="$(publish_with_v3 PUT)"
+    http_status="$(printf '%s' "${response}" | tail -n1)"
+    body="$(printf '%s' "${response}" | sed '$d')"
+    if [ "${http_status#2}" != "${http_status}" ] \
+      && printf '%s' "${body}" | grep -Eq '"code"[[:space:]]*:[[:space:]]*0|true|\"true\"|ok|OK'; then
+      published=1
+    fi
   fi
 
-  case "${body}" in
-    true|\"true\"|ok|OK)
-      log "导入成功 group=${TARGET_GROUP} dataId=${data_id}"
-      ;;
-    *)
-      die "导入返回非成功体 dataId=${data_id}, body=${body}"
-      ;;
-  esac
+  if [ "${published}" -ne 1 ]; then
+    # v3 接口在部分版本上行为不一致，回退到 v1 upsert。
+    response="$(publish_with_v1_upsert)"
+    http_status="$(printf '%s' "${response}" | tail -n1)"
+    body="$(printf '%s' "${response}" | sed '$d')"
+    if [ "${http_status#2}" != "${http_status}" ] \
+      && printf '%s' "${body}" | grep -Eq '"code"[[:space:]]*:[[:space:]]*0|true|\"true\"|ok|OK'; then
+      published=1
+    fi
+  fi
+
+  if [ "${published}" -ne 1 ]; then
+    die "导入失败 dataId=${data_id}, status=${http_status}, body=${body}"
+  fi
+  log "导入成功 group=${TARGET_GROUP} dataId=${data_id}"
 }
 
 require_env_non_empty NACOS_IMPORT_USERNAME
