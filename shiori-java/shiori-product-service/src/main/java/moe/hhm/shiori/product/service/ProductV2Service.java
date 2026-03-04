@@ -1,6 +1,7 @@
 package moe.hhm.shiori.product.service;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -29,6 +30,10 @@ import moe.hhm.shiori.product.model.SkuEntity;
 import moe.hhm.shiori.product.model.SkuRecord;
 import moe.hhm.shiori.product.repository.ProductMapper;
 import moe.hhm.shiori.product.storage.OssObjectService;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.safety.Safelist;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +41,18 @@ import org.springframework.util.StringUtils;
 
 @Service
 public class ProductV2Service {
+
+    private static final Set<String> ALLOWED_RICH_TEXT_CLASSES = Set.of(
+            "rt-fs-sm",
+            "rt-fs-md",
+            "rt-fs-lg",
+            "rt-fs-xl"
+    );
+    private static final Safelist DETAIL_HTML_SAFE_LIST = Safelist.none()
+            .addTags("p", "br", "h1", "h2", "h3", "h4", "ul", "ol", "li", "blockquote", "strong", "em", "u",
+                    "span", "img")
+            .addAttributes("img", "src", "alt", "title", "data-object-key")
+            .addAttributes(":all", "class");
 
     private final ProductMapper productMapper;
     private final OssObjectService ossObjectService;
@@ -223,6 +240,7 @@ public class ProductV2Service {
     @Transactional(rollbackFor = Exception.class)
     public ProductWriteResponse createProduct(Long ownerUserId, CreateProductV2Request request) {
         assertCoverObjectKey(request.coverObjectKey());
+        String normalizedDetailHtml = sanitizeDetailHtmlForStore(request.detailHtml());
         String categoryCode = normalizeCategory(request.categoryCode(), true);
         String conditionLevel = normalizeCondition(request.conditionLevel(), true);
         String tradeMode = normalizeTradeMode(request.tradeMode(), true);
@@ -233,6 +251,7 @@ public class ProductV2Service {
         entity.setOwnerUserId(ownerUserId);
         entity.setTitle(request.title().trim());
         entity.setDescription(request.description());
+        entity.setDetailHtml(normalizedDetailHtml);
         entity.setCoverObjectKey(request.coverObjectKey());
         entity.setCategoryCode(categoryCode);
         entity.setConditionLevel(conditionLevel);
@@ -255,6 +274,7 @@ public class ProductV2Service {
         ProductV2Record product = requireProductV2(productId);
         ensureOwnerOrAdmin(product.ownerUserId(), userId, admin);
         assertCoverObjectKey(request.coverObjectKey());
+        String normalizedDetailHtml = sanitizeDetailHtmlForStore(request.detailHtml());
 
         String categoryCode = normalizeCategory(request.categoryCode(), true);
         String conditionLevel = normalizeCondition(request.conditionLevel(), true);
@@ -265,6 +285,7 @@ public class ProductV2Service {
                 productId,
                 request.title().trim(),
                 request.description(),
+                normalizedDetailHtml,
                 request.coverObjectKey(),
                 categoryCode,
                 conditionLevel,
@@ -374,6 +395,7 @@ public class ProductV2Service {
                 product.ownerUserId(),
                 product.title(),
                 product.description(),
+                renderDetailHtmlForResponse(product.detailHtml()),
                 product.coverObjectKey(),
                 resolveCoverImageUrl(product.coverObjectKey()),
                 ProductStatus.fromCode(product.status()).name(),
@@ -417,6 +439,125 @@ public class ProductV2Service {
         if (!coverObjectKey.startsWith("product/") || coverObjectKey.contains("..")) {
             throw new BizException(ProductErrorCode.INVALID_MEDIA_OBJECT_KEY, HttpStatus.BAD_REQUEST);
         }
+    }
+
+    private String sanitizeDetailHtmlForStore(String rawDetailHtml) {
+        if (!StringUtils.hasText(rawDetailHtml)) {
+            return null;
+        }
+        Document sourceDocument = Jsoup.parseBodyFragment(rawDetailHtml);
+        normalizeDetailImageObjectKeys(sourceDocument);
+        String cleaned = Jsoup.clean(sourceDocument.body().html(), "", DETAIL_HTML_SAFE_LIST, new Document.OutputSettings()
+                .prettyPrint(false));
+        if (!StringUtils.hasText(cleaned)) {
+            return null;
+        }
+        Document normalized = Jsoup.parseBodyFragment(cleaned);
+        normalizeAllowedClassNames(normalized);
+        if (!StringUtils.hasText(normalized.text()) && normalized.select("img").isEmpty()) {
+            return null;
+        }
+        String html = normalized.body().html().trim();
+        return StringUtils.hasText(html) ? html : null;
+    }
+
+    private String renderDetailHtmlForResponse(String storedDetailHtml) {
+        if (!StringUtils.hasText(storedDetailHtml)) {
+            return null;
+        }
+        String cleaned = Jsoup.clean(storedDetailHtml, "", DETAIL_HTML_SAFE_LIST, new Document.OutputSettings()
+                .prettyPrint(false));
+        Document document = Jsoup.parseBodyFragment(cleaned);
+        for (Element image : document.select("img")) {
+            String objectKey = normalizeMediaObjectKey(
+                    firstNonBlank(image.attr("data-object-key"), image.attr("src"))
+            );
+            if (objectKey == null) {
+                image.remove();
+                continue;
+            }
+            try {
+                String signedUrl = ossObjectService.presignGetUrl(objectKey);
+                if (!StringUtils.hasText(signedUrl)) {
+                    image.remove();
+                    continue;
+                }
+                image.attr("src", signedUrl);
+                image.attr("data-object-key", objectKey);
+            } catch (BizException ex) {
+                image.remove();
+            }
+        }
+        normalizeAllowedClassNames(document);
+        String html = document.body().html().trim();
+        return StringUtils.hasText(html) ? html : null;
+    }
+
+    private void normalizeDetailImageObjectKeys(Document sourceDocument) {
+        for (Element image : sourceDocument.select("img")) {
+            String objectKey = normalizeMediaObjectKey(
+                    firstNonBlank(image.attr("data-object-key"), image.attr("src"))
+            );
+            if (objectKey == null) {
+                image.remove();
+                continue;
+            }
+            image.attr("src", objectKey);
+            image.attr("data-object-key", objectKey);
+        }
+    }
+
+    private void normalizeAllowedClassNames(Document document) {
+        for (Element element : document.select("[class]")) {
+            String className = normalizeRichTextClassNames(element.attr("class"));
+            if (!StringUtils.hasText(className)) {
+                element.removeAttr("class");
+                continue;
+            }
+            element.attr("class", className);
+        }
+    }
+
+    private String normalizeRichTextClassNames(String rawClassNames) {
+        if (!StringUtils.hasText(rawClassNames)) {
+            return null;
+        }
+        List<String> classNames = new ArrayList<>();
+        for (String className : Arrays.asList(rawClassNames.trim().split("\\s+"))) {
+            if (!ALLOWED_RICH_TEXT_CLASSES.contains(className) || classNames.contains(className)) {
+                continue;
+            }
+            classNames.add(className);
+        }
+        if (classNames.isEmpty()) {
+            return null;
+        }
+        return String.join(" ", classNames);
+    }
+
+    private String normalizeMediaObjectKey(String rawObjectKey) {
+        if (!StringUtils.hasText(rawObjectKey)) {
+            return null;
+        }
+        String objectKey = rawObjectKey.trim();
+        if (objectKey.length() > 255 || objectKey.contains("..") || objectKey.contains("://")
+                || objectKey.contains("\\") || objectKey.startsWith("/")) {
+            return null;
+        }
+        if (!objectKey.startsWith("product/")) {
+            return null;
+        }
+        return objectKey;
+    }
+
+    private String firstNonBlank(String first, String second) {
+        if (StringUtils.hasText(first)) {
+            return first;
+        }
+        if (StringUtils.hasText(second)) {
+            return second;
+        }
+        return null;
     }
 
     private boolean isDeleted(ProductV2Record product) {

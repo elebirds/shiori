@@ -267,6 +267,7 @@ function formatMoney(priceCent?: number): string {
         <h2 class="text-lg font-semibold text-slate-900">商品详情</h2>
         <div v-if="detailQuery.data.value" class="mt-3 space-y-2 text-sm text-slate-700">
           <p>标题：{{ detailQuery.data.value.title }}</p>
+          <p>简介：{{ detailQuery.data.value.description || '暂无简介' }}</p>
           <p>状态：{{ detailQuery.data.value.status }}</p>
           <p>owner：{{ detailQuery.data.value.ownerUserId }}</p>
           <p>
@@ -277,9 +278,43 @@ function formatMoney(priceCent?: number): string {
           <p>价格区间：{{ formatMoney(detailQuery.data.value.minPriceCent) }} ~ {{ formatMoney(detailQuery.data.value.maxPriceCent) }}</p>
           <p>总库存：{{ detailQuery.data.value.totalStock ?? 0 }}</p>
           <p>SKU 数：{{ detailQuery.data.value.skus.length }}</p>
+          <div class="space-y-1">
+            <p class="font-medium text-slate-800">详情：</p>
+            <div v-if="detailQuery.data.value.detailHtml" class="rich-content rounded-md border border-slate-200 bg-slate-50 p-2" v-html="detailQuery.data.value.detailHtml" />
+            <p v-else class="text-slate-500">暂无详情</p>
+          </div>
         </div>
         <p v-else class="mt-3 text-sm text-slate-400">点击左侧商品查看详情</p>
       </aside>
     </div>
   </section>
 </template>
+
+<style scoped>
+.rich-content :deep(img) {
+  max-width: 100%;
+  border-radius: 0.375rem;
+}
+
+.rich-content :deep(ul),
+.rich-content :deep(ol) {
+  margin-left: 1.1rem;
+  padding-left: 0.35rem;
+}
+
+.rich-content :deep(.rt-fs-sm) {
+  font-size: 0.875rem;
+}
+
+.rich-content :deep(.rt-fs-md) {
+  font-size: 1rem;
+}
+
+.rich-content :deep(.rt-fs-lg) {
+  font-size: 1.125rem;
+}
+
+.rich-content :deep(.rt-fs-xl) {
+  font-size: 1.25rem;
+}
+</style>

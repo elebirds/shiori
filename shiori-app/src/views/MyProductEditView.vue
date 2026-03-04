@@ -4,6 +4,7 @@ import { computed, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import ResultState from '@/components/ResultState.vue'
+import RichTextEditor from '@/components/RichTextEditor.vue'
 import { presignProductUpload, uploadByPresignedUrl } from '@/api/media'
 import {
   getMyProductDetailV2,
@@ -49,6 +50,7 @@ const productId = computed(() => Number(route.params.id))
 const form = reactive({
   title: '',
   description: '',
+  detailHtml: '',
   coverObjectKey: '',
   categoryCode: 'TEXTBOOK' as ProductCategoryCode,
   conditionLevel: 'GOOD' as ProductConditionLevel,
@@ -78,6 +80,7 @@ watch(
     }
     form.title = detail.title || ''
     form.description = detail.description || ''
+    form.detailHtml = detail.detailHtml || ''
     form.coverObjectKey = detail.coverObjectKey || ''
     form.categoryCode = detail.categoryCode
     form.conditionLevel = detail.conditionLevel
@@ -100,6 +103,7 @@ const updateMutation = useMutation({
     updateProductV2(productId.value, {
       title: form.title.trim(),
       description: form.description.trim() || undefined,
+      detailHtml: form.detailHtml.trim() || undefined,
       coverObjectKey: form.coverObjectKey.trim() || undefined,
       categoryCode: form.categoryCode,
       conditionLevel: form.conditionLevel,
@@ -351,13 +355,18 @@ onUnmounted(() => {
           </label>
 
           <label class="text-sm text-stone-700 sm:col-span-2">
-            商品描述
+            商品简介
             <textarea
               v-model.trim="form.description"
               rows="4"
               class="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2 outline-none transition focus:border-amber-500"
             />
           </label>
+
+          <div class="space-y-1 text-sm text-stone-700 sm:col-span-2">
+            <p>商品详情（富文本）</p>
+            <RichTextEditor v-model="form.detailHtml" placeholder="支持图文混排、字号、列表等内容" />
+          </div>
 
           <div class="space-y-2 sm:col-span-2">
             <label class="block text-sm text-stone-700">
@@ -498,4 +507,3 @@ onUnmounted(() => {
     </ResultState>
   </section>
 </template>
-

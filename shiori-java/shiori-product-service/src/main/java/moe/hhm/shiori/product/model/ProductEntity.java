@@ -6,6 +6,7 @@ public class ProductEntity {
     private Long ownerUserId;
     private String title;
     private String description;
+    private String detailHtml;
     private String coverObjectKey;
     private String categoryCode;
     private String conditionLevel;
@@ -59,6 +60,14 @@ public class ProductEntity {
 
     public void setCoverObjectKey(String coverObjectKey) {
         this.coverObjectKey = coverObjectKey;
+    }
+
+    public String getDetailHtml() {
+        return detailHtml;
+    }
+
+    public void setDetailHtml(String detailHtml) {
+        this.detailHtml = detailHtml;
     }
 
     public String getCategoryCode() {

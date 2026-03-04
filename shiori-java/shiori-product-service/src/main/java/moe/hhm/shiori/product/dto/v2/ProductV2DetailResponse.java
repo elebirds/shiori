@@ -9,6 +9,7 @@ public record ProductV2DetailResponse(
         Long ownerUserId,
         String title,
         String description,
+        String detailHtml,
         String coverObjectKey,
         String coverImageUrl,
         String status,

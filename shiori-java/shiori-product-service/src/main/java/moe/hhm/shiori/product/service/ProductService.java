@@ -138,6 +138,7 @@ public class ProductService {
                 productId,
                 request.title().trim(),
                 request.description(),
+                fullRecord == null ? null : fullRecord.detailHtml(),
                 request.coverObjectKey(),
                 categoryCode,
                 conditionLevel,

@@ -46,6 +46,7 @@ export interface ProductV2DetailResponse {
   ownerUserId: number
   title: string
   description?: string
+  detailHtml?: string
   coverObjectKey?: string
   coverImageUrl?: string
   status: ProductStatus
@@ -86,6 +87,7 @@ export interface SkuInput {
 export interface ProductV2WriteRequest {
   title: string
   description?: string
+  detailHtml?: string
   coverObjectKey?: string
   categoryCode: ProductCategoryCode
   conditionLevel: ProductConditionLevel
