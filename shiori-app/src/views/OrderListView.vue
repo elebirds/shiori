@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, reactive } from 'vue'
 
 import ResultState from '@/components/ResultState.vue'
-import { cancelOrder, listMyOrders, payOrder } from '@/api/order'
+import { cancelOrderV2, confirmReceiptV2, listMyOrdersV2, payOrderV2, type OrderStatus } from '@/api/orderV2'
 import { ApiBizError } from '@/types/result'
 
 const queryClient = useQueryClient()
@@ -14,32 +14,35 @@ const pager = reactive({
 })
 
 const query = useQuery({
-  queryKey: computed(() => ['orders', pager.page, pager.size]),
-  queryFn: () => listMyOrders({ page: pager.page, size: pager.size }),
+  queryKey: computed(() => ['orders-v2', pager.page, pager.size]),
+  queryFn: () => listMyOrdersV2({ page: pager.page, size: pager.size }),
 })
 
 const payMutation = useMutation({
-  mutationFn: (orderNo: string) => payOrder(orderNo, { paymentNo: `web-pay-${Date.now()}` }),
+  mutationFn: (orderNo: string) => payOrderV2(orderNo, { paymentNo: `web-pay-${Date.now()}` }),
   onSuccess: async () => {
-    await queryClient.invalidateQueries({ queryKey: ['orders'] })
+    await queryClient.invalidateQueries({ queryKey: ['orders-v2'] })
   },
 })
 
 const cancelMutation = useMutation({
-  mutationFn: (orderNo: string) => cancelOrder(orderNo, { reason: '用户主动取消' }),
+  mutationFn: (orderNo: string) => cancelOrderV2(orderNo, { reason: '用户主动取消' }),
   onSuccess: async () => {
-    await queryClient.invalidateQueries({ queryKey: ['orders'] })
+    await queryClient.invalidateQueries({ queryKey: ['orders-v2'] })
+  },
+})
+
+const confirmMutation = useMutation({
+  mutationFn: (orderNo: string) => confirmReceiptV2(orderNo, { reason: '买家已收货' }),
+  onSuccess: async () => {
+    await queryClient.invalidateQueries({ queryKey: ['orders-v2'] })
   },
 })
 
 const actionError = computed(() => {
-  if (payMutation.error.value instanceof Error) {
-    return payMutation.error.value.message
-  }
-  if (cancelMutation.error.value instanceof Error) {
-    return cancelMutation.error.value.message
-  }
-  return ''
+  const errors = [payMutation.error.value, cancelMutation.error.value, confirmMutation.error.value]
+  const matched = errors.find((item) => item instanceof Error)
+  return matched instanceof Error ? matched.message : ''
 })
 
 const items = computed(() => query.data.value?.items || [])
@@ -63,6 +66,22 @@ function formatTime(raw?: string): string {
   return parsed.toLocaleString('zh-CN')
 }
 
+function statusClass(status: OrderStatus): string {
+  if (status === 'UNPAID') {
+    return 'bg-amber-100 text-amber-700'
+  }
+  if (status === 'PAID') {
+    return 'bg-sky-100 text-sky-700'
+  }
+  if (status === 'DELIVERING') {
+    return 'bg-indigo-100 text-indigo-700'
+  }
+  if (status === 'FINISHED') {
+    return 'bg-emerald-100 text-emerald-700'
+  }
+  return 'bg-stone-200 text-stone-700'
+}
+
 async function handlePay(orderNo: string): Promise<void> {
   try {
     await payMutation.mutateAsync(orderNo)
@@ -82,13 +101,23 @@ async function handleCancel(orderNo: string): Promise<void> {
     }
   }
 }
+
+async function handleConfirm(orderNo: string): Promise<void> {
+  try {
+    await confirmMutation.mutateAsync(orderNo)
+  } catch (error) {
+    if (error instanceof ApiBizError) {
+      return
+    }
+  }
+}
 </script>
 
 <template>
   <section class="space-y-4">
     <header class="rounded-2xl border border-stone-200 bg-white/90 p-4">
       <h1 class="font-display text-2xl text-stone-900">我的订单</h1>
-      <p class="mt-1 text-sm text-stone-600">支持模拟支付与主动取消，后续可在此扩展履约状态</p>
+      <p class="mt-1 text-sm text-stone-600">支持支付、取消与确认收货（DELIVERING -> FINISHED）</p>
     </header>
 
     <ResultState :loading="query.isLoading.value" :error="errorMessage" :empty="!query.isLoading.value && items.length === 0" empty-text="你还没有订单">
@@ -102,23 +131,14 @@ async function handleCancel(orderNo: string): Promise<void> {
               <p class="mt-1 text-xs text-stone-500">支付时间 {{ formatTime(item.paidAt) }}</p>
             </div>
 
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2">
               <RouterLink
                 :to="`/orders/${item.orderNo}`"
                 class="rounded-lg border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
               >
                 查看详情
               </RouterLink>
-              <span
-                class="rounded-full px-3 py-1 text-xs font-semibold"
-                :class="
-                  item.status === 'PAID'
-                    ? 'bg-emerald-100 text-emerald-700'
-                    : item.status === 'UNPAID'
-                      ? 'bg-amber-100 text-amber-700'
-                      : 'bg-stone-200 text-stone-700'
-                "
-              >
+              <span class="rounded-full px-3 py-1 text-xs font-semibold" :class="statusClass(item.status)">
                 {{ item.status }}
               </span>
 
@@ -140,6 +160,16 @@ async function handleCancel(orderNo: string): Promise<void> {
                 @click="handleCancel(item.orderNo)"
               >
                 取消订单
+              </button>
+
+              <button
+                v-if="item.status === 'DELIVERING'"
+                type="button"
+                class="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-70"
+                :disabled="confirmMutation.isPending.value"
+                @click="handleConfirm(item.orderNo)"
+              >
+                确认收货
               </button>
             </div>
           </div>
@@ -172,3 +202,4 @@ async function handleCancel(orderNo: string): Promise<void> {
     <p v-if="actionError" class="text-sm text-rose-600">{{ actionError }}</p>
   </section>
 </template>
+

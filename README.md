@@ -33,7 +33,7 @@
 通过检查 `affected_rows` 判断是否扣减成功，天然支持多实例并发扣减不超卖。
 
 * **事件驱动与最终一致性（Transactional Outbox + Relay）**
-  订单服务在**同一数据库事务**中写入业务数据与 Outbox 事件（如 `OrderCreated / OrderPaid / OrderCanceled`），避免“写库成功但发消息失败”。
+  订单服务在**同一数据库事务**中写入业务数据与 Outbox 事件（如 `OrderCreated / OrderPaid / OrderCanceled / OrderDelivered / OrderFinished`），避免“写库成功但发消息失败”。
   通过 **Outbox Relay** 可靠投递到 MQ（可重试/可观测），实现最终一致性而不引入重型强事务框架。
 
 * **At-Least-Once 投递语义下的幂等闭环**
@@ -97,6 +97,40 @@
           ├─ 已支付：忽略（幂等）
           └─ 未支付：关单 + 回滚库存 + Outbox(OrderCanceled) → MQ
 ```
+
+---
+
+## 🆕 v0.4-b 商品与订单扩展（`/api/v2`）
+
+### 商品域
+
+1. 新增商品字段：`categoryCode`、`conditionLevel`、`tradeMode`、`campusCode`。
+2. 新增商品查询参数：`categoryCode/conditionLevel/tradeMode/campusCode/sortBy/sortDir`。
+3. 商品列表/详情新增聚合字段：`minPriceCent/maxPriceCent/totalStock`。
+4. 管理端新增批量下架：`POST /api/v2/admin/products/batch-off-shelf`。
+
+### 订单域
+
+1. 卖家工作台接口：
+   1. `GET /api/v2/order/seller/orders`
+   2. `GET /api/v2/order/seller/orders/{orderNo}`
+2. 买家确认收货：
+   1. `POST /api/v2/order/orders/{orderNo}/confirm-receipt`
+3. 履约时间线：
+   1. `GET /api/v2/order/orders/{orderNo}/timeline`
+4. 管理端履约操作：
+   1. `POST /api/v2/admin/orders/{orderNo}/deliver`
+   2. `POST /api/v2/admin/orders/{orderNo}/finish`
+
+### 开关、迁移与指标
+
+1. v2 灰度开关：`feature.api-v2.enabled=true`（Nacos 模板已提供）。
+2. 数据库迁移：
+   1. `shiori-product-service`：`V5__add_product_v2_fields.sql`
+   2. `shiori-order-service`：`V6__add_order_v2_indexes.sql`
+3. 新增指标：
+   1. `shiori_order_transition_total{from,to,source}`
+   2. `shiori_product_query_total{filter_combo}`
 
 ---
 

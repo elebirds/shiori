@@ -7,6 +7,10 @@ public class ProductEntity {
     private String title;
     private String description;
     private String coverObjectKey;
+    private String categoryCode;
+    private String conditionLevel;
+    private String tradeMode;
+    private String campusCode;
     private Integer status;
 
     public Long getId() {
@@ -55,6 +59,38 @@ public class ProductEntity {
 
     public void setCoverObjectKey(String coverObjectKey) {
         this.coverObjectKey = coverObjectKey;
+    }
+
+    public String getCategoryCode() {
+        return categoryCode;
+    }
+
+    public void setCategoryCode(String categoryCode) {
+        this.categoryCode = categoryCode;
+    }
+
+    public String getConditionLevel() {
+        return conditionLevel;
+    }
+
+    public void setConditionLevel(String conditionLevel) {
+        this.conditionLevel = conditionLevel;
+    }
+
+    public String getTradeMode() {
+        return tradeMode;
+    }
+
+    public void setTradeMode(String tradeMode) {
+        this.tradeMode = tradeMode;
+    }
+
+    public String getCampusCode() {
+        return campusCode;
+    }
+
+    public void setCampusCode(String campusCode) {
+        this.campusCode = campusCode;
     }
 
     public Integer getStatus() {

@@ -4,7 +4,15 @@ import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import ResultState from '@/components/ResultState.vue'
-import { listMyProducts, offShelfProduct, publishProduct, type ProductStatus } from '@/api/product'
+import {
+  listMyProductsV2,
+  offShelfProductV2,
+  publishProductV2,
+  type ProductCategoryCode,
+  type ProductConditionLevel,
+  type ProductStatus,
+  type ProductTradeMode,
+} from '@/api/productV2'
 import { ApiBizError } from '@/types/result'
 
 const queryClient = useQueryClient()
@@ -16,30 +24,49 @@ const pager = reactive({
 })
 const keywordInput = ref('')
 const keyword = ref('')
+const campusCodeInput = ref('')
+const campusCode = ref('')
 const status = ref<'ALL' | ProductStatus>('ALL')
+const categoryCode = ref<ProductCategoryCode | ''>('')
+const conditionLevel = ref<ProductConditionLevel | ''>('')
+const tradeMode = ref<ProductTradeMode | ''>('')
 
 const query = useQuery({
-  queryKey: computed(() => ['my-products', pager.page, pager.size, keyword.value, status.value]),
+  queryKey: computed(() => [
+    'my-products-v2',
+    pager.page,
+    pager.size,
+    keyword.value,
+    status.value,
+    categoryCode.value,
+    conditionLevel.value,
+    tradeMode.value,
+    campusCode.value,
+  ]),
   queryFn: () =>
-    listMyProducts({
+    listMyProductsV2({
       page: pager.page,
       size: pager.size,
       keyword: keyword.value || undefined,
       status: status.value === 'ALL' ? undefined : status.value,
+      categoryCode: categoryCode.value || undefined,
+      conditionLevel: conditionLevel.value || undefined,
+      tradeMode: tradeMode.value || undefined,
+      campusCode: campusCode.value || undefined,
     }),
 })
 
 const publishMutation = useMutation({
-  mutationFn: (productId: number) => publishProduct(productId),
+  mutationFn: (productId: number) => publishProductV2(productId),
   onSuccess: async () => {
-    await queryClient.invalidateQueries({ queryKey: ['my-products'] })
+    await queryClient.invalidateQueries({ queryKey: ['my-products-v2'] })
   },
 })
 
 const offShelfMutation = useMutation({
-  mutationFn: (productId: number) => offShelfProduct(productId),
+  mutationFn: (productId: number) => offShelfProductV2(productId),
   onSuccess: async () => {
-    await queryClient.invalidateQueries({ queryKey: ['my-products'] })
+    await queryClient.invalidateQueries({ queryKey: ['my-products-v2'] })
   },
 })
 
@@ -56,6 +83,7 @@ const operateError = computed(() => {
 function applyFilter(): void {
   pager.page = 1
   keyword.value = keywordInput.value.trim()
+  campusCode.value = campusCodeInput.value.trim()
 }
 
 function toEdit(productId: number): void {
@@ -93,7 +121,7 @@ async function handleOffShelf(productId: number): Promise<void> {
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 class="font-display text-2xl text-stone-900">我的商品</h1>
-          <p class="mt-1 text-sm text-stone-600">管理自己发布的商品，支持编辑和上下架。</p>
+          <p class="mt-1 text-sm text-stone-600">支持 v2 字段筛选、编辑和上下架。</p>
         </div>
         <button
           type="button"
@@ -106,12 +134,19 @@ async function handleOffShelf(productId: number): Promise<void> {
     </header>
 
     <section class="rounded-2xl border border-stone-200 bg-white/90 p-4">
-      <div class="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+      <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <input
           v-model="keywordInput"
           type="text"
           class="rounded-xl border border-stone-300 px-3 py-2 text-sm outline-none transition focus:border-amber-500"
           placeholder="按标题/描述搜索"
+          @keyup.enter="applyFilter"
+        />
+        <input
+          v-model="campusCodeInput"
+          type="text"
+          class="rounded-xl border border-stone-300 px-3 py-2 text-sm outline-none transition focus:border-amber-500"
+          placeholder="校区编码"
           @keyup.enter="applyFilter"
         />
         <select
@@ -122,6 +157,35 @@ async function handleOffShelf(productId: number): Promise<void> {
           <option value="DRAFT">草稿</option>
           <option value="ON_SALE">在售</option>
           <option value="OFF_SHELF">已下架</option>
+        </select>
+        <select
+          v-model="categoryCode"
+          class="rounded-xl border border-stone-300 px-3 py-2 text-sm outline-none transition focus:border-amber-500"
+        >
+          <option value="">全部分类</option>
+          <option value="TEXTBOOK">教材</option>
+          <option value="EXAM_MATERIAL">考试资料</option>
+          <option value="NOTE">笔记</option>
+          <option value="OTHER">其他</option>
+        </select>
+        <select
+          v-model="conditionLevel"
+          class="rounded-xl border border-stone-300 px-3 py-2 text-sm outline-none transition focus:border-amber-500"
+        >
+          <option value="">全部成色</option>
+          <option value="NEW">全新</option>
+          <option value="LIKE_NEW">近新</option>
+          <option value="GOOD">良好</option>
+          <option value="FAIR">一般</option>
+        </select>
+        <select
+          v-model="tradeMode"
+          class="rounded-xl border border-stone-300 px-3 py-2 text-sm outline-none transition focus:border-amber-500"
+        >
+          <option value="">全部交易方式</option>
+          <option value="MEETUP">面交</option>
+          <option value="DELIVERY">邮寄</option>
+          <option value="BOTH">均可</option>
         </select>
         <button
           type="button"
@@ -141,6 +205,9 @@ async function handleOffShelf(productId: number): Promise<void> {
               <p class="line-clamp-1 text-base font-semibold text-stone-900">{{ item.title }}</p>
               <p class="mt-1 line-clamp-2 text-sm text-stone-600">{{ item.description || '暂无描述' }}</p>
               <p class="mt-1 text-xs text-stone-500">{{ item.productNo }}</p>
+              <p class="mt-1 text-xs text-stone-500">
+                {{ item.categoryCode }} / {{ item.conditionLevel }} / {{ item.tradeMode }} / {{ item.campusCode }}
+              </p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
               <span
