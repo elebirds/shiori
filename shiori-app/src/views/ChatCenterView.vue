@@ -103,8 +103,8 @@ async function loadOlder(): Promise<void> {
       <p v-if="chatStore.lastError" class="mt-2 text-sm text-rose-600">{{ chatStore.lastError }}</p>
     </header>
 
-    <div class="grid gap-4 lg:grid-cols-[320px_1fr]">
-      <aside class="max-h-[70vh] overflow-auto rounded-2xl border border-stone-200 bg-white/95">
+    <div class="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+      <aside class="h-[60vh] min-h-[420px] max-h-[760px] overflow-auto rounded-2xl border border-stone-200 bg-white/95 lg:h-[70vh]">
         <article
           v-for="item in conversations"
           :key="item.conversationId"
@@ -133,7 +133,7 @@ async function loadOlder(): Promise<void> {
         <div v-if="conversations.length === 0" class="p-6 text-center text-sm text-stone-500">暂无会话</div>
       </aside>
 
-      <section class="flex min-h-[70vh] flex-col rounded-2xl border border-stone-200 bg-white/95">
+      <section class="flex h-[60vh] min-h-[420px] max-h-[760px] flex-col rounded-2xl border border-stone-200 bg-white/95 lg:h-[70vh]">
         <header class="border-b border-stone-100 px-4 py-3">
           <h2 class="text-sm font-semibold text-stone-900">
             {{ activeConversation?.peerProfile?.nickname || (activeConversation ? `用户 ${activeConversation.peerUserId}` : '请选择会话') }}
@@ -141,7 +141,7 @@ async function loadOlder(): Promise<void> {
           <p class="mt-1 text-xs text-stone-500">{{ activeConversation?.listingTitle || '' }}</p>
         </header>
 
-        <div class="flex-1 space-y-3 overflow-auto px-4 py-3">
+        <div class="flex-1 space-y-3 overflow-y-auto px-4 py-3">
           <button
             v-if="activeConversation && canLoadOlder"
             type="button"
