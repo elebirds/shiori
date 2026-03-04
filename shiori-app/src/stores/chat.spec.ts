@@ -132,4 +132,25 @@ describe('chat store', () => {
     expect(chatStore.messagesByConversation[11]).toHaveLength(1)
     expect(chatStore.chatUnreadMessageCount).toBe(1)
   })
+
+  it('should keep optimistic messages in send order', async () => {
+    const authStore = useAuthStore()
+    authStore.setSession({
+      accessToken: 'token',
+      refreshToken: 'refresh',
+      user: { userId: 1001, userNo: 'U1', username: 'buyer', roles: ['USER'] },
+    })
+    const notifyStore = useNotifyStore()
+    notifyStore.registerFrameListener = vi.fn(() => () => {})
+    notifyStore.sendFrame = vi.fn(() => true)
+
+    const chatStore = useChatStore()
+    await chatStore.bootstrap()
+    await chatStore.openConversation(11)
+    await chatStore.sendMessage('第一条')
+    await new Promise((resolve) => setTimeout(resolve, 2))
+    await chatStore.sendMessage('第二条')
+
+    expect(chatStore.activeMessages.map((item) => item.content)).toEqual(['第一条', '第二条'])
+  })
 })

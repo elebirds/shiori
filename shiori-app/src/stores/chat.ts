@@ -298,18 +298,19 @@ export const useChatStore = defineStore('chat', () => {
       return
     }
     const current = messagesByConversation.value[conversationId] || []
+    const nextList = current.map((item) =>
+      item.clientMsgId === clientMsgId
+        ? {
+            ...item,
+            messageId,
+            createdAt: String(frame.createdAt || item.createdAt),
+            status: 'sent',
+          }
+        : item,
+    )
     messagesByConversation.value = {
       ...messagesByConversation.value,
-      [conversationId]: current.map((item) =>
-        item.clientMsgId === clientMsgId
-          ? {
-              ...item,
-              messageId,
-              createdAt: String(frame.createdAt || item.createdAt),
-              status: 'sent',
-            }
-          : item,
-      ),
+      [conversationId]: sortMessages(nextList),
     }
     sendingMap.value = {
       ...sendingMap.value,
@@ -323,23 +324,24 @@ export const useChatStore = defineStore('chat', () => {
       (item) => item.messageId === message.messageId || (message.clientMsgId && item.clientMsgId === message.clientMsgId),
     )
     if (exists) {
+      const nextList = current.map((item) => {
+        if (item.messageId === message.messageId || (message.clientMsgId && item.clientMsgId === message.clientMsgId)) {
+          return {
+            ...item,
+            ...message,
+          }
+        }
+        return item
+      })
       messagesByConversation.value = {
         ...messagesByConversation.value,
-        [conversationId]: current.map((item) => {
-          if (item.messageId === message.messageId || (message.clientMsgId && item.clientMsgId === message.clientMsgId)) {
-            return {
-              ...item,
-              ...message,
-            }
-          }
-          return item
-        }),
+        [conversationId]: sortMessages(nextList),
       }
       return
     }
     messagesByConversation.value = {
       ...messagesByConversation.value,
-      [conversationId]: [...current, message].sort((a, b) => a.messageId - b.messageId),
+      [conversationId]: sortMessages([...current, message]),
     }
   }
 
@@ -459,7 +461,23 @@ export const useChatStore = defineStore('chat', () => {
     for (const item of incoming) {
       merged.set(`${item.messageId}:${item.clientMsgId}`, item)
     }
-    return Array.from(merged.values()).sort((a, b) => a.messageId - b.messageId)
+    return sortMessages(Array.from(merged.values()))
+  }
+
+  function sortMessages(messages: ChatMessageVM[]): ChatMessageVM[] {
+    return messages.slice().sort(compareMessageOrder)
+  }
+
+  function compareMessageOrder(a: ChatMessageVM, b: ChatMessageVM): number {
+    const aTime = Date.parse(a.createdAt)
+    const bTime = Date.parse(b.createdAt)
+    if (Number.isFinite(aTime) && Number.isFinite(bTime) && aTime !== bTime) {
+      return aTime - bTime
+    }
+    if (a.messageId !== b.messageId) {
+      return a.messageId - b.messageId
+    }
+    return a.clientMsgId.localeCompare(b.clientMsgId)
   }
 
   function latestMessageId(conversationId: number): number {
