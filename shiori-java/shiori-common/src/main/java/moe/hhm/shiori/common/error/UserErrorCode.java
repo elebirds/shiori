@@ -13,7 +13,12 @@ public enum UserErrorCode implements ErrorCode {
     ADMIN_MIN_ONE_REQUIRED(30009, "系统至少保留一名启用状态管理员"),
     CANNOT_LOCK_SELF(30010, "不能锁定当前登录账号"),
     USER_NOT_LOCKED(30011, "账号未锁定"),
-    PASSWORD_RESET_INVALID(30012, "重置密码参数不合法");
+    PASSWORD_RESET_INVALID(30012, "重置密码参数不合法"),
+    PROFILE_INVALID(30013, "个人资料参数不合法"),
+    AVATAR_FILE_INVALID(30014, "头像文件不合法"),
+    AVATAR_UPLOAD_FAILED(30015, "头像上传失败"),
+    AVATAR_NOT_FOUND(30016, "头像不存在"),
+    AVATAR_READ_FAILED(30017, "头像读取失败");
 
     private final int code;
     private final String message;

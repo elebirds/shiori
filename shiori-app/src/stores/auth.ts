@@ -16,8 +16,10 @@ import {
   logout,
   refresh,
   register,
+  uploadMyAvatar as uploadMyAvatarApi,
   updateMyProfile as updateMyProfileApi,
   type AuthUserInfo,
+  type AvatarUploadResponse,
   type ChangePasswordRequest,
   type LoginRequest,
   type RegisterRequest,
@@ -139,6 +141,17 @@ export const useAuthStore = defineStore('auth', () => {
     return data
   }
 
+  async function uploadMyAvatar(file: File): Promise<AvatarUploadResponse> {
+    const data = await uploadMyAvatarApi(file)
+    if (profile.value) {
+      profile.value = {
+        ...profile.value,
+        avatarUrl: data.avatarUrl,
+      }
+    }
+    return data
+  }
+
   async function changeMyPassword(payload: ChangePasswordRequest): Promise<void> {
     await changePassword(payload)
     setMustChangePassword(false)
@@ -158,6 +171,7 @@ export const useAuthStore = defineStore('auth', () => {
     logoutSession,
     fetchMyProfile,
     updateMyProfile,
+    uploadMyAvatar,
     changeMyPassword,
     setMustChangePassword,
     syncTokensFromStorage,

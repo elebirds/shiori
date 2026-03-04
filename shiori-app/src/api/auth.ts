@@ -53,12 +53,22 @@ export interface UserProfile {
   userNo: string
   username: string
   nickname: string
+  gender: number
+  birthDate?: string
+  age?: number
+  bio?: string
   avatarUrl?: string
 }
 
 export interface UpdateProfileRequest {
   nickname: string
-  avatarUrl?: string
+  gender: number
+  birthDate?: string
+  bio?: string
+}
+
+export interface AvatarUploadResponse {
+  avatarUrl: string
 }
 
 export interface SimpleSuccessResponse {
@@ -91,4 +101,10 @@ export function getMyProfile(): Promise<UserProfile> {
 
 export function updateMyProfile(payload: UpdateProfileRequest): Promise<UserProfile> {
   return httpPut<UserProfile>('/api/user/me', payload)
+}
+
+export async function uploadMyAvatar(file: File): Promise<AvatarUploadResponse> {
+  const formData = new FormData()
+  formData.append('file', file)
+  return httpPost<AvatarUploadResponse>('/api/user/media/avatar', formData)
 }

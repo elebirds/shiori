@@ -14,6 +14,9 @@ public interface UserProfileMapper {
                    user_no AS userNo,
                    username,
                    nickname,
+                   gender,
+                   birth_date AS birthDate,
+                   bio,
                    avatar_url AS avatarUrl
             FROM u_user
             WHERE id = #{userId}
@@ -25,7 +28,9 @@ public interface UserProfileMapper {
     @Update("""
             UPDATE u_user
             SET nickname = #{nickname},
-                avatar_url = #{avatarUrl},
+                gender = #{gender},
+                birth_date = #{birthDate},
+                bio = #{bio},
                 updated_at = CURRENT_TIMESTAMP(3),
                 version = version + 1
             WHERE id = #{userId}
@@ -33,5 +38,18 @@ public interface UserProfileMapper {
             """)
     int updateProfileByUserId(@Param("userId") Long userId,
                               @Param("nickname") String nickname,
-                              @Param("avatarUrl") String avatarUrl);
+                              @Param("gender") Integer gender,
+                              @Param("birthDate") java.time.LocalDate birthDate,
+                              @Param("bio") String bio);
+
+    @Update("""
+            UPDATE u_user
+            SET avatar_url = #{avatarUrl},
+                updated_at = CURRENT_TIMESTAMP(3),
+                version = version + 1
+            WHERE id = #{userId}
+              AND is_deleted = 0
+            """)
+    int updateAvatarByUserId(@Param("userId") Long userId,
+                             @Param("avatarUrl") String avatarUrl);
 }

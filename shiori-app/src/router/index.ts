@@ -82,6 +82,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/account/security',
+      name: 'account-security',
+      component: () => import('@/views/AccountSecurityView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/notifications',
       name: 'notifications',
       component: () => import('@/views/NotificationCenterView.vue'),
@@ -111,9 +117,9 @@ router.beforeEach((to) => {
     }
   }
 
-  if (loggedIn && mustChangePassword && to.path !== '/profile') {
+  if (loggedIn && mustChangePassword && to.path !== '/account/security') {
     return {
-      path: '/profile',
+      path: '/account/security',
       query: {
         forceChangePassword: '1',
       },
@@ -121,7 +127,7 @@ router.beforeEach((to) => {
   }
 
   if ((to.path === '/login' || to.path === '/register') && loggedIn) {
-    return { path: mustChangePassword ? '/profile' : '/products' }
+    return { path: mustChangePassword ? '/account/security' : '/products' }
   }
 
   return true

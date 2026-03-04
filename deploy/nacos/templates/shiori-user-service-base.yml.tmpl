@@ -39,3 +39,9 @@ user:
     user-status-changed-routing-key: ${USER_STATUS_CHANGED_ROUTING_KEY:user.status.changed}
     user-role-changed-routing-key: ${USER_ROLE_CHANGED_ROUTING_KEY:user.role.changed}
     user-password-reset-routing-key: ${USER_PASSWORD_RESET_ROUTING_KEY:user.password.reset}
+  avatar:
+    storage:
+      endpoint: ${PRODUCT_OSS_ENDPOINT}
+      bucket: ${MINIO_PRODUCT_BUCKET}
+      path-style-access: true
+      public-path-prefix: /api/user/media/avatar/

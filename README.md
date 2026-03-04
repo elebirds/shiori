@@ -446,7 +446,7 @@ export NOTIFY_JWT_ISSUER=shiori
 
 ```bash
 # 未携带 Token，应返回 401（Result.code=20002）
-curl -i http://localhost:8080/api/user/profile
+curl -i http://localhost:8080/api/user/me
 
 # 登录签发（白名单接口，无需 Bearer）
 curl -i -X POST http://localhost:8080/api/user/auth/login \
@@ -464,7 +464,12 @@ curl -i -X POST http://localhost:8080/api/user/auth/refresh \
   -d '{"refreshToken":"<opaque-refresh-token>"}'
 
 # 携带 Access Token 访问受保护路径（通过网关鉴权后再转发）
-curl -i -H "Authorization: Bearer <access-jwt>" http://localhost:8080/api/user/profile
+curl -i -H "Authorization: Bearer <access-jwt>" http://localhost:8080/api/user/me
+
+# 上传头像（用户服务中转到对象存储，不暴露 OSS 连接）
+curl -X POST http://localhost:8080/api/user/media/avatar \
+  -H "Authorization: Bearer <access-jwt>" \
+  -F "file=@./avatar.jpg"
 
 # 商品匿名浏览（无需 Bearer）
 curl -i http://localhost:8080/api/product/products

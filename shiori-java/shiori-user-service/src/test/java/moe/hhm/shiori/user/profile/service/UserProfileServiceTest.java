@@ -1,15 +1,20 @@
 package moe.hhm.shiori.user.profile.service;
 
+import java.time.LocalDate;
 import moe.hhm.shiori.common.exception.BizException;
+import moe.hhm.shiori.user.profile.config.UserAvatarStorageProperties;
+import moe.hhm.shiori.user.profile.dto.AvatarUploadResponse;
 import moe.hhm.shiori.user.profile.dto.UpdateProfileRequest;
 import moe.hhm.shiori.user.profile.dto.UserProfileResponse;
 import moe.hhm.shiori.user.profile.model.UserProfileRecord;
 import moe.hhm.shiori.user.profile.repository.UserProfileMapper;
+import moe.hhm.shiori.user.profile.storage.UserAvatarStorageService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockMultipartFile;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -22,13 +27,31 @@ class UserProfileServiceTest {
     @Mock
     private UserProfileMapper userProfileMapper;
 
-    @InjectMocks
+    @Mock
+    private UserAvatarStorageService userAvatarStorageService;
+
     private UserProfileService userProfileService;
+
+    @BeforeEach
+    void setUp() {
+        UserAvatarStorageProperties avatarStorageProperties = new UserAvatarStorageProperties();
+        avatarStorageProperties.setPublicPathPrefix("/api/user/media/avatar/");
+        userProfileService = new UserProfileService(userProfileMapper, userAvatarStorageService, avatarStorageProperties);
+    }
 
     @Test
     void shouldGetProfile() {
         when(userProfileMapper.findByUserId(1L)).thenReturn(
-                new UserProfileRecord(1L, "U202603030001", "alice", "Alice", "https://img/a.png")
+                new UserProfileRecord(
+                        1L,
+                        "U202603030001",
+                        "alice",
+                        "Alice",
+                        2,
+                        LocalDate.of(2000, 1, 2),
+                        "hello",
+                        "avatar_1_202603_xxx.jpg"
+                )
         );
 
         UserProfileResponse response = userProfileService.getMyProfile(1L);
@@ -36,20 +59,57 @@ class UserProfileServiceTest {
         assertThat(response.userId()).isEqualTo(1L);
         assertThat(response.username()).isEqualTo("alice");
         assertThat(response.nickname()).isEqualTo("Alice");
+        assertThat(response.gender()).isEqualTo(2);
+        assertThat(response.birthDate()).isEqualTo(LocalDate.of(2000, 1, 2));
+        assertThat(response.age()).isNotNull();
+        assertThat(response.avatarUrl()).isEqualTo("/api/user/media/avatar/avatar_1_202603_xxx.jpg");
     }
 
     @Test
     void shouldUpdateProfile() {
+        LocalDate birthDate = LocalDate.of(2001, 6, 1);
         when(userProfileMapper.findByUserId(1L))
-                .thenReturn(new UserProfileRecord(1L, "U202603030001", "alice", "Alice", "https://img/a.png"))
-                .thenReturn(new UserProfileRecord(1L, "U202603030001", "alice", "AliceNew", "https://img/b.png"));
+                .thenReturn(new UserProfileRecord(
+                        1L, "U202603030001", "alice", "Alice", 0, null, null, "avatar_old.jpg"
+                ))
+                .thenReturn(new UserProfileRecord(
+                        1L, "U202603030001", "alice", "AliceNew", 1, birthDate, "new bio", "avatar_old.jpg"
+                ));
 
         UserProfileResponse response = userProfileService.updateMyProfile(
-                1L, new UpdateProfileRequest("AliceNew", "https://img/b.png")
+                1L, new UpdateProfileRequest("AliceNew", 1, birthDate, "  new bio  ")
         );
 
         assertThat(response.nickname()).isEqualTo("AliceNew");
-        verify(userProfileMapper).updateProfileByUserId(1L, "AliceNew", "https://img/b.png");
+        assertThat(response.gender()).isEqualTo(1);
+        assertThat(response.bio()).isEqualTo("new bio");
+        verify(userProfileMapper).updateProfileByUserId(1L, "AliceNew", 1, birthDate, "new bio");
+    }
+
+    @Test
+    void shouldUploadAvatar() {
+        when(userProfileMapper.findByUserId(1L)).thenReturn(new UserProfileRecord(
+                1L, "U202603030001", "alice", "Alice", 0, null, null, null
+        ));
+        when(userAvatarStorageService.uploadAvatar(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.any()))
+                .thenReturn("avatar_1_202603_abc.jpg");
+
+        MockMultipartFile file = new MockMultipartFile("file", "avatar.jpg", "image/jpeg", new byte[]{1, 2, 3});
+        AvatarUploadResponse response = userProfileService.uploadMyAvatar(1L, file);
+
+        assertThat(response.avatarUrl()).isEqualTo("/api/user/media/avatar/avatar_1_202603_abc.jpg");
+        verify(userProfileMapper).updateAvatarByUserId(1L, "avatar_1_202603_abc.jpg");
+    }
+
+    @Test
+    void shouldRejectInvalidGender() {
+        when(userProfileMapper.findByUserId(1L)).thenReturn(
+                new UserProfileRecord(1L, "U202603030001", "alice", "Alice", 0, null, null, null)
+        );
+
+        assertThatThrownBy(() -> userProfileService.updateMyProfile(
+                1L, new UpdateProfileRequest("Alice", 8, null, null)
+        )).isInstanceOf(BizException.class);
     }
 
     @Test

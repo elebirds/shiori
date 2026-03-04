@@ -39,3 +39,14 @@ user:
     user-status-changed-routing-key: ${USER_STATUS_CHANGED_ROUTING_KEY:user.status.changed}
     user-role-changed-routing-key: ${USER_ROLE_CHANGED_ROUTING_KEY:user.role.changed}
     user-password-reset-routing-key: ${USER_PASSWORD_RESET_ROUTING_KEY:user.password.reset}
+  avatar:
+    storage:
+      enabled: ${USER_AVATAR_STORAGE_ENABLED:true}
+      endpoint: ${USER_AVATAR_STORAGE_ENDPOINT:http://localhost:9000}
+      region: ${USER_AVATAR_STORAGE_REGION:us-east-1}
+      access-key: ${USER_AVATAR_STORAGE_ACCESS_KEY:shiori}
+      secret-key: ${USER_AVATAR_STORAGE_SECRET_KEY:shiori-minio-secret}
+      bucket: ${USER_AVATAR_STORAGE_BUCKET:shiori-user-avatar}
+      path-style-access: ${USER_AVATAR_STORAGE_PATH_STYLE:true}
+      max-file-size-bytes: ${USER_AVATAR_MAX_FILE_SIZE_BYTES:2097152}
+      public-path-prefix: ${USER_AVATAR_PUBLIC_PATH_PREFIX:/api/user/media/avatar/}
