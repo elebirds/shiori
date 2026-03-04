@@ -62,6 +62,10 @@ spring:
               uri: lb://shiori-order-service
               predicates:
                 - Path=/api/v2/admin/orders/**
+            - id: notify-service
+              uri: ${notify.base-url:http://shiori-notify-service:8090}
+              predicates:
+                - Path=/api/notify/**
 
 security:
   auth:
