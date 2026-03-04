@@ -75,6 +75,19 @@ class GatewaySecurityIntegrationTest {
     }
 
     @Test
+    void shouldReturn403WhenNoAdminRoleOnV2AdminPath() throws Exception {
+        String token = createToken("u1001", List.of("USER"));
+        webTestClient().get()
+                .uri("/api/v2/admin/dashboard")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .exchange()
+                .expectStatus().isForbidden()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo(20003)
+                .jsonPath("$.message").isEqualTo("网关无权限访问");
+    }
+
+    @Test
     void shouldPassSecurityWhenTokenValid() throws Exception {
         String token = createToken("u1001", List.of("USER"));
         HttpStatusCode status = webTestClient().get()

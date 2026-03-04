@@ -55,7 +55,7 @@ public class GatewaySecurityConfiguration {
                     if (anonymousGetPaths.length > 0) {
                         authorize.pathMatchers(HttpMethod.GET, anonymousGetPaths).permitAll();
                     }
-                    authorize.pathMatchers("/api/admin/**").hasRole("ADMIN")
+                    authorize.pathMatchers("/api/admin/**", "/api/v2/admin/**").hasRole("ADMIN")
                             .pathMatchers("/api/**").authenticated()
                             .anyExchange().permitAll();
                 })

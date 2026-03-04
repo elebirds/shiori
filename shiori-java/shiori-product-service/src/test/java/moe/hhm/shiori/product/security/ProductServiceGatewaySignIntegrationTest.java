@@ -69,6 +69,21 @@ class ProductServiceGatewaySignIntegrationTest {
     }
 
     @Test
+    void shouldReturn403WhenUserAccessV2AdminPath() throws Exception {
+        String userId = "u1001";
+        String roles = "ROLE_USER";
+        String ts = String.valueOf(System.currentTimeMillis());
+        String nonce = "nonce-admin-v2";
+        String sign = sign("GET", "/api/v2/admin/demo", null, userId, roles, ts, nonce);
+        HttpHeaders headers = signedHeaders(userId, roles, ts, nonce, sign);
+
+        mockMvc.perform(get("/api/v2/admin/demo")
+                        .headers(headers))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(10004));
+    }
+
+    @Test
     void shouldPassSecurityChainWithValidSign() throws Exception {
         String userId = "u1001";
         String roles = "ROLE_USER";

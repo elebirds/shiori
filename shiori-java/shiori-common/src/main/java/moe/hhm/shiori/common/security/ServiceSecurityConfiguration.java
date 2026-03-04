@@ -59,7 +59,7 @@ public class ServiceSecurityConfiguration {
                     if (anonymousGetPaths.length > 0) {
                         auth.requestMatchers(HttpMethod.GET, anonymousGetPaths).permitAll();
                     }
-                    auth.requestMatchers("/api/admin/**").hasRole("ADMIN")
+                    auth.requestMatchers("/api/admin/**", "/api/v2/admin/**").hasRole("ADMIN")
                             .requestMatchers("/api/**").authenticated()
                             .anyRequest().permitAll();
                 })
