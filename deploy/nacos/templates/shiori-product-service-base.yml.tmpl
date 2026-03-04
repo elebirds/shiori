@@ -19,6 +19,12 @@ feature:
   api-v2:
     enabled: true
 
+chat:
+  ticket:
+    issuer: ${CHAT_TICKET_ISSUER}
+    ttl-seconds: ${CHAT_TICKET_TTL_SECONDS}
+    kid: ${CHAT_TICKET_KID}
+
 storage:
   oss:
     enabled: true

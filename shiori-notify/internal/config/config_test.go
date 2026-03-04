@@ -31,6 +31,15 @@ func TestLoadDefaults(t *testing.T) {
 	t.Setenv("NOTIFY_MYSQL_MAX_OPEN_CONNS", "")
 	t.Setenv("NOTIFY_MYSQL_MAX_IDLE_CONNS", "")
 	t.Setenv("NOTIFY_MYSQL_CONN_MAX_LIFETIME", "")
+	t.Setenv("NOTIFY_WS_PATH", "")
+	t.Setenv("NOTIFY_CHAT_ENABLED", "")
+	t.Setenv("NOTIFY_CHAT_DEFAULT_LIMIT", "")
+	t.Setenv("NOTIFY_CHAT_MAX_LIMIT", "")
+	t.Setenv("NOTIFY_CHAT_TICKET_ISSUER", "")
+	t.Setenv("NOTIFY_CHAT_TICKET_PUBLIC_KEY_PEM_BASE64", "")
+	t.Setenv("NOTIFY_CHAT_MQ_ENABLED", "")
+	t.Setenv("NOTIFY_CHAT_MQ_EXCHANGE", "")
+	t.Setenv("NOTIFY_INSTANCE_ID", "")
 
 	cfg := Load()
 	if cfg.HTTPAddr != defaultHTTPAddr {
@@ -90,6 +99,30 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.MySQLConnMaxLifetime != defaultMySQLConnMaxLifetime {
 		t.Fatalf("unexpected default MySQLConnMaxLifetime: %s", cfg.MySQLConnMaxLifetime)
 	}
+	if cfg.WSPath != defaultWSPath {
+		t.Fatalf("unexpected default WSPath: %s", cfg.WSPath)
+	}
+	if cfg.ChatEnabled != defaultChatEnabled {
+		t.Fatalf("unexpected default ChatEnabled: %t", cfg.ChatEnabled)
+	}
+	if cfg.ChatDefaultLimit != defaultChatPageLimit {
+		t.Fatalf("unexpected default ChatDefaultLimit: %d", cfg.ChatDefaultLimit)
+	}
+	if cfg.ChatMaxLimit != defaultChatMaxPageLimit {
+		t.Fatalf("unexpected default ChatMaxLimit: %d", cfg.ChatMaxLimit)
+	}
+	if cfg.ChatTicketIssuer != defaultChatTicketIssuer {
+		t.Fatalf("unexpected default ChatTicketIssuer: %s", cfg.ChatTicketIssuer)
+	}
+	if cfg.ChatMQEnabled != defaultChatMQEnabled {
+		t.Fatalf("unexpected default ChatMQEnabled: %t", cfg.ChatMQEnabled)
+	}
+	if cfg.ChatMQExchange != defaultChatMQExchange {
+		t.Fatalf("unexpected default ChatMQExchange: %s", cfg.ChatMQExchange)
+	}
+	if cfg.InstanceID == "" {
+		t.Fatalf("unexpected empty default InstanceID")
+	}
 }
 
 func TestLoadOverrideAndFallback(t *testing.T) {
@@ -114,6 +147,15 @@ func TestLoadOverrideAndFallback(t *testing.T) {
 	t.Setenv("NOTIFY_MYSQL_MAX_OPEN_CONNS", "30")
 	t.Setenv("NOTIFY_MYSQL_MAX_IDLE_CONNS", "15")
 	t.Setenv("NOTIFY_MYSQL_CONN_MAX_LIFETIME", "1h")
+	t.Setenv("NOTIFY_WS_PATH", "/socket")
+	t.Setenv("NOTIFY_CHAT_ENABLED", "true")
+	t.Setenv("NOTIFY_CHAT_DEFAULT_LIMIT", "30")
+	t.Setenv("NOTIFY_CHAT_MAX_LIMIT", "80")
+	t.Setenv("NOTIFY_CHAT_TICKET_ISSUER", "chat-issuer")
+	t.Setenv("NOTIFY_CHAT_TICKET_PUBLIC_KEY_PEM_BASE64", "public-key")
+	t.Setenv("NOTIFY_CHAT_MQ_ENABLED", "false")
+	t.Setenv("NOTIFY_CHAT_MQ_EXCHANGE", "chat-ex")
+	t.Setenv("NOTIFY_INSTANCE_ID", "instance-1")
 
 	cfg := Load()
 
@@ -185,6 +227,33 @@ func TestLoadOverrideAndFallback(t *testing.T) {
 	}
 	if cfg.MySQLConnMaxLifetime != time.Hour {
 		t.Fatalf("unexpected MySQLConnMaxLifetime: %s", cfg.MySQLConnMaxLifetime)
+	}
+	if cfg.WSPath != "/socket" {
+		t.Fatalf("unexpected WSPath: %s", cfg.WSPath)
+	}
+	if !cfg.ChatEnabled {
+		t.Fatalf("unexpected ChatEnabled: %t", cfg.ChatEnabled)
+	}
+	if cfg.ChatDefaultLimit != 30 {
+		t.Fatalf("unexpected ChatDefaultLimit: %d", cfg.ChatDefaultLimit)
+	}
+	if cfg.ChatMaxLimit != 80 {
+		t.Fatalf("unexpected ChatMaxLimit: %d", cfg.ChatMaxLimit)
+	}
+	if cfg.ChatTicketIssuer != "chat-issuer" {
+		t.Fatalf("unexpected ChatTicketIssuer: %s", cfg.ChatTicketIssuer)
+	}
+	if cfg.ChatTicketPublicKey != "public-key" {
+		t.Fatalf("unexpected ChatTicketPublicKey: %s", cfg.ChatTicketPublicKey)
+	}
+	if cfg.ChatMQEnabled {
+		t.Fatalf("unexpected ChatMQEnabled: %t", cfg.ChatMQEnabled)
+	}
+	if cfg.ChatMQExchange != "chat-ex" {
+		t.Fatalf("unexpected ChatMQExchange: %s", cfg.ChatMQExchange)
+	}
+	if cfg.InstanceID != "instance-1" {
+		t.Fatalf("unexpected InstanceID: %s", cfg.InstanceID)
 	}
 }
 

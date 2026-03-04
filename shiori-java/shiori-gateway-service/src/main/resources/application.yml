@@ -66,6 +66,14 @@ spring:
               uri: ${notify.base-url:http://shiori-notify-service:8090}
               predicates:
                 - Path=/api/notify/**
+            - id: chat-service
+              uri: ${notify.base-url:http://shiori-notify-service:8090}
+              predicates:
+                - Path=/api/chat/**
+            - id: notify-ws
+              uri: ${notify.ws-base-url:ws://shiori-notify-service:8090}
+              predicates:
+                - Path=/ws
 
 security:
   auth:

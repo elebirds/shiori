@@ -119,6 +119,7 @@ services:
       USER_RMQ_USERNAME: ${USER_RMQ_USERNAME:?missing}
       USER_RMQ_PASSWORD: ${USER_RMQ_PASSWORD:?missing}
       NOTIFY_BASE_URL: ${NOTIFY_BASE_URL_DOCKER:-http://shiori-notify-service:8090}
+      NOTIFY_WS_BASE_URL: ${NOTIFY_WS_BASE_URL_DOCKER:-ws://shiori-notify-service:8090}
       PRODUCT_OSS_ENDPOINT: ${PRODUCT_OSS_ENDPOINT_DOCKER:-http://minio:9000}
       ORDER_PRODUCT_SERVICE_BASE_URL: ${ORDER_PRODUCT_SERVICE_BASE_URL_DOCKER:-http://shiori-product-service}
       MINIO_PRODUCT_BUCKET: ${MINIO_PRODUCT_BUCKET:-shiori-product}
@@ -126,6 +127,10 @@ services:
       MINIO_PRODUCT_SECRET_KEY: ${MINIO_PRODUCT_SECRET_KEY:?missing}
       JWT_HMAC_SECRET: ${JWT_HMAC_SECRET:?missing}
       GATEWAY_SIGN_SECRET: ${GATEWAY_SIGN_SECRET:?missing}
+      CHAT_TICKET_ISSUER: ${CHAT_TICKET_ISSUER:-shiori-chat-ticket}
+      CHAT_TICKET_TTL_SECONDS: ${CHAT_TICKET_TTL_SECONDS:-300}
+      CHAT_TICKET_KID: ${CHAT_TICKET_KID:-chat-ticket-kid}
+      CHAT_TICKET_PRIVATE_KEY_PEM_BASE64: ${CHAT_TICKET_PRIVATE_KEY_PEM_BASE64:-}
     volumes:
       - ./nacos:/deploy/nacos:ro
     entrypoint: ["/bin/sh", "/deploy/nacos/import-nacos-configs.sh"]
@@ -168,6 +173,7 @@ services:
       USER_RMQ_USERNAME: ${USER_RMQ_USERNAME:?missing}
       USER_RMQ_PASSWORD: ${USER_RMQ_PASSWORD:?missing}
       NOTIFY_BASE_URL: ${NOTIFY_BASE_URL_LOCAL:-http://127.0.0.1:8090}
+      NOTIFY_WS_BASE_URL: ${NOTIFY_WS_BASE_URL_LOCAL:-ws://127.0.0.1:8090}
       PRODUCT_OSS_ENDPOINT: ${PRODUCT_OSS_ENDPOINT_LOCAL:-http://127.0.0.1:9000}
       ORDER_PRODUCT_SERVICE_BASE_URL: ${ORDER_PRODUCT_SERVICE_BASE_URL_LOCAL:-http://shiori-product-service}
       MINIO_PRODUCT_BUCKET: ${MINIO_PRODUCT_BUCKET:-shiori-product}
@@ -175,6 +181,10 @@ services:
       MINIO_PRODUCT_SECRET_KEY: ${MINIO_PRODUCT_SECRET_KEY:?missing}
       JWT_HMAC_SECRET: ${JWT_HMAC_SECRET:?missing}
       GATEWAY_SIGN_SECRET: ${GATEWAY_SIGN_SECRET:?missing}
+      CHAT_TICKET_ISSUER: ${CHAT_TICKET_ISSUER:-shiori-chat-ticket}
+      CHAT_TICKET_TTL_SECONDS: ${CHAT_TICKET_TTL_SECONDS:-300}
+      CHAT_TICKET_KID: ${CHAT_TICKET_KID:-chat-ticket-kid}
+      CHAT_TICKET_PRIVATE_KEY_PEM_BASE64: ${CHAT_TICKET_PRIVATE_KEY_PEM_BASE64:-}
     volumes:
       - ./nacos:/deploy/nacos:ro
     entrypoint: ["/bin/sh", "/deploy/nacos/import-nacos-configs.sh"]
@@ -394,6 +404,15 @@ services:
       NOTIFY_AUTH_ENABLED: "true"
       NOTIFY_JWT_HMAC_SECRET: ${NOTIFY_JWT_HMAC_SECRET:?missing}
       NOTIFY_JWT_ISSUER: ${NOTIFY_JWT_ISSUER:-shiori}
+      NOTIFY_WS_PATH: ${NOTIFY_WS_PATH:-/ws}
+      NOTIFY_CHAT_ENABLED: ${NOTIFY_CHAT_ENABLED:-false}
+      NOTIFY_CHAT_DEFAULT_LIMIT: ${NOTIFY_CHAT_DEFAULT_LIMIT:-20}
+      NOTIFY_CHAT_MAX_LIMIT: ${NOTIFY_CHAT_MAX_LIMIT:-100}
+      NOTIFY_CHAT_TICKET_ISSUER: ${CHAT_TICKET_ISSUER:-shiori-chat-ticket}
+      NOTIFY_CHAT_TICKET_PUBLIC_KEY_PEM_BASE64: ${NOTIFY_CHAT_TICKET_PUBLIC_KEY_PEM_BASE64:-}
+      NOTIFY_CHAT_MQ_ENABLED: ${NOTIFY_CHAT_MQ_ENABLED:-true}
+      NOTIFY_CHAT_MQ_EXCHANGE: ${NOTIFY_CHAT_MQ_EXCHANGE:-shiori.chat.event}
+      NOTIFY_INSTANCE_ID: ${NOTIFY_INSTANCE_ID:-}
       RABBITMQ_ADDR: amqp://${NOTIFY_RMQ_USERNAME:?missing}:${NOTIFY_RMQ_PASSWORD:?missing}@rabbitmq:5672/
       RABBITMQ_EXCHANGES: shiori.order.event,shiori.user.event
       RABBITMQ_ROUTING_KEYS: order.created,order.paid,order.canceled,order.delivered,order.finished,user.status.changed,user.role.changed,user.password.reset

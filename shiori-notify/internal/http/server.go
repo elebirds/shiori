@@ -5,9 +5,11 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/hhm/shiori/shiori-notify/internal/chat"
 	notifyauth "github.com/hhm/shiori/shiori-notify/internal/auth"
 	"github.com/hhm/shiori/shiori-notify/internal/config"
 	"github.com/hhm/shiori/shiori-notify/internal/metrics"
@@ -21,6 +23,8 @@ type Server struct {
 	hub        *ws.Hub
 	eventStore store.EventStore
 	auth       *notifyauth.JWTVerifier
+	chat       *chat.Service
+	chatMQ     chat.Broadcaster
 	logger     *zerolog.Logger
 	engine     *gin.Engine
 }
@@ -50,6 +54,12 @@ func NewServer(
 		engine:     engine,
 	}
 	s.registerRoutes()
+	return s
+}
+
+func (s *Server) WithChat(chatService *chat.Service, broadcaster chat.Broadcaster) *Server {
+	s.chat = chatService
+	s.chatMQ = broadcaster
 	return s
 }
 
@@ -87,8 +97,16 @@ func (s *Server) Run(ctx context.Context) error {
 }
 
 func (s *Server) registerRoutes() {
+	wsPath := strings.TrimSpace(s.cfg.WSPath)
+	if wsPath == "" {
+		wsPath = "/ws"
+	}
+	if !strings.HasPrefix(wsPath, "/") {
+		wsPath = "/" + wsPath
+	}
+
 	s.engine.GET("/healthz", s.handleHealth)
-	s.engine.GET("/ws", s.handleWS)
+	s.engine.GET(wsPath, s.handleWS)
 
 	notifyGroup := s.engine.Group("/api/notify")
 	{
@@ -96,6 +114,13 @@ func (s *Server) registerRoutes() {
 		notifyGroup.POST("/events/:eventId/read", s.handleMarkRead)
 		notifyGroup.POST("/events/read-all", s.handleMarkAllRead)
 		notifyGroup.GET("/summary", s.handleSummary)
+	}
+
+	chatGroup := s.engine.Group("/api/chat")
+	{
+		chatGroup.GET("/conversations", s.handleListConversations)
+		chatGroup.GET("/conversations/:conversationId/messages", s.handleListMessages)
+		chatGroup.POST("/conversations/:conversationId/read", s.handleReadConversation)
 	}
 
 	if s.cfg.MetricsEnabled {

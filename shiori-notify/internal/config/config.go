@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -26,6 +27,13 @@ const (
 	defaultJWTIssuer         = "shiori"
 	defaultMySQLMaxOpenConns = 20
 	defaultMySQLMaxIdleConns = 10
+	defaultWSPath            = "/ws"
+	defaultChatEnabled       = false
+	defaultChatPageLimit     = 20
+	defaultChatMaxPageLimit  = 100
+	defaultChatTicketIssuer  = "shiori-chat-ticket"
+	defaultChatMQEnabled     = true
+	defaultChatMQExchange    = "shiori.chat.event"
 )
 
 var (
@@ -58,6 +66,15 @@ type Config struct {
 	MySQLMaxOpenConns    int
 	MySQLMaxIdleConns    int
 	MySQLConnMaxLifetime time.Duration
+	WSPath               string
+	ChatEnabled          bool
+	ChatDefaultLimit     int
+	ChatMaxLimit         int
+	ChatTicketIssuer     string
+	ChatTicketPublicKey  string
+	ChatMQEnabled        bool
+	ChatMQExchange       string
+	InstanceID           string
 }
 
 func Load() Config {
@@ -104,6 +121,15 @@ func Load() Config {
 		MySQLMaxOpenConns:    parseIntOrDefault("NOTIFY_MYSQL_MAX_OPEN_CONNS", defaultMySQLMaxOpenConns),
 		MySQLMaxIdleConns:    parseIntOrDefault("NOTIFY_MYSQL_MAX_IDLE_CONNS", defaultMySQLMaxIdleConns),
 		MySQLConnMaxLifetime: parseDurationOrDefault("NOTIFY_MYSQL_CONN_MAX_LIFETIME", defaultMySQLConnMaxLifetime),
+		WSPath:               envOrDefault("NOTIFY_WS_PATH", defaultWSPath),
+		ChatEnabled:          parseBoolOrDefault("NOTIFY_CHAT_ENABLED", defaultChatEnabled),
+		ChatDefaultLimit:     parseIntOrDefault("NOTIFY_CHAT_DEFAULT_LIMIT", defaultChatPageLimit),
+		ChatMaxLimit:         parseIntOrDefault("NOTIFY_CHAT_MAX_LIMIT", defaultChatMaxPageLimit),
+		ChatTicketIssuer:     envOrDefault("NOTIFY_CHAT_TICKET_ISSUER", defaultChatTicketIssuer),
+		ChatTicketPublicKey:  envOrDefault("NOTIFY_CHAT_TICKET_PUBLIC_KEY_PEM_BASE64", ""),
+		ChatMQEnabled:        parseBoolOrDefault("NOTIFY_CHAT_MQ_ENABLED", defaultChatMQEnabled),
+		ChatMQExchange:       envOrDefault("NOTIFY_CHAT_MQ_EXCHANGE", defaultChatMQExchange),
+		InstanceID:           envOrDefault("NOTIFY_INSTANCE_ID", defaultInstanceID()),
 	}
 }
 
@@ -182,4 +208,12 @@ func parseCSV(raw string) []string {
 		result = append(result, normalized)
 	}
 	return result
+}
+
+func defaultInstanceID() string {
+	hostname, err := os.Hostname()
+	if err != nil || strings.TrimSpace(hostname) == "" {
+		hostname = "notify"
+	}
+	return fmt.Sprintf("%s-%d", hostname, os.Getpid())
 }
