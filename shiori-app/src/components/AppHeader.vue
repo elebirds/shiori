@@ -212,7 +212,14 @@ onBeforeUnmount(() => {
               class="block px-3 py-2 text-sm text-stone-700 transition hover:bg-stone-100"
               @click="closeDropdown"
             >
-              个人资料设置
+              个人中心
+            </RouterLink>
+            <RouterLink
+              to="/profile/edit"
+              class="block px-3 py-2 text-sm text-stone-700 transition hover:bg-stone-100"
+              @click="closeDropdown"
+            >
+              编辑资料
             </RouterLink>
             <RouterLink
               to="/notifications"

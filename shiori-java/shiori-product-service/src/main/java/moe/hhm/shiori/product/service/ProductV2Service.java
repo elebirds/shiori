@@ -123,6 +123,41 @@ public class ProductV2Service {
         return new ProductV2PageResponse(total, normalizedPage, normalizedSize, items);
     }
 
+    public ProductV2PageResponse listOnSaleProductsByOwner(Long ownerUserId,
+                                                            String keyword,
+                                                            String categoryCode,
+                                                            String conditionLevel,
+                                                            String tradeMode,
+                                                            String campusCode,
+                                                            String sortBy,
+                                                            String sortDir,
+                                                            int page,
+                                                            int size) {
+        int normalizedPage = normalizePage(page);
+        int normalizedSize = normalizeSize(size);
+        int offset = (normalizedPage - 1) * normalizedSize;
+        String normalizedCategory = normalizeCategory(categoryCode, false);
+        String normalizedCondition = normalizeCondition(conditionLevel, false);
+        String normalizedTradeMode = normalizeTradeMode(tradeMode, false);
+        String normalizedCampusCode = normalizeCampusCode(campusCode, false);
+        String normalizedSortBy = normalizeSortBy(sortBy);
+        String normalizedSortDir = normalizeSortDir(sortDir);
+        int onSaleStatus = ProductStatus.ON_SALE.getCode();
+
+        long total = productMapper.countProductsByOwnerV2(ownerUserId, keyword, onSaleStatus, normalizedCategory,
+                normalizedCondition, normalizedTradeMode, normalizedCampusCode);
+        List<ProductV2Record> records = productMapper.listProductsByOwnerV2(ownerUserId, keyword, onSaleStatus,
+                normalizedCategory, normalizedCondition, normalizedTradeMode, normalizedCampusCode,
+                normalizedSortBy, normalizedSortDir, normalizedSize, offset);
+        if (records == null) {
+            records = List.of();
+        }
+        List<ProductV2SummaryResponse> items = records.stream().map(this::toSummaryResponse).toList();
+        productMetrics.incQuery(buildFilterCombo(keyword, normalizedCategory, normalizedCondition, normalizedTradeMode,
+                normalizedCampusCode, normalizedSortBy));
+        return new ProductV2PageResponse(total, normalizedPage, normalizedSize, items);
+    }
+
     public ProductV2PageResponse listProductsForAdmin(String keyword,
                                                       String status,
                                                       Long ownerUserId,

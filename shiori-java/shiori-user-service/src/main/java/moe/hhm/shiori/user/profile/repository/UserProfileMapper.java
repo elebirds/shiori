@@ -25,6 +25,22 @@ public interface UserProfileMapper {
             """)
     UserProfileRecord findByUserId(@Param("userId") Long userId);
 
+    @Select("""
+            SELECT id AS userId,
+                   user_no AS userNo,
+                   username,
+                   nickname,
+                   gender,
+                   birth_date AS birthDate,
+                   bio,
+                   avatar_url AS avatarUrl
+            FROM u_user
+            WHERE user_no = #{userNo}
+              AND is_deleted = 0
+            LIMIT 1
+            """)
+    UserProfileRecord findByUserNo(@Param("userNo") String userNo);
+
     @Update("""
             UPDATE u_user
             SET nickname = #{nickname},

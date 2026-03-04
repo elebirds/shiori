@@ -1,9 +1,12 @@
 package moe.hhm.shiori.user.profile.controller;
 
 import java.time.LocalDate;
+import moe.hhm.shiori.common.error.UserErrorCode;
+import moe.hhm.shiori.common.exception.BizException;
 import moe.hhm.shiori.common.mvc.GlobalExceptionHandler;
 import moe.hhm.shiori.common.mvc.ResultResponseBodyAdvice;
 import moe.hhm.shiori.user.profile.dto.AvatarUploadResponse;
+import moe.hhm.shiori.user.profile.dto.PublicUserProfileResponse;
 import moe.hhm.shiori.user.profile.dto.UpdateProfileRequest;
 import moe.hhm.shiori.user.profile.dto.UserProfileResponse;
 import moe.hhm.shiori.user.profile.service.UserProfileService;
@@ -12,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -110,6 +114,40 @@ class UserProfileControllerMvcTest {
                 .andExpect(jsonPath("$.data.bio").value("new bio"));
 
         verify(userProfileService).updateMyProfile(1L, request);
+    }
+
+    @Test
+    void shouldGetPublicProfileByUserNo() throws Exception {
+        when(userProfileService.getProfileByUserNo("U202603030001")).thenReturn(
+                new PublicUserProfileResponse(
+                        1L,
+                        "U202603030001",
+                        "alice",
+                        "Alice",
+                        "/api/user/media/avatar/avatar_1_202603_abc.jpg",
+                        2,
+                        26,
+                        "hello"
+                )
+        );
+
+        mockMvc.perform(get("/api/user/profiles/U202603030001"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.userNo").value("U202603030001"))
+                .andExpect(jsonPath("$.data.avatarUrl").value("/api/user/media/avatar/avatar_1_202603_abc.jpg"));
+
+        verify(userProfileService).getProfileByUserNo("U202603030001");
+    }
+
+    @Test
+    void shouldReturn404WhenPublicProfileMissing() throws Exception {
+        when(userProfileService.getProfileByUserNo("U404"))
+                .thenThrow(new BizException(UserErrorCode.USER_NOT_FOUND, HttpStatus.NOT_FOUND));
+
+        mockMvc.perform(get("/api/user/profiles/U404"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(30000));
     }
 
     @Test

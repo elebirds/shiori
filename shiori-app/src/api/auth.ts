@@ -60,6 +60,17 @@ export interface UserProfile {
   avatarUrl?: string
 }
 
+export interface PublicUserProfile {
+  userId: number
+  userNo: string
+  username: string
+  nickname: string
+  avatarUrl?: string
+  gender: number
+  age?: number
+  bio?: string
+}
+
 export interface UpdateProfileRequest {
   nickname: string
   gender: number
@@ -97,6 +108,10 @@ export function changePassword(payload: ChangePasswordRequest): Promise<SimpleSu
 
 export function getMyProfile(): Promise<UserProfile> {
   return httpGet<UserProfile>('/api/user/me')
+}
+
+export function getUserProfileByUserNo(userNo: string): Promise<PublicUserProfile> {
+  return httpGet<PublicUserProfile>(`/api/user/profiles/${encodeURIComponent(userNo)}`)
 }
 
 export function updateMyProfile(payload: UpdateProfileRequest): Promise<UserProfile> {

@@ -34,7 +34,7 @@ class GatewaySecurityIntegrationTest {
     @Test
     void shouldReturn401WhenNoToken() {
         webTestClient().get()
-                .uri("/api/user/profile")
+                .uri("/api/user/me")
                 .exchange()
                 .expectStatus().isUnauthorized()
                 .expectBody()
@@ -52,7 +52,7 @@ class GatewaySecurityIntegrationTest {
     @Test
     void shouldReturn401WhenTokenInvalid() {
         webTestClient().get()
-                .uri("/api/user/profile")
+                .uri("/api/user/me")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer invalid-token")
                 .exchange()
                 .expectStatus().isUnauthorized()
@@ -91,7 +91,7 @@ class GatewaySecurityIntegrationTest {
     void shouldPassSecurityWhenTokenValid() throws Exception {
         String token = createToken("u1001", List.of("USER"));
         HttpStatusCode status = webTestClient().get()
-                .uri("/api/user/profile")
+                .uri("/api/user/me")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                 .exchange()
                 .returnResult(String.class)
@@ -161,6 +161,42 @@ class GatewaySecurityIntegrationTest {
     void shouldAllowAnonymousOnProductGetPath() {
         HttpStatusCode status = webTestClient().get()
                 .uri("/api/product/products")
+                .exchange()
+                .returnResult(String.class)
+                .getStatus();
+
+        assertThat(status.value()).isNotEqualTo(401);
+        assertThat(status.value()).isNotEqualTo(403);
+    }
+
+    @Test
+    void shouldAllowAnonymousOnPublicUserProfilePath() {
+        HttpStatusCode status = webTestClient().get()
+                .uri("/api/user/profiles/U202603030001")
+                .exchange()
+                .returnResult(String.class)
+                .getStatus();
+
+        assertThat(status.value()).isNotEqualTo(401);
+        assertThat(status.value()).isNotEqualTo(403);
+    }
+
+    @Test
+    void shouldAllowAnonymousOnPublicAvatarPath() {
+        HttpStatusCode status = webTestClient().get()
+                .uri("/api/user/media/avatar/avatar_1_202603_abc.jpg")
+                .exchange()
+                .returnResult(String.class)
+                .getStatus();
+
+        assertThat(status.value()).isNotEqualTo(401);
+        assertThat(status.value()).isNotEqualTo(403);
+    }
+
+    @Test
+    void shouldAllowAnonymousOnUserProductsPath() {
+        HttpStatusCode status = webTestClient().get()
+                .uri("/api/v2/product/users/1001/products")
                 .exchange()
                 .returnResult(String.class)
                 .getStatus();

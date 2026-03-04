@@ -134,6 +134,22 @@
 
 ---
 
+## 🆕 v0.5 个人中心与资料编辑拆分
+
+1. 路由拆分：
+   1. 个人中心展示页：`/u/{userNo}`（可匿名访问）
+   2. 资料编辑页：`/profile/edit`（需登录）
+   3. `/profile` 作为本人中心入口，自动跳转到 `/u/{当前用户userNo}`
+2. 新增公开接口：
+   1. `GET /api/user/profiles/{userNo}`（公开资料）
+   2. `GET /api/v2/product/users/{ownerUserId}/products`（仅在售商品）
+3. 安全白名单（匿名 GET）补充：
+   1. `/api/user/profiles/**`
+   2. `/api/user/media/avatar/**`
+   3. `/api/v2/product/users/**`
+
+---
+
 ## 🛠️ 技术栈清单 (Tech Stack)
 
 ### 核心后端 (Core Services)
@@ -389,7 +405,7 @@ cd shiori-java
 - 管理路径：`/api/admin/**` 需要 `ROLE_ADMIN`
 - 网关向下游透传 `X-User-Id`、`X-User-Roles`
 - 网关为 `/api/**` 写入 `X-Gateway-Ts`、`X-Gateway-Nonce`、`X-Gateway-Sign`，业务服务执行签名校验 + 防重放作为第二道防线
-- `GET /api/product/**` 允许匿名读取（商品浏览）
+- 匿名 GET 白名单默认包含：`/api/product/**`、`/api/v2/product/**`、`/api/user/profiles/**`、`/api/user/media/avatar/**`、`/api/v2/product/users/**`
 
 推荐通过 Nacos 配置中心下发安全配置（group 由 `SHIORI_ENV` 或 `NACOS_CONFIG_GROUP` 决定）：
 - `shiori-security-base.yml`：`issuer`、`ttl`、`max-skew`

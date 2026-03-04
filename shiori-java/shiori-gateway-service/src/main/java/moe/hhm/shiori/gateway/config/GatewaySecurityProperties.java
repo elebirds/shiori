@@ -71,7 +71,10 @@ public class GatewaySecurityProperties {
         private List<String> whitelist = new ArrayList<>();
         private List<String> anonymousGetPaths = new ArrayList<>(List.of(
                 "/api/product/**",
-                "/api/v2/product/**"
+                "/api/v2/product/**",
+                "/api/user/profiles/**",
+                "/api/user/media/avatar/**",
+                "/api/v2/product/users/**"
         ));
 
         public List<String> getWhitelist() {

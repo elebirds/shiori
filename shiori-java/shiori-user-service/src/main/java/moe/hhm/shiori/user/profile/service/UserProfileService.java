@@ -4,6 +4,7 @@ import moe.hhm.shiori.common.error.UserErrorCode;
 import moe.hhm.shiori.common.exception.BizException;
 import moe.hhm.shiori.user.profile.config.UserAvatarStorageProperties;
 import moe.hhm.shiori.user.profile.dto.AvatarUploadResponse;
+import moe.hhm.shiori.user.profile.dto.PublicUserProfileResponse;
 import moe.hhm.shiori.user.profile.dto.UpdateProfileRequest;
 import moe.hhm.shiori.user.profile.dto.UserProfileResponse;
 import moe.hhm.shiori.user.profile.model.UserProfileRecord;
@@ -41,6 +42,10 @@ public class UserProfileService {
         return toResponse(requireProfile(userId));
     }
 
+    public PublicUserProfileResponse getProfileByUserNo(String userNo) {
+        return toPublicResponse(requireProfileByUserNo(userNo));
+    }
+
     public UserProfileResponse updateMyProfile(Long userId, UpdateProfileRequest request) {
         UserProfileRecord profile = requireProfile(userId);
         validateRequest(request);
@@ -68,6 +73,14 @@ public class UserProfileService {
 
     private UserProfileRecord requireProfile(Long userId) {
         UserProfileRecord profile = userProfileMapper.findByUserId(userId);
+        if (profile == null) {
+            throw new BizException(UserErrorCode.USER_NOT_FOUND, HttpStatus.NOT_FOUND);
+        }
+        return profile;
+    }
+
+    private UserProfileRecord requireProfileByUserNo(String userNo) {
+        UserProfileRecord profile = userProfileMapper.findByUserNo(userNo);
         if (profile == null) {
             throw new BizException(UserErrorCode.USER_NOT_FOUND, HttpStatus.NOT_FOUND);
         }
@@ -102,6 +115,20 @@ public class UserProfileService {
                 birthDate == null ? null : calculateAge(birthDate),
                 record.bio(),
                 buildAvatarUrl(record.avatarUrl())
+        );
+    }
+
+    private PublicUserProfileResponse toPublicResponse(UserProfileRecord record) {
+        LocalDate birthDate = record.birthDate();
+        return new PublicUserProfileResponse(
+                record.userId(),
+                record.userNo(),
+                record.username(),
+                record.nickname(),
+                buildAvatarUrl(record.avatarUrl()),
+                record.gender(),
+                birthDate == null ? null : calculateAge(birthDate),
+                record.bio()
         );
     }
 

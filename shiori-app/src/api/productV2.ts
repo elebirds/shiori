@@ -104,6 +104,10 @@ export function listProductsV2(query: ProductV2Query): Promise<ProductV2PageResp
   return httpGet<ProductV2PageResponse>('/api/v2/product/products', { params: query })
 }
 
+export function listUserProductsV2(ownerUserId: number, query: ProductV2Query): Promise<ProductV2PageResponse> {
+  return httpGet<ProductV2PageResponse>(`/api/v2/product/users/${ownerUserId}/products`, { params: query })
+}
+
 export function getProductDetailV2(productId: number): Promise<ProductV2DetailResponse> {
   return httpGet<ProductV2DetailResponse>(`/api/v2/product/products/${productId}`)
 }
@@ -131,4 +135,3 @@ export function publishProductV2(productId: number): Promise<ProductWriteRespons
 export function offShelfProductV2(productId: number): Promise<ProductWriteResponse> {
   return httpPost<ProductWriteResponse>(`/api/v2/product/products/${productId}/off-shelf`)
 }
-

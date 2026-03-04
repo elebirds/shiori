@@ -3,6 +3,7 @@ package moe.hhm.shiori.user.profile.controller;
 import jakarta.validation.Valid;
 import moe.hhm.shiori.common.mvc.SkipResultWrap;
 import moe.hhm.shiori.user.profile.dto.AvatarUploadResponse;
+import moe.hhm.shiori.user.profile.dto.PublicUserProfileResponse;
 import moe.hhm.shiori.user.profile.dto.UpdateProfileRequest;
 import moe.hhm.shiori.user.profile.dto.UserProfileResponse;
 import moe.hhm.shiori.user.profile.service.UserProfileService;
@@ -37,6 +38,11 @@ public class UserProfileController {
     public UserProfileResponse getMyProfile(Authentication authentication) {
         Long userId = CurrentUserSupport.requireUserId(authentication);
         return userProfileService.getMyProfile(userId);
+    }
+
+    @GetMapping("/profiles/{userNo}")
+    public PublicUserProfileResponse getPublicProfile(@PathVariable String userNo) {
+        return userProfileService.getProfileByUserNo(userNo);
     }
 
     @PutMapping("/me")

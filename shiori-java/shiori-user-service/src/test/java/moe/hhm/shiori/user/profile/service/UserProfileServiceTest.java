@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import moe.hhm.shiori.common.exception.BizException;
 import moe.hhm.shiori.user.profile.config.UserAvatarStorageProperties;
 import moe.hhm.shiori.user.profile.dto.AvatarUploadResponse;
+import moe.hhm.shiori.user.profile.dto.PublicUserProfileResponse;
 import moe.hhm.shiori.user.profile.dto.UpdateProfileRequest;
 import moe.hhm.shiori.user.profile.dto.UserProfileResponse;
 import moe.hhm.shiori.user.profile.model.UserProfileRecord;
@@ -66,6 +67,30 @@ class UserProfileServiceTest {
     }
 
     @Test
+    void shouldGetPublicProfileByUserNo() {
+        when(userProfileMapper.findByUserNo("U202603030001")).thenReturn(
+                new UserProfileRecord(
+                        1L,
+                        "U202603030001",
+                        "alice",
+                        "Alice",
+                        2,
+                        LocalDate.of(2000, 1, 2),
+                        "hello",
+                        "avatar_1_202603_xxx.jpg"
+                )
+        );
+
+        PublicUserProfileResponse response = userProfileService.getProfileByUserNo("U202603030001");
+
+        assertThat(response.userId()).isEqualTo(1L);
+        assertThat(response.userNo()).isEqualTo("U202603030001");
+        assertThat(response.gender()).isEqualTo(2);
+        assertThat(response.age()).isNotNull();
+        assertThat(response.avatarUrl()).isEqualTo("/api/user/media/avatar/avatar_1_202603_xxx.jpg");
+    }
+
+    @Test
     void shouldUpdateProfile() {
         LocalDate birthDate = LocalDate.of(2001, 6, 1);
         when(userProfileMapper.findByUserId(1L))
@@ -117,6 +142,14 @@ class UserProfileServiceTest {
         when(userProfileMapper.findByUserId(99L)).thenReturn(null);
 
         assertThatThrownBy(() -> userProfileService.getMyProfile(99L))
+                .isInstanceOf(BizException.class);
+    }
+
+    @Test
+    void shouldRejectWhenPublicProfileMissing() {
+        when(userProfileMapper.findByUserNo("U404")).thenReturn(null);
+
+        assertThatThrownBy(() -> userProfileService.getProfileByUserNo("U404"))
                 .isInstanceOf(BizException.class);
     }
 }

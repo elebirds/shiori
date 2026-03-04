@@ -76,8 +76,27 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/u/:userNo',
+      name: 'user-center',
+      component: () => import('@/views/UserCenterView.vue'),
+      meta: { public: true },
+    },
+    {
       path: '/profile',
       name: 'profile',
+      redirect: () => {
+        const authStore = useAuthStore()
+        const userNo = authStore.user?.userNo?.trim()
+        if (!userNo) {
+          return '/products'
+        }
+        return `/u/${encodeURIComponent(userNo)}`
+      },
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/profile/edit',
+      name: 'profile-edit',
       component: () => import('@/views/ProfileView.vue'),
       meta: { requiresAuth: true },
     },

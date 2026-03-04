@@ -7,3 +7,9 @@ security:
     max-skew-seconds: 300
     replay-protection-enabled: true
     replay-cache-max-entries: 200000
+    anonymous-get-paths:
+      - /api/product/**
+      - /api/v2/product/**
+      - /api/user/profiles/**
+      - /api/user/media/avatar/**
+      - /api/v2/product/users/**

@@ -81,6 +81,9 @@ security:
     anonymous-get-paths:
       - /api/product/**
       - /api/v2/product/**
+      - /api/user/profiles/**
+      - /api/user/media/avatar/**
+      - /api/v2/product/users/**
 
 server:
   port: 8080
