@@ -6,6 +6,7 @@ public record ProductV2Record(
         Long ownerUserId,
         String title,
         String description,
+        String detailHtml,
         String coverObjectKey,
         String categoryCode,
         String conditionLevel,

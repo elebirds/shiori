@@ -46,6 +46,7 @@ export interface AdminProductDetailV2 {
   ownerUserId: number
   title: string
   description?: string
+  detailHtml?: string
   coverObjectKey?: string
   coverImageUrl?: string
   status: ProductStatus
@@ -101,4 +102,3 @@ export function forceOffShelfV2(productId: number, reason?: string): Promise<Pro
 export function batchOffShelfV2(productIds: number[], reason?: string): Promise<BatchOffShelfResponse> {
   return httpPost('/api/v2/admin/products/batch-off-shelf', { productIds, reason })
 }
-

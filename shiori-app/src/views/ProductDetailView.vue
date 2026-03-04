@@ -172,7 +172,16 @@ async function handleCreateOrder(): Promise<void> {
           </div>
 
           <h1 class="mt-4 font-display text-3xl text-stone-900">{{ product.title }}</h1>
-          <p class="mt-2 whitespace-pre-line text-sm text-stone-700">{{ product.description || '暂无描述' }}</p>
+          <div class="mt-2 space-y-2">
+            <h2 class="text-sm font-semibold text-stone-900">商品简介</h2>
+            <p class="whitespace-pre-line text-sm text-stone-700">{{ product.description || '暂无简介' }}</p>
+          </div>
+
+          <div class="mt-4 space-y-2">
+            <h2 class="text-sm font-semibold text-stone-900">商品详情</h2>
+            <div v-if="product.detailHtml" class="rich-content text-sm text-stone-700" v-html="product.detailHtml" />
+            <p v-else class="text-sm text-stone-500">暂无详情</p>
+          </div>
 
           <div class="mt-4 flex flex-wrap gap-2 text-xs text-stone-700">
             <span class="rounded-full bg-stone-100 px-2 py-1">{{ formatCategory(product.categoryCode) }}</span>
@@ -238,3 +247,31 @@ async function handleCreateOrder(): Promise<void> {
   </section>
 </template>
 
+<style scoped>
+.rich-content :deep(img) {
+  max-width: 100%;
+  border-radius: 0.5rem;
+}
+
+.rich-content :deep(ul),
+.rich-content :deep(ol) {
+  margin-left: 1.2rem;
+  padding-left: 0.4rem;
+}
+
+.rich-content :deep(.rt-fs-sm) {
+  font-size: 0.875rem;
+}
+
+.rich-content :deep(.rt-fs-md) {
+  font-size: 1rem;
+}
+
+.rich-content :deep(.rt-fs-lg) {
+  font-size: 1.125rem;
+}
+
+.rich-content :deep(.rt-fs-xl) {
+  font-size: 1.25rem;
+}
+</style>

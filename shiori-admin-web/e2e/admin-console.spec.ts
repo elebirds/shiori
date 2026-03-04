@@ -71,6 +71,8 @@ test.describe('管理端前端烟测', () => {
     await page.getByPlaceholder('标题/描述/商品编号').fill(prepared.productTitle)
     await page.getByRole('button', { name: '查询' }).click()
     await expect(page.locator('tr').filter({ hasText: prepared.productTitle }).first()).toBeVisible()
+    await page.locator('tr').filter({ hasText: prepared.productTitle }).first().getByRole('button', { name: prepared.productTitle }).click()
+    await expect(page.getByText('后台富文本详情')).toBeVisible()
     await page.locator('tr').filter({ hasText: prepared.productTitle }).first().getByRole('button', { name: '强制下架' }).click()
     await expect
       .poll(() => fetchAdminProductStatus(request, prepared.admin.username, prepared.admin.password, prepared.productId))
@@ -121,12 +123,17 @@ async function prepareData(request: APIRequestContext): Promise<PreparedData> {
   const productCreate = await callApi<{ productId: number }>(
     request,
     'POST',
-    '/api/product/products',
+    '/api/v2/product/products',
     sellerLogin.accessToken,
     {
       title: productTitle,
       description: 'admin-web e2e',
+      detailHtml: '<p class="rt-fs-lg">后台富文本详情</p>',
       coverObjectKey: null,
+      categoryCode: 'TEXTBOOK',
+      conditionLevel: 'GOOD',
+      tradeMode: 'MEETUP',
+      campusCode: 'main_campus',
       skus: [{ skuName: '默认款', specJson: '{"edition":"std"}', priceCent: 1888, stock: 30 }],
     },
   )
@@ -135,7 +142,7 @@ async function prepareData(request: APIRequestContext): Promise<PreparedData> {
   await callApi(
     request,
     'POST',
-    `/api/product/products/${productId}/publish`,
+    `/api/v2/product/products/${productId}/publish`,
     sellerLogin.accessToken,
     undefined,
   )
@@ -143,7 +150,7 @@ async function prepareData(request: APIRequestContext): Promise<PreparedData> {
   const detail = await callApi<{ skus: Array<{ skuId: number }> }>(
     request,
     'GET',
-    `/api/product/products/${productId}`,
+    `/api/v2/product/products/${productId}`,
     '',
     undefined,
   )
@@ -262,7 +269,7 @@ async function fetchAdminProductStatus(
   const detail = await callApi<{ status: string }>(
     request,
     'GET',
-    `/api/admin/products/${productId}`,
+    `/api/v2/admin/products/${productId}`,
     admin.accessToken,
     undefined,
   )

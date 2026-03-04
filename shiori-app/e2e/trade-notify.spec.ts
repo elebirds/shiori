@@ -27,7 +27,9 @@ test.describe('交易与通知前端烟测', () => {
 
     const productTitle = `E2E 商品 ${runId}`
     await page.getByLabel('商品标题').fill(productTitle)
-    await page.getByLabel('商品描述').fill('Playwright 端到端烟测商品')
+    await page.getByLabel('商品简介').fill('Playwright 端到端烟测商品')
+    await page.getByTestId('rich-editor-content').click()
+    await page.getByTestId('rich-editor-content').fill('E2E 富文本详情内容')
 
     await page.getByPlaceholder('SKU 1').fill('标准版')
     await page.getByRole('button', { name: '添加 SKU' }).click()
@@ -49,6 +51,7 @@ test.describe('交易与通知前端烟测', () => {
 
     await page.goto(`/products/${productId}`)
     await expect(page.getByRole('heading', { name: productTitle })).toBeVisible()
+    await expect(page.getByText('E2E 富文本详情内容')).toBeVisible()
 
     const quantityInputs = page.locator('input[type="number"][min="0"]')
     await expect(quantityInputs).toHaveCount(2)

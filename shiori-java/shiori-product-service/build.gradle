@@ -26,6 +26,7 @@ dependencies {
     implementation 'org.flywaydb:flyway-mysql'
     implementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter:4.0.1'
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.2'
+    implementation 'org.jsoup:jsoup:1.18.3'
     implementation 'software.amazon.awssdk:auth'
     implementation 'software.amazon.awssdk:regions'
     implementation 'software.amazon.awssdk:s3'

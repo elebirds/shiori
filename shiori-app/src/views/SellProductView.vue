@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/vue-query'
 import { onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import RichTextEditor from '@/components/RichTextEditor.vue'
 import { presignProductUpload, uploadByPresignedUrl } from '@/api/media'
 import {
   createProductV2,
@@ -43,6 +44,7 @@ const tradeModeOptions: Array<{ label: string; value: ProductTradeMode }> = [
 const form = reactive({
   title: '',
   description: '',
+  detailHtml: '',
   coverObjectKey: '',
   categoryCode: 'TEXTBOOK' as ProductCategoryCode,
   conditionLevel: 'GOOD' as ProductConditionLevel,
@@ -73,6 +75,7 @@ const createMutation = useMutation({
     const created = await createProductV2({
       title: form.title.trim(),
       description: form.description.trim() || undefined,
+      detailHtml: form.detailHtml.trim() || undefined,
       coverObjectKey: form.coverObjectKey.trim() || undefined,
       categoryCode: form.categoryCode,
       conditionLevel: form.conditionLevel,
@@ -272,7 +275,7 @@ onUnmounted(() => {
         </label>
 
         <label class="text-sm text-stone-700 sm:col-span-2">
-          商品描述
+          商品简介
           <textarea
             v-model.trim="form.description"
             rows="4"
@@ -280,6 +283,11 @@ onUnmounted(() => {
             placeholder="成色、笔记情况、交易地点等"
           />
         </label>
+
+        <div class="space-y-1 text-sm text-stone-700 sm:col-span-2">
+          <p>商品详情（富文本）</p>
+          <RichTextEditor v-model="form.detailHtml" placeholder="支持图文混排、字号、列表等内容" />
+        </div>
 
         <div class="space-y-2 sm:col-span-2">
           <label class="block text-sm text-stone-700">
@@ -402,4 +410,3 @@ onUnmounted(() => {
     </form>
   </section>
 </template>
-

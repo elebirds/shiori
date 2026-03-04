@@ -46,6 +46,7 @@ export interface ProductV2DetailResponse {
   ownerUserId: number
   title: string
   description?: string
+  detailHtml?: string
   coverObjectKey?: string
   coverImageUrl?: string
   status: ProductStatus
@@ -86,6 +87,7 @@ export interface SkuInput {
 export interface ProductV2WriteRequest {
   title: string
   description?: string
+  detailHtml?: string
   coverObjectKey?: string
   categoryCode: ProductCategoryCode
   conditionLevel: ProductConditionLevel
@@ -131,4 +133,3 @@ export function publishProductV2(productId: number): Promise<ProductWriteRespons
 export function offShelfProductV2(productId: number): Promise<ProductWriteResponse> {
   return httpPost<ProductWriteResponse>(`/api/v2/product/products/${productId}/off-shelf`)
 }
-

@@ -13,6 +13,8 @@ public record UpdateProductV2Request(
         String title,
         @Size(max = 5000, message = "商品描述长度不能超过5000")
         String description,
+        @Size(max = 20000, message = "商品详情长度不能超过20000")
+        String detailHtml,
         @Size(max = 255, message = "封面对象键长度不能超过255")
         String coverObjectKey,
         @NotBlank(message = "分类不能为空")
