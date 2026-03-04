@@ -35,43 +35,36 @@ Go 通知服务（Gin + WebSocket + RabbitMQ + MySQL）。
 
 ## 运行
 
+`shiori-notify` 采用 Nacos 作为配置中心，业务配置不再从环境变量直接读取。
+
 ```bash
 cd shiori-notify
-./gen-env.sh -f            # 默认生成 memory 模式 .env
-# ./gen-env.sh -f -m mysql # 需要本地可用的 shiori_notify 库
+./gen-env.sh -f
 go run .
 ```
 
-> 若 `deploy/.env` 不在默认路径，可使用 `./gen-env.sh -i <path-to-env> -f`。
-> `go run .` 会自动尝试读取当前目录 `.env`。如需指定文件，可设置 `NOTIFY_ENV_FILE=/path/to/file.env`。
+`go run .` 会自动尝试读取当前目录 `.env`。如需指定文件，可设置 `NOTIFY_ENV_FILE=/path/to/file.env`。
 
-## 环境变量
+`gen-env.sh` 只会生成 Nacos 连接参数：`NACOS_ADDR`、`NACOS_USERNAME`、`NACOS_PASSWORD`、`NACOS_CONFIG_GROUP`、`NACOS_CONFIG_NAMESPACE`。
+
+## 启动必需环境变量（仅 Nacos 连接）
 
 | 变量名 | 默认值 | 说明 |
 |---|---|---|
-| `NOTIFY_HTTP_ADDR` | `:8090` | HTTP 监听地址 |
-| `RABBITMQ_ADDR` | `amqp://localhost:5672/` | RabbitMQ 连接串 |
-| `RABBITMQ_EXCHANGES` | `shiori.order.event,shiori.user.event` | 订阅 exchange 列表 |
-| `RABBITMQ_QUEUE` | `notify.order.event` | 消费队列 |
-| `RABBITMQ_ROUTING_KEYS` | `order.created,order.paid,order.canceled,order.delivered,order.finished,user.status.changed,user.role.changed,user.password.reset` | 绑定 routing key 列表 |
-| `NOTIFY_STORE_DRIVER` | `memory` | `memory` 或 `mysql` |
-| `NOTIFY_MYSQL_DSN` | 空 | `mysql` 驱动必填 |
-| `NOTIFY_AUTH_ENABLED` | `true` | 是否启用 JWT 鉴权 |
-| `NOTIFY_JWT_HMAC_SECRET` | 空 | JWT HMAC 密钥 |
-| `NOTIFY_JWT_ISSUER` | `shiori` | JWT issuer |
-| `NOTIFY_EVENT_STORE_MAX_PER_USER` | `1000` | 每个用户最大保留事件数 |
-| `NOTIFY_REPLAY_DEFAULT_LIMIT` | `50` | 补偿拉取默认条数 |
-| `NOTIFY_REPLAY_MAX_LIMIT` | `200` | 补偿拉取最大条数 |
-| `NOTIFY_WS_REPLAY_DEFAULT_LIMIT` | `100` | WS 建连补偿上限 |
-| `NOTIFY_WS_PATH` | `/ws` | WebSocket 路径 |
-| `NOTIFY_CHAT_ENABLED` | `false` | 是否启用聊天能力 |
-| `NOTIFY_CHAT_DEFAULT_LIMIT` | `20` | 聊天分页默认条数 |
-| `NOTIFY_CHAT_MAX_LIMIT` | `100` | 聊天分页最大条数 |
-| `NOTIFY_CHAT_TICKET_ISSUER` | `shiori-chat-ticket` | Chat Ticket issuer |
-| `NOTIFY_CHAT_TICKET_PUBLIC_KEY_PEM_BASE64` | 空 | RS256 公钥（PEM 文本再 base64） |
-| `NOTIFY_CHAT_MQ_ENABLED` | `true` | 是否开启跨实例聊天广播 |
-| `NOTIFY_CHAT_MQ_EXCHANGE` | `shiori.chat.event` | 广播 exchange |
-| `NOTIFY_INSTANCE_ID` | `<hostname>-<pid>` | 实例标识，用于广播去重 |
+| `NACOS_ADDR` | `nacos:8848` | Nacos 地址 |
+| `NACOS_USERNAME` | 空 | Nacos 用户名（必填） |
+| `NACOS_PASSWORD` | 空 | Nacos 密码（必填） |
+| `NACOS_CONFIG_GROUP` | `SHIORI_DEV_DOCKER` | Nacos 配置组 |
+| `NACOS_CONFIG_NAMESPACE` | 空 | Nacos 命名空间（可选） |
+
+## Nacos DataId
+
+启动时按顺序拉取并合并：
+
+1. `shiori-notify-service-base.yml`
+2. `shiori-notify-service-secret.yml`
+3. `shiori-security-base.yml`
+4. `shiori-security-secret.yml`
 
 ## ws-smoke
 

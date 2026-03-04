@@ -11,29 +11,27 @@ import (
 )
 
 const (
+	defaultNacosAddr         = "nacos:8848"
+	defaultNacosConfigGroup  = "SHIORI_DEV_DOCKER"
 	defaultHTTPAddr          = ":8090"
-	defaultRabbitMQAddr      = "amqp://localhost:5672/"
 	defaultRabbitMQExchange  = "shiori.order.event"
 	defaultRabbitMQExchanges = "shiori.order.event,shiori.user.event"
 	defaultRabbitMQQueue     = "notify.order.event"
 	defaultRabbitMQRouteKeys = "order.created,order.paid,order.canceled,order.delivered,order.finished,user.status.changed,user.role.changed,user.password.reset"
 	defaultMetricsEnabled    = true
-	defaultStoreDriver       = "memory"
 	defaultStoreMaxPerUser   = 1000
 	defaultReplayLimit       = 50
 	defaultReplayMaxLimit    = 200
 	defaultWSReplayLimit     = 100
-	defaultAuthEnabled       = true
-	defaultJWTIssuer         = "shiori"
 	defaultMySQLMaxOpenConns = 20
 	defaultMySQLMaxIdleConns = 10
 	defaultWSPath            = "/ws"
-	defaultChatEnabled       = false
 	defaultChatPageLimit     = 20
 	defaultChatMaxPageLimit  = 100
 	defaultChatTicketIssuer  = "shiori-chat-ticket"
 	defaultChatMQEnabled     = true
 	defaultChatMQExchange    = "shiori.chat.event"
+	defaultJWTIssuer         = "shiori"
 )
 
 var (
@@ -41,6 +39,14 @@ var (
 	defaultWSPingInterval       = 30 * time.Second
 	defaultMySQLConnMaxLifetime = 30 * time.Minute
 )
+
+type NacosConnConfig struct {
+	Addr      string
+	Username  string
+	Password  string
+	Group     string
+	Namespace string
+}
 
 type Config struct {
 	HTTPAddr             string
@@ -77,60 +83,249 @@ type Config struct {
 	InstanceID           string
 }
 
-func Load() Config {
-	exchanges := parseCSV(
-		envOrDefault(
-			"RABBITMQ_EXCHANGES",
-			envOrDefault("RABBITMQ_EXCHANGE", defaultRabbitMQExchanges),
-		),
-	)
-	if len(exchanges) == 0 {
-		exchanges = []string{defaultRabbitMQExchange}
+type NotifyNacosConfig struct {
+	Notify   notifySection   `yaml:"notify"`
+	Security securitySection `yaml:"security"`
+}
+
+type notifySection struct {
+	HTTP     notifyHTTPSection     `yaml:"http"`
+	RabbitMQ notifyRabbitMQSection `yaml:"rabbitmq"`
+	Log      notifyLogSection      `yaml:"log"`
+	WS       notifyWSSection       `yaml:"ws"`
+	Metrics  notifyMetricsSection  `yaml:"metrics"`
+	Store    notifyStoreSection    `yaml:"store"`
+	Replay   notifyReplaySection   `yaml:"replay"`
+	Auth     notifyAuthSection     `yaml:"auth"`
+	MySQL    notifyMySQLSection    `yaml:"mysql"`
+	Chat     notifyChatSection     `yaml:"chat"`
+	Instance notifyInstanceSection `yaml:"instance"`
+}
+
+type notifyHTTPSection struct {
+	Addr string `yaml:"addr"`
+}
+
+type notifyRabbitMQSection struct {
+	Addr        string `yaml:"addr"`
+	Exchange    string `yaml:"exchange"`
+	Queue       string `yaml:"queue"`
+	RoutingKey  string `yaml:"routing-key"`
+	Exchanges   string `yaml:"exchanges"`
+	RoutingKeys string `yaml:"routing-keys"`
+}
+
+type notifyLogSection struct {
+	Level string `yaml:"level"`
+}
+
+type notifyWSSection struct {
+	Path         string `yaml:"path"`
+	WriteTimeout string `yaml:"write-timeout"`
+	PingInterval string `yaml:"ping-interval"`
+}
+
+type notifyMetricsSection struct {
+	Enabled *bool `yaml:"enabled"`
+}
+
+type notifyStoreSection struct {
+	Driver     string `yaml:"driver"`
+	MaxPerUser int    `yaml:"max-per-user"`
+}
+
+type notifyReplaySection struct {
+	DefaultLimit int `yaml:"default-limit"`
+	MaxLimit     int `yaml:"max-limit"`
+	WSLimit      int `yaml:"ws-limit"`
+}
+
+type notifyAuthSection struct {
+	Enabled *bool `yaml:"enabled"`
+}
+
+type notifyMySQLSection struct {
+	DSN             string `yaml:"dsn"`
+	MaxOpenConns    int    `yaml:"max-open-conns"`
+	MaxIdleConns    int    `yaml:"max-idle-conns"`
+	ConnMaxLifetime string `yaml:"conn-max-lifetime"`
+}
+
+type notifyChatSection struct {
+	Enabled         *bool  `yaml:"enabled"`
+	DefaultLimit    int    `yaml:"default-limit"`
+	MaxLimit        int    `yaml:"max-limit"`
+	TicketIssuer    string `yaml:"ticket-issuer"`
+	TicketPublicKey string `yaml:"ticket-public-key-pem-base64"`
+	MQEnabled       *bool  `yaml:"mq-enabled"`
+	MQExchange      string `yaml:"mq-exchange"`
+}
+
+type notifyInstanceSection struct {
+	ID string `yaml:"id"`
+}
+
+type securitySection struct {
+	JWT securityJWTSection `yaml:"jwt"`
+}
+
+type securityJWTSection struct {
+	Issuer     string `yaml:"issuer"`
+	HMACSecret string `yaml:"hmac-secret"`
+}
+
+func LoadNacosConnFromEnv() (NacosConnConfig, error) {
+	cfg := NacosConnConfig{
+		Addr:      envOrDefault("NACOS_ADDR", defaultNacosAddr),
+		Username:  strings.TrimSpace(os.Getenv("NACOS_USERNAME")),
+		Password:  strings.TrimSpace(os.Getenv("NACOS_PASSWORD")),
+		Group:     envOrDefault("NACOS_CONFIG_GROUP", defaultNacosConfigGroup),
+		Namespace: strings.TrimSpace(os.Getenv("NACOS_CONFIG_NAMESPACE")),
 	}
-	routingKeys := parseCSV(
-		envOrDefault(
-			"RABBITMQ_ROUTING_KEYS",
-			envOrDefault("RABBITMQ_ROUTING_KEY", defaultRabbitMQRouteKeys),
-		),
-	)
+	if cfg.Username == "" {
+		return NacosConnConfig{}, fmt.Errorf("NACOS_USERNAME is required")
+	}
+	if cfg.Password == "" {
+		return NacosConnConfig{}, fmt.Errorf("NACOS_PASSWORD is required")
+	}
+	if strings.TrimSpace(cfg.Addr) == "" {
+		return NacosConnConfig{}, fmt.Errorf("NACOS_ADDR is required")
+	}
+	if strings.TrimSpace(cfg.Group) == "" {
+		return NacosConnConfig{}, fmt.Errorf("NACOS_CONFIG_GROUP is required")
+	}
+	return cfg, nil
+}
+
+func (c NotifyNacosConfig) ToRuntimeConfig() (Config, error) {
+	exchanges := parseCSV(strings.TrimSpace(c.Notify.RabbitMQ.Exchanges))
+	if len(exchanges) == 0 {
+		exchanges = parseCSV(defaultRabbitMQExchanges)
+	}
+	routingKeys := parseCSV(strings.TrimSpace(c.Notify.RabbitMQ.RoutingKeys))
 	if len(routingKeys) == 0 {
 		routingKeys = parseCSV(defaultRabbitMQRouteKeys)
 	}
-
-	return Config{
-		HTTPAddr:             envOrDefault("NOTIFY_HTTP_ADDR", defaultHTTPAddr),
-		RabbitMQAddr:         envOrDefault("RABBITMQ_ADDR", defaultRabbitMQAddr),
-		RabbitMQExchange:     exchanges[0],
-		RabbitMQQueue:        envOrDefault("RABBITMQ_QUEUE", defaultRabbitMQQueue),
-		RabbitMQRoutingKey:   routingKeys[0],
+	cfg := Config{
+		HTTPAddr:             stringOrDefault(c.Notify.HTTP.Addr, defaultHTTPAddr),
+		RabbitMQAddr:         strings.TrimSpace(c.Notify.RabbitMQ.Addr),
+		RabbitMQExchange:     stringOrDefault(c.Notify.RabbitMQ.Exchange, firstOrDefault(exchanges, defaultRabbitMQExchange)),
+		RabbitMQQueue:        stringOrDefault(c.Notify.RabbitMQ.Queue, defaultRabbitMQQueue),
+		RabbitMQRoutingKey:   stringOrDefault(c.Notify.RabbitMQ.RoutingKey, firstOrDefault(routingKeys, "")),
 		RabbitMQExchanges:    exchanges,
 		RabbitMQRoutingKeys:  routingKeys,
-		LogLevel:             parseLogLevel(envOrDefault("LOG_LEVEL", "info")),
-		WSWriteTimeout:       parseDurationOrDefault("WS_WRITE_TIMEOUT", defaultWSWriteTimeout),
-		WSPingInterval:       parseDurationOrDefault("WS_PING_INTERVAL", defaultWSPingInterval),
-		MetricsEnabled:       parseBoolOrDefault("NOTIFY_METRICS_ENABLED", defaultMetricsEnabled),
-		StoreDriver:          strings.ToLower(envOrDefault("NOTIFY_STORE_DRIVER", defaultStoreDriver)),
-		StoreMaxPerUser:      parseIntOrDefault("NOTIFY_EVENT_STORE_MAX_PER_USER", defaultStoreMaxPerUser),
-		ReplayDefaultLimit:   parseIntOrDefault("NOTIFY_REPLAY_DEFAULT_LIMIT", defaultReplayLimit),
-		ReplayMaxLimit:       parseIntOrDefault("NOTIFY_REPLAY_MAX_LIMIT", defaultReplayMaxLimit),
-		WSReplayLimit:        parseIntOrDefault("NOTIFY_WS_REPLAY_DEFAULT_LIMIT", defaultWSReplayLimit),
-		AuthEnabled:          parseBoolOrDefault("NOTIFY_AUTH_ENABLED", defaultAuthEnabled),
-		JWTHmacSecret:        envOrDefault("NOTIFY_JWT_HMAC_SECRET", ""),
-		JWTIssuer:            envOrDefault("NOTIFY_JWT_ISSUER", defaultJWTIssuer),
-		MySQLDSN:             envOrDefault("NOTIFY_MYSQL_DSN", ""),
-		MySQLMaxOpenConns:    parseIntOrDefault("NOTIFY_MYSQL_MAX_OPEN_CONNS", defaultMySQLMaxOpenConns),
-		MySQLMaxIdleConns:    parseIntOrDefault("NOTIFY_MYSQL_MAX_IDLE_CONNS", defaultMySQLMaxIdleConns),
-		MySQLConnMaxLifetime: parseDurationOrDefault("NOTIFY_MYSQL_CONN_MAX_LIFETIME", defaultMySQLConnMaxLifetime),
-		WSPath:               envOrDefault("NOTIFY_WS_PATH", defaultWSPath),
-		ChatEnabled:          parseBoolOrDefault("NOTIFY_CHAT_ENABLED", defaultChatEnabled),
-		ChatDefaultLimit:     parseIntOrDefault("NOTIFY_CHAT_DEFAULT_LIMIT", defaultChatPageLimit),
-		ChatMaxLimit:         parseIntOrDefault("NOTIFY_CHAT_MAX_LIMIT", defaultChatMaxPageLimit),
-		ChatTicketIssuer:     envOrDefault("NOTIFY_CHAT_TICKET_ISSUER", defaultChatTicketIssuer),
-		ChatTicketPublicKey:  envOrDefault("NOTIFY_CHAT_TICKET_PUBLIC_KEY_PEM_BASE64", ""),
-		ChatMQEnabled:        parseBoolOrDefault("NOTIFY_CHAT_MQ_ENABLED", defaultChatMQEnabled),
-		ChatMQExchange:       envOrDefault("NOTIFY_CHAT_MQ_EXCHANGE", defaultChatMQExchange),
-		InstanceID:           envOrDefault("NOTIFY_INSTANCE_ID", defaultInstanceID()),
+		LogLevel:             parseLogLevel(stringOrDefault(c.Notify.Log.Level, "info")),
+		WSWriteTimeout:       parseDurationOrDefaultValue(c.Notify.WS.WriteTimeout, defaultWSWriteTimeout),
+		WSPingInterval:       parseDurationOrDefaultValue(c.Notify.WS.PingInterval, defaultWSPingInterval),
+		MetricsEnabled:       boolOrDefault(c.Notify.Metrics.Enabled, defaultMetricsEnabled),
+		StoreDriver:          strings.ToLower(strings.TrimSpace(c.Notify.Store.Driver)),
+		StoreMaxPerUser:      intOrDefault(c.Notify.Store.MaxPerUser, defaultStoreMaxPerUser),
+		ReplayDefaultLimit:   intOrDefault(c.Notify.Replay.DefaultLimit, defaultReplayLimit),
+		ReplayMaxLimit:       intOrDefault(c.Notify.Replay.MaxLimit, defaultReplayMaxLimit),
+		WSReplayLimit:        intOrDefault(c.Notify.Replay.WSLimit, defaultWSReplayLimit),
+		AuthEnabled:          boolOrDefault(c.Notify.Auth.Enabled, true),
+		JWTHmacSecret:        strings.TrimSpace(c.Security.JWT.HMACSecret),
+		JWTIssuer:            stringOrDefault(c.Security.JWT.Issuer, defaultJWTIssuer),
+		MySQLDSN:             strings.TrimSpace(c.Notify.MySQL.DSN),
+		MySQLMaxOpenConns:    intOrDefault(c.Notify.MySQL.MaxOpenConns, defaultMySQLMaxOpenConns),
+		MySQLMaxIdleConns:    intOrDefault(c.Notify.MySQL.MaxIdleConns, defaultMySQLMaxIdleConns),
+		MySQLConnMaxLifetime: parseDurationOrDefaultValue(c.Notify.MySQL.ConnMaxLifetime, defaultMySQLConnMaxLifetime),
+		WSPath:               stringOrDefault(c.Notify.WS.Path, defaultWSPath),
+		ChatEnabled:          boolOrDefault(c.Notify.Chat.Enabled, false),
+		ChatDefaultLimit:     intOrDefault(c.Notify.Chat.DefaultLimit, defaultChatPageLimit),
+		ChatMaxLimit:         intOrDefault(c.Notify.Chat.MaxLimit, defaultChatMaxPageLimit),
+		ChatTicketIssuer:     stringOrDefault(c.Notify.Chat.TicketIssuer, defaultChatTicketIssuer),
+		ChatTicketPublicKey:  strings.TrimSpace(c.Notify.Chat.TicketPublicKey),
+		ChatMQEnabled:        boolOrDefault(c.Notify.Chat.MQEnabled, defaultChatMQEnabled),
+		ChatMQExchange:       stringOrDefault(c.Notify.Chat.MQExchange, defaultChatMQExchange),
+		InstanceID:           strings.TrimSpace(c.Notify.Instance.ID),
 	}
+	if cfg.InstanceID == "" {
+		cfg.InstanceID = defaultInstanceID()
+	}
+	if err := validateRuntimeConfig(cfg); err != nil {
+		return Config{}, err
+	}
+	return cfg, nil
+}
+
+func validateRuntimeConfig(cfg Config) error {
+	if strings.TrimSpace(cfg.HTTPAddr) == "" {
+		return fmt.Errorf("notify.http.addr is required")
+	}
+	if strings.TrimSpace(cfg.RabbitMQAddr) == "" {
+		return fmt.Errorf("notify.rabbitmq.addr is required")
+	}
+	if len(cfg.RabbitMQExchanges) == 0 {
+		return fmt.Errorf("notify.rabbitmq.exchanges is required")
+	}
+	if len(cfg.RabbitMQRoutingKeys) == 0 {
+		return fmt.Errorf("notify.rabbitmq.routing-keys is required")
+	}
+	if strings.TrimSpace(cfg.RabbitMQQueue) == "" {
+		return fmt.Errorf("notify.rabbitmq.queue is required")
+	}
+	if strings.TrimSpace(cfg.StoreDriver) == "" {
+		return fmt.Errorf("notify.store.driver is required")
+	}
+	if cfg.StoreMaxPerUser <= 0 {
+		return fmt.Errorf("notify.store.max-per-user must be positive")
+	}
+	if cfg.ReplayDefaultLimit <= 0 || cfg.ReplayMaxLimit <= 0 || cfg.WSReplayLimit <= 0 {
+		return fmt.Errorf("notify replay limits must be positive")
+	}
+	if cfg.AuthEnabled {
+		if strings.TrimSpace(cfg.JWTIssuer) == "" {
+			return fmt.Errorf("notify.security.jwt.issuer is required when auth enabled")
+		}
+		if strings.TrimSpace(cfg.JWTHmacSecret) == "" {
+			return fmt.Errorf("notify.security.jwt.hmac-secret is required when auth enabled")
+		}
+	}
+	if cfg.StoreDriver == "mysql" && strings.TrimSpace(cfg.MySQLDSN) == "" {
+		return fmt.Errorf("notify.mysql.dsn is required when store.driver=mysql")
+	}
+	if cfg.ChatEnabled {
+		if cfg.StoreDriver != "mysql" {
+			return fmt.Errorf("chat requires mysql store driver")
+		}
+		if strings.TrimSpace(cfg.ChatTicketIssuer) == "" {
+			return fmt.Errorf("notify.chat.ticket-issuer is required when chat enabled")
+		}
+		if strings.TrimSpace(cfg.ChatTicketPublicKey) == "" {
+			return fmt.Errorf("notify.chat.ticket-public-key-pem-base64 is required when chat enabled")
+		}
+	}
+	return nil
+}
+
+func firstOrDefault(items []string, fallback string) string {
+	if len(items) == 0 {
+		return fallback
+	}
+	return items[0]
+}
+
+func stringOrDefault(value, fallback string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return fallback
+	}
+	return trimmed
+}
+
+func boolOrDefault(value *bool, fallback bool) bool {
+	if value == nil {
+		return fallback
+	}
+	return *value
+}
+
+func intOrDefault(value, fallback int) int {
+	if value <= 0 {
+		return fallback
+	}
+	return value
 }
 
 func envOrDefault(key, fallback string) string {
@@ -139,6 +334,18 @@ func envOrDefault(key, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+func parseDurationOrDefaultValue(raw string, fallback time.Duration) time.Duration {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return fallback
+	}
+	duration, err := time.ParseDuration(trimmed)
+	if err != nil || duration <= 0 {
+		return fallback
+	}
+	return duration
 }
 
 func parseDurationOrDefault(key string, fallback time.Duration) time.Duration {

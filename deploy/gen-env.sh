@@ -66,6 +66,14 @@ rand_b64() {
 gen_value() {
   key="$1"
   case "${key}" in
+    CHAT_TICKET_PRIVATE_KEY_PEM_BASE64)
+      ensure_chat_ticket_keypair
+      printf '%s' "${chat_ticket_private_key_b64}"
+      ;;
+    NOTIFY_CHAT_TICKET_PUBLIC_KEY_PEM_BASE64)
+      ensure_chat_ticket_keypair
+      printf '%s' "${chat_ticket_public_key_b64}"
+      ;;
     JWT_HMAC_SECRET|GATEWAY_SIGN_SECRET)
       rand_hex 32
       ;;
@@ -86,6 +94,27 @@ gen_value() {
       rand_hex 16
       ;;
   esac
+}
+
+chat_ticket_private_key_b64=""
+chat_ticket_public_key_b64=""
+
+ensure_chat_ticket_keypair() {
+  if [ -n "${chat_ticket_private_key_b64}" ] && [ -n "${chat_ticket_public_key_b64}" ]; then
+    return 0
+  fi
+
+  tmp_key_dir="$(mktemp -d)"
+  private_key_file="${tmp_key_dir}/chat_ticket_private.pem"
+  public_key_file="${tmp_key_dir}/chat_ticket_public.pem"
+
+  openssl genrsa -out "${private_key_file}" 2048 >/dev/null 2>&1
+  openssl rsa -in "${private_key_file}" -pubout -out "${public_key_file}" >/dev/null 2>&1
+
+  chat_ticket_private_key_b64="$(openssl base64 -A -in "${private_key_file}")"
+  chat_ticket_public_key_b64="$(openssl base64 -A -in "${public_key_file}")"
+
+  rm -rf "${tmp_key_dir}"
 }
 
 TMP_FILE="$(mktemp)"
@@ -123,11 +152,47 @@ sync_value() {
   fi
 }
 
+sync_chat_ticket_public_from_private() {
+  private_b64="$(grep '^CHAT_TICKET_PRIVATE_KEY_PEM_BASE64=' "${TMP_FILE}" | head -n1 | cut -d= -f2- || true)"
+  if [ -z "${private_b64}" ]; then
+    return 0
+  fi
+
+  tmp_key_dir="$(mktemp -d)"
+  private_key_file="${tmp_key_dir}/chat_ticket_private.pem"
+  public_key_file="${tmp_key_dir}/chat_ticket_public.pem"
+
+  printf '%s' "${private_b64}" | openssl base64 -d -A > "${private_key_file}" 2>/dev/null || {
+    rm -rf "${tmp_key_dir}"
+    echo "[gen-env][ERROR] CHAT_TICKET_PRIVATE_KEY_PEM_BASE64 不是合法 base64" >&2
+    exit 1
+  }
+
+  openssl rsa -in "${private_key_file}" -pubout -out "${public_key_file}" >/dev/null 2>&1 || {
+    rm -rf "${tmp_key_dir}"
+    echo "[gen-env][ERROR] CHAT_TICKET_PRIVATE_KEY_PEM_BASE64 不是合法 RSA 私钥 PEM" >&2
+    exit 1
+  }
+
+  public_b64="$(openssl base64 -A -in "${public_key_file}")"
+
+  awk -v value="${public_b64}" '
+  BEGIN { key = "NOTIFY_CHAT_TICKET_PUBLIC_KEY_PEM_BASE64=" }
+  index($0, key) == 1 { print key value; next }
+  { print }
+  ' "${TMP_FILE}" > "${TMP_FILE}.chatkey.sync"
+  mv "${TMP_FILE}.chatkey.sync" "${TMP_FILE}"
+
+  rm -rf "${tmp_key_dir}"
+}
+
 # Nacos 本机调试别名变量保持与导入账号一致，避免密码不一致导致认证失败。
 sync_value "NACOS_IMPORT_PASSWORD" "NACOS_PASSWORD"
 sync_value "NACOS_IMPORT_USERNAME" "NACOS_USERNAME"
 # notify 默认复用 user-service 的 JWT HMAC 密钥，确保可校验 access token。
 sync_value "JWT_HMAC_SECRET" "NOTIFY_JWT_HMAC_SECRET"
+# 无论模板如何填写，最终都强制由私钥推导公钥，保证签发/验签一致。
+sync_chat_ticket_public_from_private
 
 if [ "${FORCE_OVERWRITE}" -eq 1 ] && [ -f "${OUTPUT_FILE}" ]; then
   rm -f "${OUTPUT_FILE}"

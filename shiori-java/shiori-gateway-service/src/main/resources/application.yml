@@ -63,15 +63,15 @@ spring:
               predicates:
                 - Path=/api/v2/admin/orders/**
             - id: notify-service
-              uri: ${notify.base-url:http://shiori-notify-service:8090}
+              uri: lb://shiori-notify-service
               predicates:
                 - Path=/api/notify/**
             - id: chat-service
-              uri: ${notify.base-url:http://shiori-notify-service:8090}
+              uri: lb://shiori-notify-service
               predicates:
                 - Path=/api/chat/**
             - id: notify-ws
-              uri: ${notify.ws-base-url:ws://shiori-notify-service:8090}
+              uri: lb:ws://shiori-notify-service
               predicates:
                 - Path=/ws
 

@@ -90,11 +90,11 @@ upsert_permissions \
   "^(shiori[.]user[.]event)$" \
   "^(shiori[.]user[.]event)$"
 
-# notify-service: consume order + user events
+# notify-service: consume order/user events + chat fanout broadcast
 upsert_permissions \
   "${NOTIFY_RMQ_USERNAME}" \
-  "^(shiori[.]order[.]event|shiori[.]user[.]event|notify[.]order[.]event)$" \
-  "^(shiori[.]order[.]event|shiori[.]user[.]event|notify[.]order[.]event)$" \
-  "^(shiori[.]order[.]event|shiori[.]user[.]event|notify[.]order[.]event)$"
+  "^(shiori[.]order[.]event|shiori[.]user[.]event|shiori[.]chat[.]event|notify[.]order[.]event|amq[.]gen.*)$" \
+  "^(shiori[.]order[.]event|shiori[.]user[.]event|shiori[.]chat[.]event|notify[.]order[.]event|amq[.]gen.*)$" \
+  "^(shiori[.]order[.]event|shiori[.]user[.]event|shiori[.]chat[.]event|notify[.]order[.]event|amq[.]gen.*)$"
 
 log "rabbitmq users and permissions initialized"

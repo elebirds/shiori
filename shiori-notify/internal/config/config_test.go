@@ -1,268 +1,104 @@
 package config
 
 import (
+	"os"
 	"testing"
-	"time"
-
-	"github.com/rs/zerolog"
 )
 
-func TestLoadDefaults(t *testing.T) {
-	t.Setenv("NOTIFY_HTTP_ADDR", "")
-	t.Setenv("RABBITMQ_ADDR", "")
-	t.Setenv("RABBITMQ_EXCHANGE", "")
-	t.Setenv("RABBITMQ_QUEUE", "")
-	t.Setenv("RABBITMQ_ROUTING_KEY", "")
-	t.Setenv("RABBITMQ_EXCHANGES", "")
-	t.Setenv("RABBITMQ_ROUTING_KEYS", "")
-	t.Setenv("LOG_LEVEL", "")
-	t.Setenv("WS_WRITE_TIMEOUT", "")
-	t.Setenv("WS_PING_INTERVAL", "")
-	t.Setenv("NOTIFY_METRICS_ENABLED", "")
-	t.Setenv("NOTIFY_STORE_DRIVER", "")
-	t.Setenv("NOTIFY_EVENT_STORE_MAX_PER_USER", "")
-	t.Setenv("NOTIFY_REPLAY_DEFAULT_LIMIT", "")
-	t.Setenv("NOTIFY_REPLAY_MAX_LIMIT", "")
-	t.Setenv("NOTIFY_WS_REPLAY_DEFAULT_LIMIT", "")
-	t.Setenv("NOTIFY_AUTH_ENABLED", "")
-	t.Setenv("NOTIFY_JWT_HMAC_SECRET", "")
-	t.Setenv("NOTIFY_JWT_ISSUER", "")
-	t.Setenv("NOTIFY_MYSQL_DSN", "")
-	t.Setenv("NOTIFY_MYSQL_MAX_OPEN_CONNS", "")
-	t.Setenv("NOTIFY_MYSQL_MAX_IDLE_CONNS", "")
-	t.Setenv("NOTIFY_MYSQL_CONN_MAX_LIFETIME", "")
-	t.Setenv("NOTIFY_WS_PATH", "")
-	t.Setenv("NOTIFY_CHAT_ENABLED", "")
-	t.Setenv("NOTIFY_CHAT_DEFAULT_LIMIT", "")
-	t.Setenv("NOTIFY_CHAT_MAX_LIMIT", "")
-	t.Setenv("NOTIFY_CHAT_TICKET_ISSUER", "")
-	t.Setenv("NOTIFY_CHAT_TICKET_PUBLIC_KEY_PEM_BASE64", "")
-	t.Setenv("NOTIFY_CHAT_MQ_ENABLED", "")
-	t.Setenv("NOTIFY_CHAT_MQ_EXCHANGE", "")
-	t.Setenv("NOTIFY_INSTANCE_ID", "")
+func TestLoadNacosConnFromEnv(t *testing.T) {
+	t.Setenv("NACOS_ADDR", "127.0.0.1:8848")
+	t.Setenv("NACOS_USERNAME", "nacos")
+	t.Setenv("NACOS_PASSWORD", "secret")
+	t.Setenv("NACOS_CONFIG_GROUP", "SHIORI_TEST")
+	t.Setenv("NACOS_CONFIG_NAMESPACE", "abc")
 
-	cfg := Load()
-	if cfg.HTTPAddr != defaultHTTPAddr {
-		t.Fatalf("unexpected default HTTPAddr: %s", cfg.HTTPAddr)
+	cfg, err := LoadNacosConnFromEnv()
+	if err != nil {
+		t.Fatalf("LoadNacosConnFromEnv failed: %v", err)
 	}
-	if cfg.RabbitMQAddr != defaultRabbitMQAddr {
-		t.Fatalf("unexpected default RabbitMQAddr: %s", cfg.RabbitMQAddr)
+	if cfg.Addr != "127.0.0.1:8848" || cfg.Username != "nacos" || cfg.Password != "secret" {
+		t.Fatalf("unexpected nacos conn config: %+v", cfg)
 	}
-	if cfg.RabbitMQExchange != defaultRabbitMQExchange {
-		t.Fatalf("unexpected default RabbitMQExchange: %s", cfg.RabbitMQExchange)
-	}
-	if len(cfg.RabbitMQExchanges) != 2 || cfg.RabbitMQExchanges[0] != "shiori.order.event" || cfg.RabbitMQExchanges[1] != "shiori.user.event" {
-		t.Fatalf("unexpected default RabbitMQExchanges: %+v", cfg.RabbitMQExchanges)
-	}
-	if cfg.RabbitMQQueue != defaultRabbitMQQueue {
-		t.Fatalf("unexpected default RabbitMQQueue: %s", cfg.RabbitMQQueue)
-	}
-	if cfg.LogLevel != zerolog.InfoLevel {
-		t.Fatalf("unexpected default LogLevel: %v", cfg.LogLevel)
-	}
-	if cfg.WSWriteTimeout != defaultWSWriteTimeout {
-		t.Fatalf("unexpected default WSWriteTimeout: %s", cfg.WSWriteTimeout)
-	}
-	if cfg.WSPingInterval != defaultWSPingInterval {
-		t.Fatalf("unexpected default WSPingInterval: %s", cfg.WSPingInterval)
-	}
-	if cfg.MetricsEnabled != defaultMetricsEnabled {
-		t.Fatalf("unexpected default MetricsEnabled: %t", cfg.MetricsEnabled)
-	}
-	if cfg.StoreDriver != defaultStoreDriver {
-		t.Fatalf("unexpected default StoreDriver: %s", cfg.StoreDriver)
-	}
-	if cfg.StoreMaxPerUser != defaultStoreMaxPerUser {
-		t.Fatalf("unexpected default StoreMaxPerUser: %d", cfg.StoreMaxPerUser)
-	}
-	if cfg.ReplayDefaultLimit != defaultReplayLimit {
-		t.Fatalf("unexpected default ReplayDefaultLimit: %d", cfg.ReplayDefaultLimit)
-	}
-	if cfg.ReplayMaxLimit != defaultReplayMaxLimit {
-		t.Fatalf("unexpected default ReplayMaxLimit: %d", cfg.ReplayMaxLimit)
-	}
-	if cfg.WSReplayLimit != defaultWSReplayLimit {
-		t.Fatalf("unexpected default WSReplayLimit: %d", cfg.WSReplayLimit)
-	}
-	if cfg.AuthEnabled != defaultAuthEnabled {
-		t.Fatalf("unexpected default AuthEnabled: %t", cfg.AuthEnabled)
-	}
-	if cfg.JWTIssuer != defaultJWTIssuer {
-		t.Fatalf("unexpected default JWTIssuer: %s", cfg.JWTIssuer)
-	}
-	if cfg.MySQLMaxOpenConns != defaultMySQLMaxOpenConns {
-		t.Fatalf("unexpected default MySQLMaxOpenConns: %d", cfg.MySQLMaxOpenConns)
-	}
-	if cfg.MySQLMaxIdleConns != defaultMySQLMaxIdleConns {
-		t.Fatalf("unexpected default MySQLMaxIdleConns: %d", cfg.MySQLMaxIdleConns)
-	}
-	if cfg.MySQLConnMaxLifetime != defaultMySQLConnMaxLifetime {
-		t.Fatalf("unexpected default MySQLConnMaxLifetime: %s", cfg.MySQLConnMaxLifetime)
-	}
-	if cfg.WSPath != defaultWSPath {
-		t.Fatalf("unexpected default WSPath: %s", cfg.WSPath)
-	}
-	if cfg.ChatEnabled != defaultChatEnabled {
-		t.Fatalf("unexpected default ChatEnabled: %t", cfg.ChatEnabled)
-	}
-	if cfg.ChatDefaultLimit != defaultChatPageLimit {
-		t.Fatalf("unexpected default ChatDefaultLimit: %d", cfg.ChatDefaultLimit)
-	}
-	if cfg.ChatMaxLimit != defaultChatMaxPageLimit {
-		t.Fatalf("unexpected default ChatMaxLimit: %d", cfg.ChatMaxLimit)
-	}
-	if cfg.ChatTicketIssuer != defaultChatTicketIssuer {
-		t.Fatalf("unexpected default ChatTicketIssuer: %s", cfg.ChatTicketIssuer)
-	}
-	if cfg.ChatMQEnabled != defaultChatMQEnabled {
-		t.Fatalf("unexpected default ChatMQEnabled: %t", cfg.ChatMQEnabled)
-	}
-	if cfg.ChatMQExchange != defaultChatMQExchange {
-		t.Fatalf("unexpected default ChatMQExchange: %s", cfg.ChatMQExchange)
-	}
-	if cfg.InstanceID == "" {
-		t.Fatalf("unexpected empty default InstanceID")
+	if cfg.Group != "SHIORI_TEST" || cfg.Namespace != "abc" {
+		t.Fatalf("unexpected group/namespace: %+v", cfg)
 	}
 }
 
-func TestLoadOverrideAndFallback(t *testing.T) {
-	t.Setenv("NOTIFY_HTTP_ADDR", ":18090")
-	t.Setenv("RABBITMQ_ADDR", "amqp://guest:guest@127.0.0.1:5672/")
-	t.Setenv("RABBITMQ_EXCHANGES", "shiori.order.event,shiori.user.event")
-	t.Setenv("RABBITMQ_QUEUE", "notify.event")
-	t.Setenv("RABBITMQ_ROUTING_KEYS", "order.paid,user.status.changed")
-	t.Setenv("LOG_LEVEL", "debug")
-	t.Setenv("WS_WRITE_TIMEOUT", "not-a-duration")
-	t.Setenv("WS_PING_INTERVAL", "45s")
-	t.Setenv("NOTIFY_METRICS_ENABLED", "false")
-	t.Setenv("NOTIFY_STORE_DRIVER", "MySQL")
-	t.Setenv("NOTIFY_EVENT_STORE_MAX_PER_USER", "500")
-	t.Setenv("NOTIFY_REPLAY_DEFAULT_LIMIT", "20")
-	t.Setenv("NOTIFY_REPLAY_MAX_LIMIT", "120")
-	t.Setenv("NOTIFY_WS_REPLAY_DEFAULT_LIMIT", "80")
-	t.Setenv("NOTIFY_AUTH_ENABLED", "false")
-	t.Setenv("NOTIFY_JWT_HMAC_SECRET", "secret")
-	t.Setenv("NOTIFY_JWT_ISSUER", "test-issuer")
-	t.Setenv("NOTIFY_MYSQL_DSN", "user:pwd@tcp(127.0.0.1:3306)/shiori_notify")
-	t.Setenv("NOTIFY_MYSQL_MAX_OPEN_CONNS", "30")
-	t.Setenv("NOTIFY_MYSQL_MAX_IDLE_CONNS", "15")
-	t.Setenv("NOTIFY_MYSQL_CONN_MAX_LIFETIME", "1h")
-	t.Setenv("NOTIFY_WS_PATH", "/socket")
-	t.Setenv("NOTIFY_CHAT_ENABLED", "true")
-	t.Setenv("NOTIFY_CHAT_DEFAULT_LIMIT", "30")
-	t.Setenv("NOTIFY_CHAT_MAX_LIMIT", "80")
-	t.Setenv("NOTIFY_CHAT_TICKET_ISSUER", "chat-issuer")
-	t.Setenv("NOTIFY_CHAT_TICKET_PUBLIC_KEY_PEM_BASE64", "public-key")
-	t.Setenv("NOTIFY_CHAT_MQ_ENABLED", "false")
-	t.Setenv("NOTIFY_CHAT_MQ_EXCHANGE", "chat-ex")
-	t.Setenv("NOTIFY_INSTANCE_ID", "instance-1")
+func TestLoadNacosConnFromEnvRequiresCredentials(t *testing.T) {
+	_ = os.Unsetenv("NACOS_USERNAME")
+	_ = os.Unsetenv("NACOS_PASSWORD")
+	t.Setenv("NACOS_ADDR", "127.0.0.1:8848")
 
-	cfg := Load()
-
-	if cfg.HTTPAddr != ":18090" {
-		t.Fatalf("unexpected HTTPAddr: %s", cfg.HTTPAddr)
-	}
-	if cfg.RabbitMQAddr != "amqp://guest:guest@127.0.0.1:5672/" {
-		t.Fatalf("unexpected RabbitMQAddr: %s", cfg.RabbitMQAddr)
-	}
-	if len(cfg.RabbitMQExchanges) != 2 || cfg.RabbitMQExchanges[1] != "shiori.user.event" {
-		t.Fatalf("unexpected RabbitMQExchanges: %+v", cfg.RabbitMQExchanges)
-	}
-	if len(cfg.RabbitMQRoutingKeys) != 2 || cfg.RabbitMQRoutingKeys[1] != "user.status.changed" {
-		t.Fatalf("unexpected RabbitMQRoutingKeys: %+v", cfg.RabbitMQRoutingKeys)
-	}
-	if cfg.RabbitMQExchange != "shiori.order.event" {
-		t.Fatalf("unexpected RabbitMQExchange: %s", cfg.RabbitMQExchange)
-	}
-	if cfg.RabbitMQRoutingKey != "order.paid" {
-		t.Fatalf("unexpected RabbitMQRoutingKey: %s", cfg.RabbitMQRoutingKey)
-	}
-	if cfg.RabbitMQQueue != "notify.event" {
-		t.Fatalf("unexpected RabbitMQQueue: %s", cfg.RabbitMQQueue)
-	}
-	if cfg.LogLevel != zerolog.DebugLevel {
-		t.Fatalf("unexpected LogLevel: %v", cfg.LogLevel)
-	}
-	if cfg.WSWriteTimeout != defaultWSWriteTimeout {
-		t.Fatalf("invalid duration should fallback, got: %s", cfg.WSWriteTimeout)
-	}
-	if cfg.WSPingInterval != 45*time.Second {
-		t.Fatalf("unexpected WSPingInterval: %s", cfg.WSPingInterval)
-	}
-	if cfg.MetricsEnabled {
-		t.Fatalf("unexpected MetricsEnabled: %t", cfg.MetricsEnabled)
-	}
-	if cfg.StoreDriver != "mysql" {
-		t.Fatalf("unexpected StoreDriver: %s", cfg.StoreDriver)
-	}
-	if cfg.StoreMaxPerUser != 500 {
-		t.Fatalf("unexpected StoreMaxPerUser: %d", cfg.StoreMaxPerUser)
-	}
-	if cfg.ReplayDefaultLimit != 20 {
-		t.Fatalf("unexpected ReplayDefaultLimit: %d", cfg.ReplayDefaultLimit)
-	}
-	if cfg.ReplayMaxLimit != 120 {
-		t.Fatalf("unexpected ReplayMaxLimit: %d", cfg.ReplayMaxLimit)
-	}
-	if cfg.WSReplayLimit != 80 {
-		t.Fatalf("unexpected WSReplayLimit: %d", cfg.WSReplayLimit)
-	}
-	if cfg.AuthEnabled {
-		t.Fatalf("unexpected AuthEnabled: %t", cfg.AuthEnabled)
-	}
-	if cfg.JWTHmacSecret != "secret" {
-		t.Fatalf("unexpected JWTHmacSecret: %s", cfg.JWTHmacSecret)
-	}
-	if cfg.JWTIssuer != "test-issuer" {
-		t.Fatalf("unexpected JWTIssuer: %s", cfg.JWTIssuer)
-	}
-	if cfg.MySQLDSN != "user:pwd@tcp(127.0.0.1:3306)/shiori_notify" {
-		t.Fatalf("unexpected MySQLDSN: %s", cfg.MySQLDSN)
-	}
-	if cfg.MySQLMaxOpenConns != 30 {
-		t.Fatalf("unexpected MySQLMaxOpenConns: %d", cfg.MySQLMaxOpenConns)
-	}
-	if cfg.MySQLMaxIdleConns != 15 {
-		t.Fatalf("unexpected MySQLMaxIdleConns: %d", cfg.MySQLMaxIdleConns)
-	}
-	if cfg.MySQLConnMaxLifetime != time.Hour {
-		t.Fatalf("unexpected MySQLConnMaxLifetime: %s", cfg.MySQLConnMaxLifetime)
-	}
-	if cfg.WSPath != "/socket" {
-		t.Fatalf("unexpected WSPath: %s", cfg.WSPath)
-	}
-	if !cfg.ChatEnabled {
-		t.Fatalf("unexpected ChatEnabled: %t", cfg.ChatEnabled)
-	}
-	if cfg.ChatDefaultLimit != 30 {
-		t.Fatalf("unexpected ChatDefaultLimit: %d", cfg.ChatDefaultLimit)
-	}
-	if cfg.ChatMaxLimit != 80 {
-		t.Fatalf("unexpected ChatMaxLimit: %d", cfg.ChatMaxLimit)
-	}
-	if cfg.ChatTicketIssuer != "chat-issuer" {
-		t.Fatalf("unexpected ChatTicketIssuer: %s", cfg.ChatTicketIssuer)
-	}
-	if cfg.ChatTicketPublicKey != "public-key" {
-		t.Fatalf("unexpected ChatTicketPublicKey: %s", cfg.ChatTicketPublicKey)
-	}
-	if cfg.ChatMQEnabled {
-		t.Fatalf("unexpected ChatMQEnabled: %t", cfg.ChatMQEnabled)
-	}
-	if cfg.ChatMQExchange != "chat-ex" {
-		t.Fatalf("unexpected ChatMQExchange: %s", cfg.ChatMQExchange)
-	}
-	if cfg.InstanceID != "instance-1" {
-		t.Fatalf("unexpected InstanceID: %s", cfg.InstanceID)
+	if _, err := LoadNacosConnFromEnv(); err == nil {
+		t.Fatalf("expected error when nacos credentials are missing")
 	}
 }
 
-func TestParseCSV(t *testing.T) {
-	items := parseCSV("a, b, a, ,c")
-	if len(items) != 3 {
-		t.Fatalf("unexpected item len: %d", len(items))
+func TestNotifyNacosConfigToRuntimeConfig(t *testing.T) {
+	metricsEnabled := true
+	authEnabled := true
+	chatEnabled := true
+	chatMQEnabled := true
+
+	nacosCfg := NotifyNacosConfig{}
+	nacosCfg.Notify.HTTP.Addr = ":8090"
+	nacosCfg.Notify.RabbitMQ.Addr = "amqp://notify:pwd@rabbitmq:5672/"
+	nacosCfg.Notify.RabbitMQ.Exchanges = "shiori.order.event,shiori.user.event"
+	nacosCfg.Notify.RabbitMQ.RoutingKeys = "order.created,user.status.changed"
+	nacosCfg.Notify.RabbitMQ.Queue = "notify.order.event"
+	nacosCfg.Notify.Log.Level = "info"
+	nacosCfg.Notify.WS.Path = "/ws"
+	nacosCfg.Notify.WS.WriteTimeout = "5s"
+	nacosCfg.Notify.WS.PingInterval = "30s"
+	nacosCfg.Notify.Metrics.Enabled = &metricsEnabled
+	nacosCfg.Notify.Store.Driver = "mysql"
+	nacosCfg.Notify.Store.MaxPerUser = 1000
+	nacosCfg.Notify.Replay.DefaultLimit = 50
+	nacosCfg.Notify.Replay.MaxLimit = 200
+	nacosCfg.Notify.Replay.WSLimit = 100
+	nacosCfg.Notify.Auth.Enabled = &authEnabled
+	nacosCfg.Notify.MySQL.DSN = "notify_service:pwd@tcp(mysql:3306)/shiori_notify?charset=utf8mb4&parseTime=true&loc=UTC"
+	nacosCfg.Notify.MySQL.MaxOpenConns = 20
+	nacosCfg.Notify.MySQL.MaxIdleConns = 10
+	nacosCfg.Notify.MySQL.ConnMaxLifetime = "30m"
+	nacosCfg.Notify.Chat.Enabled = &chatEnabled
+	nacosCfg.Notify.Chat.DefaultLimit = 20
+	nacosCfg.Notify.Chat.MaxLimit = 100
+	nacosCfg.Notify.Chat.TicketIssuer = "shiori-chat-ticket"
+	nacosCfg.Notify.Chat.TicketPublicKey = "pub"
+	nacosCfg.Notify.Chat.MQEnabled = &chatMQEnabled
+	nacosCfg.Notify.Chat.MQExchange = "shiori.chat.event"
+	nacosCfg.Notify.Instance.ID = "notify-1"
+	nacosCfg.Security.JWT.Issuer = "shiori"
+	nacosCfg.Security.JWT.HMACSecret = "hmac"
+
+	cfg, err := nacosCfg.ToRuntimeConfig()
+	if err != nil {
+		t.Fatalf("ToRuntimeConfig failed: %v", err)
 	}
-	if items[0] != "a" || items[1] != "b" || items[2] != "c" {
-		t.Fatalf("unexpected parse result: %+v", items)
+	if cfg.StoreDriver != "mysql" || !cfg.ChatEnabled || cfg.JWTHmacSecret != "hmac" {
+		t.Fatalf("unexpected runtime config: %+v", cfg)
+	}
+}
+
+func TestNotifyNacosConfigToRuntimeConfigValidate(t *testing.T) {
+	authEnabled := true
+	nacosCfg := NotifyNacosConfig{}
+	nacosCfg.Notify.HTTP.Addr = ":8090"
+	nacosCfg.Notify.RabbitMQ.Addr = "amqp://notify:pwd@rabbitmq:5672/"
+	nacosCfg.Notify.RabbitMQ.Exchanges = "shiori.order.event"
+	nacosCfg.Notify.RabbitMQ.RoutingKeys = "order.created"
+	nacosCfg.Notify.RabbitMQ.Queue = "notify.order.event"
+	nacosCfg.Notify.Store.Driver = "mysql"
+	nacosCfg.Notify.Store.MaxPerUser = 1000
+	nacosCfg.Notify.Replay.DefaultLimit = 50
+	nacosCfg.Notify.Replay.MaxLimit = 200
+	nacosCfg.Notify.Replay.WSLimit = 100
+	nacosCfg.Notify.Auth.Enabled = &authEnabled
+	nacosCfg.Security.JWT.Issuer = "shiori"
+	// intentionally missing jwt secret and mysql dsn
+
+	if _, err := nacosCfg.ToRuntimeConfig(); err == nil {
+		t.Fatalf("expected validation error when required fields are missing")
 	}
 }

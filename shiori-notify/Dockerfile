@@ -14,8 +14,8 @@ RUN addgroup -S app && adduser -S app -G app
 WORKDIR /app
 COPY --from=builder /out/shiori-notify /usr/local/bin/shiori-notify
 
-ENV NOTIFY_HTTP_ADDR=:8090
-ENV RABBITMQ_ADDR=amqp://rabbitmq:5672/
+ENV NACOS_ADDR=nacos:8848
+ENV NACOS_CONFIG_GROUP=SHIORI_DEV_DOCKER
 
 EXPOSE 8090
 USER app

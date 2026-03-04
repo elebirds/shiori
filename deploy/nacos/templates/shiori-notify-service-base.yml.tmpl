@@ -1,0 +1,36 @@
+notify:
+  http:
+    addr: ${NOTIFY_HTTP_ADDR}
+  rabbitmq:
+    addr: ${NOTIFY_RABBITMQ_ADDR}
+    queue: notify.order.event
+    exchanges: shiori.order.event,shiori.user.event
+    routing-keys: order.created,order.paid,order.canceled,order.delivered,order.finished,user.status.changed,user.role.changed,user.password.reset
+  log:
+    level: info
+  ws:
+    path: ${NOTIFY_WS_PATH}
+    write-timeout: 5s
+    ping-interval: 30s
+  metrics:
+    enabled: true
+  store:
+    driver: mysql
+    max-per-user: 1000
+  replay:
+    default-limit: 50
+    max-limit: 200
+    ws-limit: 100
+  auth:
+    enabled: true
+  mysql:
+    max-open-conns: 20
+    max-idle-conns: 10
+    conn-max-lifetime: 30m
+  chat:
+    enabled: ${NOTIFY_CHAT_ENABLED}
+    default-limit: ${NOTIFY_CHAT_DEFAULT_LIMIT}
+    max-limit: ${NOTIFY_CHAT_MAX_LIMIT}
+    ticket-issuer: ${CHAT_TICKET_ISSUER}
+    mq-enabled: ${NOTIFY_CHAT_MQ_ENABLED}
+    mq-exchange: ${NOTIFY_CHAT_MQ_EXCHANGE}

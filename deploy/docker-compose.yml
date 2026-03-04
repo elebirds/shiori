@@ -118,8 +118,17 @@ services:
       USER_RMQ_PORT: ${USER_RMQ_PORT_DOCKER:-5672}
       USER_RMQ_USERNAME: ${USER_RMQ_USERNAME:?missing}
       USER_RMQ_PASSWORD: ${USER_RMQ_PASSWORD:?missing}
-      NOTIFY_BASE_URL: ${NOTIFY_BASE_URL_DOCKER:-http://shiori-notify-service:8090}
-      NOTIFY_WS_BASE_URL: ${NOTIFY_WS_BASE_URL_DOCKER:-ws://shiori-notify-service:8090}
+      NOTIFY_HTTP_ADDR: ${NOTIFY_HTTP_ADDR:-:8090}
+      NOTIFY_WS_PATH: ${NOTIFY_WS_PATH:-/ws}
+      NOTIFY_CHAT_ENABLED: ${NOTIFY_CHAT_ENABLED:-false}
+      NOTIFY_CHAT_DEFAULT_LIMIT: ${NOTIFY_CHAT_DEFAULT_LIMIT:-20}
+      NOTIFY_CHAT_MAX_LIMIT: ${NOTIFY_CHAT_MAX_LIMIT:-100}
+      NOTIFY_CHAT_MQ_ENABLED: ${NOTIFY_CHAT_MQ_ENABLED:-true}
+      NOTIFY_CHAT_MQ_EXCHANGE: ${NOTIFY_CHAT_MQ_EXCHANGE:-shiori.chat.event}
+      NOTIFY_INSTANCE_ID: ${NOTIFY_INSTANCE_ID:-}
+      NOTIFY_CHAT_TICKET_PUBLIC_KEY_PEM_BASE64: ${NOTIFY_CHAT_TICKET_PUBLIC_KEY_PEM_BASE64:-}
+      NOTIFY_MYSQL_DSN: ${NOTIFY_DB_USERNAME:?missing}:${NOTIFY_DB_PASSWORD:?missing}@tcp(${NOTIFY_DB_HOST_DOCKER:-mysql}:${NOTIFY_DB_PORT_DOCKER:-3306})/${NOTIFY_DB_NAME_DOCKER:-shiori_notify}?charset=utf8mb4&parseTime=true&loc=UTC
+      NOTIFY_RABBITMQ_ADDR: amqp://${NOTIFY_RMQ_USERNAME:?missing}:${NOTIFY_RMQ_PASSWORD:?missing}@${NOTIFY_RMQ_HOST_DOCKER:-rabbitmq}:${NOTIFY_RMQ_PORT_DOCKER:-5672}/
       PRODUCT_OSS_ENDPOINT: ${PRODUCT_OSS_ENDPOINT_DOCKER:-http://minio:9000}
       ORDER_PRODUCT_SERVICE_BASE_URL: ${ORDER_PRODUCT_SERVICE_BASE_URL_DOCKER:-http://shiori-product-service}
       MINIO_PRODUCT_BUCKET: ${MINIO_PRODUCT_BUCKET:-shiori-product}
@@ -172,8 +181,17 @@ services:
       USER_RMQ_PORT: ${USER_RMQ_PORT_LOCAL:-5672}
       USER_RMQ_USERNAME: ${USER_RMQ_USERNAME:?missing}
       USER_RMQ_PASSWORD: ${USER_RMQ_PASSWORD:?missing}
-      NOTIFY_BASE_URL: ${NOTIFY_BASE_URL_LOCAL:-http://127.0.0.1:8090}
-      NOTIFY_WS_BASE_URL: ${NOTIFY_WS_BASE_URL_LOCAL:-ws://127.0.0.1:8090}
+      NOTIFY_HTTP_ADDR: ${NOTIFY_HTTP_ADDR:-:8090}
+      NOTIFY_WS_PATH: ${NOTIFY_WS_PATH:-/ws}
+      NOTIFY_CHAT_ENABLED: ${NOTIFY_CHAT_ENABLED:-false}
+      NOTIFY_CHAT_DEFAULT_LIMIT: ${NOTIFY_CHAT_DEFAULT_LIMIT:-20}
+      NOTIFY_CHAT_MAX_LIMIT: ${NOTIFY_CHAT_MAX_LIMIT:-100}
+      NOTIFY_CHAT_MQ_ENABLED: ${NOTIFY_CHAT_MQ_ENABLED:-true}
+      NOTIFY_CHAT_MQ_EXCHANGE: ${NOTIFY_CHAT_MQ_EXCHANGE:-shiori.chat.event}
+      NOTIFY_INSTANCE_ID: ${NOTIFY_INSTANCE_ID:-}
+      NOTIFY_CHAT_TICKET_PUBLIC_KEY_PEM_BASE64: ${NOTIFY_CHAT_TICKET_PUBLIC_KEY_PEM_BASE64:-}
+      NOTIFY_MYSQL_DSN: ${NOTIFY_DB_USERNAME:?missing}:${NOTIFY_DB_PASSWORD:?missing}@tcp(${NOTIFY_DB_HOST_LOCAL:-127.0.0.1}:${NOTIFY_DB_PORT_LOCAL:-3306})/${NOTIFY_DB_NAME_LOCAL:-shiori_notify}?charset=utf8mb4&parseTime=true&loc=UTC
+      NOTIFY_RABBITMQ_ADDR: amqp://${NOTIFY_RMQ_USERNAME:?missing}:${NOTIFY_RMQ_PASSWORD:?missing}@${NOTIFY_RMQ_HOST_LOCAL:-127.0.0.1}:${NOTIFY_RMQ_PORT_LOCAL:-5672}/
       PRODUCT_OSS_ENDPOINT: ${PRODUCT_OSS_ENDPOINT_LOCAL:-http://127.0.0.1:9000}
       ORDER_PRODUCT_SERVICE_BASE_URL: ${ORDER_PRODUCT_SERVICE_BASE_URL_LOCAL:-http://shiori-product-service}
       MINIO_PRODUCT_BUCKET: ${MINIO_PRODUCT_BUCKET:-shiori-product}
@@ -398,30 +416,21 @@ services:
       dockerfile: shiori-notify/Dockerfile
     container_name: shiori-notify-service
     environment:
-      NOTIFY_HTTP_ADDR: :8090
-      NOTIFY_STORE_DRIVER: mysql
-      NOTIFY_MYSQL_DSN: ${NOTIFY_DB_USERNAME:?missing}:${NOTIFY_DB_PASSWORD:?missing}@tcp(mysql:3306)/${NOTIFY_DB_NAME_DOCKER:-shiori_notify}?charset=utf8mb4&parseTime=true&loc=UTC
-      NOTIFY_AUTH_ENABLED: "true"
-      NOTIFY_JWT_HMAC_SECRET: ${NOTIFY_JWT_HMAC_SECRET:?missing}
-      NOTIFY_JWT_ISSUER: ${NOTIFY_JWT_ISSUER:-shiori}
-      NOTIFY_WS_PATH: ${NOTIFY_WS_PATH:-/ws}
-      NOTIFY_CHAT_ENABLED: ${NOTIFY_CHAT_ENABLED:-false}
-      NOTIFY_CHAT_DEFAULT_LIMIT: ${NOTIFY_CHAT_DEFAULT_LIMIT:-20}
-      NOTIFY_CHAT_MAX_LIMIT: ${NOTIFY_CHAT_MAX_LIMIT:-100}
-      NOTIFY_CHAT_TICKET_ISSUER: ${CHAT_TICKET_ISSUER:-shiori-chat-ticket}
-      NOTIFY_CHAT_TICKET_PUBLIC_KEY_PEM_BASE64: ${NOTIFY_CHAT_TICKET_PUBLIC_KEY_PEM_BASE64:-}
-      NOTIFY_CHAT_MQ_ENABLED: ${NOTIFY_CHAT_MQ_ENABLED:-true}
-      NOTIFY_CHAT_MQ_EXCHANGE: ${NOTIFY_CHAT_MQ_EXCHANGE:-shiori.chat.event}
-      NOTIFY_INSTANCE_ID: ${NOTIFY_INSTANCE_ID:-}
-      RABBITMQ_ADDR: amqp://${NOTIFY_RMQ_USERNAME:?missing}:${NOTIFY_RMQ_PASSWORD:?missing}@rabbitmq:5672/
-      RABBITMQ_EXCHANGES: shiori.order.event,shiori.user.event
-      RABBITMQ_ROUTING_KEYS: order.created,order.paid,order.canceled,order.delivered,order.finished,user.status.changed,user.role.changed,user.password.reset
+      NACOS_ADDR: nacos:8848
+      NACOS_USERNAME: ${NACOS_IMPORT_USERNAME:?missing}
+      NACOS_PASSWORD: ${NACOS_IMPORT_PASSWORD:?missing}
+      NACOS_CONFIG_GROUP: ${NACOS_CONFIG_GROUP:-SHIORI_DEV_DOCKER}
+      NACOS_CONFIG_NAMESPACE: ${NACOS_CONFIG_NAMESPACE:-}
     depends_on:
       mysql:
         condition: service_started
       rabbitmq:
         condition: service_started
       rabbitmq-auth-init:
+        condition: service_completed_successfully
+      nacos:
+        condition: service_started
+      nacos-config-init:
         condition: service_completed_successfully
     ports:
       - "8090:8090"

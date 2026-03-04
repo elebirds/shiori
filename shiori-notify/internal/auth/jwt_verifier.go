@@ -33,7 +33,7 @@ func NewJWTVerifier(enabled bool, hmacSecret, issuer string) (*JWTVerifier, erro
 
 	trimmedSecret := strings.TrimSpace(hmacSecret)
 	if trimmedSecret == "" {
-		return nil, errors.New("notify auth is enabled but NOTIFY_JWT_HMAC_SECRET is empty")
+		return nil, errors.New("notify auth is enabled but JWT HMAC secret is empty")
 	}
 
 	return &JWTVerifier{
