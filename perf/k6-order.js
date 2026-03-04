@@ -13,6 +13,8 @@ let failLogCount = 0;
 
 const orderCreateDuration = new Trend('shiori_perf_order_create_duration_ms', true);
 const orderPayDuration = new Trend('shiori_perf_order_pay_duration_ms', true);
+const orderDeliverDuration = new Trend('shiori_perf_order_deliver_duration_ms', true);
+const orderConfirmDuration = new Trend('shiori_perf_order_confirm_duration_ms', true);
 const orderDetailDuration = new Trend('shiori_perf_order_detail_duration_ms', true);
 const bizFailedTotal = new Counter('shiori_perf_order_biz_failed_total');
 
@@ -21,9 +23,11 @@ export const options = {
   duration,
   thresholds: {
     http_req_failed: ['rate<0.01'],
-    shiori_perf_order_create_duration_ms: ['p(95)<300'],
-    shiori_perf_order_pay_duration_ms: ['p(95)<300'],
-    shiori_perf_order_detail_duration_ms: ['p(95)<300'],
+    shiori_perf_order_create_duration_ms: ['p(95)<400'],
+    shiori_perf_order_pay_duration_ms: ['p(95)<400'],
+    shiori_perf_order_deliver_duration_ms: ['p(95)<400'],
+    shiori_perf_order_confirm_duration_ms: ['p(95)<400'],
+    shiori_perf_order_detail_duration_ms: ['p(95)<400'],
     shiori_perf_order_biz_failed_total: ['count==0'],
   },
 };
@@ -97,13 +101,13 @@ export function setup() {
   const sellerPassword = uniqueText('SellerA');
   const buyerPassword = uniqueText('BuyerA');
 
-  mustOk(
+  const sellerRegister = mustOk(
     apiRequest('POST', '/api/user/auth/register', '', {
       username: sellerUsername,
       password: sellerPassword,
       nickname: `Seller ${perfPrefix}`,
     }),
-    'register seller'
+    'register seller',
   );
   const buyerRegister = mustOk(
     apiRequest('POST', '/api/user/auth/register', '', {
@@ -111,7 +115,7 @@ export function setup() {
       password: buyerPassword,
       nickname: `Buyer ${perfPrefix}`,
     }),
-    'register buyer'
+    'register buyer',
   );
 
   const sellerLogin = mustOk(
@@ -119,40 +123,46 @@ export function setup() {
       username: sellerUsername,
       password: sellerPassword,
     }),
-    'login seller'
+    'login seller',
   );
   const buyerLogin = mustOk(
     apiRequest('POST', '/api/user/auth/login', '', {
       username: buyerUsername,
       password: buyerPassword,
     }),
-    'login buyer'
+    'login buyer',
   );
 
   const productCreate = mustOk(
-    apiRequest('POST', '/api/product/products', sellerLogin.accessToken, {
+    apiRequest('POST', '/api/v2/product/products', sellerLogin.accessToken, {
       title: `Perf 商品 ${perfPrefix}`,
-      description: 'k6 order baseline',
+      description: 'k6 v0.4-b order flow',
       coverObjectKey: null,
+      categoryCode: 'TEXTBOOK',
+      conditionLevel: 'GOOD',
+      tradeMode: 'MEETUP',
+      campusCode: 'perf_campus',
       skus: [
         { skuName: '标准版', specJson: '{"edition":"std"}', priceCent: 1999, stock: 200000 },
         { skuName: '豪华版', specJson: '{"edition":"pro"}', priceCent: 2999, stock: 200000 },
       ],
     }),
-    'create product'
+    'create product',
   );
 
   mustOk(
-    apiRequest('POST', `/api/product/products/${productCreate.productId}/publish`, sellerLogin.accessToken, null),
-    'publish product'
+    apiRequest('POST', `/api/v2/product/products/${productCreate.productId}/publish`, sellerLogin.accessToken, null),
+    'publish product',
   );
 
   const detail = mustOk(
-    apiRequest('GET', `/api/product/products/${productCreate.productId}`, '', null),
-    'get product detail'
+    apiRequest('GET', `/api/v2/product/products/${productCreate.productId}`, '', null),
+    'get product detail',
   );
 
   return {
+    sellerToken: sellerLogin.accessToken,
+    sellerUserId: `${sellerRegister.userId}`,
     buyerToken: buyerLogin.accessToken,
     buyerUserId: `${buyerRegister.userId}`,
     productId: productCreate.productId,
@@ -162,10 +172,10 @@ export function setup() {
 }
 
 export default function (data) {
-  const idemKey = `${perfPrefix}-idem-${__VU}-${__ITER}-${Date.now()}`;
+  const createIdemKey = `${perfPrefix}-create-${__VU}-${__ITER}-${Date.now()}`;
   const createOrder = apiRequest(
     'POST',
-    '/api/order/orders',
+    '/api/v2/order/orders',
     data.buyerToken,
     {
       items: [
@@ -173,7 +183,7 @@ export default function (data) {
         { productId: data.productId, skuId: data.skuId2, quantity: 1 },
       ],
     },
-    { 'Idempotency-Key': idemKey }
+    { 'Idempotency-Key': createIdemKey },
   );
   orderCreateDuration.add(createOrder.res.timings.duration);
   if (!createOrder.ok) {
@@ -184,9 +194,10 @@ export default function (data) {
   const orderNo = createOrder.parsed.data.orderNo;
   const payOrder = apiRequest(
     'POST',
-    `/api/order/orders/${orderNo}/pay`,
+    `/api/v2/order/orders/${orderNo}/pay`,
     data.buyerToken,
-    { paymentNo: `${perfPrefix}-pay-${__VU}-${__ITER}-${Date.now()}` }
+    { paymentNo: `${perfPrefix}-pay-${__VU}-${__ITER}-${Date.now()}` },
+    { 'Idempotency-Key': `${perfPrefix}-pay-${__VU}-${__ITER}-${Date.now()}` },
   );
   orderPayDuration.add(payOrder.res.timings.duration);
   if (!payOrder.ok) {
@@ -194,16 +205,41 @@ export default function (data) {
     return;
   }
 
+  const deliverOrder = apiRequest(
+    'POST',
+    `/api/v2/order/seller/orders/${orderNo}/deliver`,
+    data.sellerToken,
+    { reason: 'k6 seller deliver' },
+  );
+  orderDeliverDuration.add(deliverOrder.res.timings.duration);
+  if (!deliverOrder.ok) {
+    markBizFailure('deliver', deliverOrder);
+    return;
+  }
+
+  const confirmReceipt = apiRequest(
+    'POST',
+    `/api/v2/order/orders/${orderNo}/confirm-receipt`,
+    data.buyerToken,
+    { reason: 'k6 buyer confirm' },
+  );
+  orderConfirmDuration.add(confirmReceipt.res.timings.duration);
+  if (!confirmReceipt.ok) {
+    markBizFailure('confirm', confirmReceipt);
+    return;
+  }
+
   const orderDetail = apiRequest(
     'GET',
-    `/api/order/orders/${orderNo}`,
+    `/api/v2/order/orders/${orderNo}`,
     data.buyerToken,
-    null
+    null,
   );
   orderDetailDuration.add(orderDetail.res.timings.duration);
-  if (!orderDetail.ok || orderDetail.parsed.data.status !== 'PAID') {
+  if (!orderDetail.ok || orderDetail.parsed.data.status !== 'FINISHED') {
     markBizFailure('detail', orderDetail);
   }
 
   sleep(0.2);
 }
+

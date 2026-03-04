@@ -19,6 +19,10 @@ mybatis:
   configuration:
     map-underscore-to-camel-case: true
 
+feature:
+  api-v2:
+    enabled: true
+
 order:
   timeout-minutes: 15
   product-client:
@@ -34,6 +38,8 @@ order:
     order-created-routing-key: order.created
     order-paid-routing-key: order.paid
     order-canceled-routing-key: order.canceled
+    order-delivered-routing-key: order.delivered
+    order-finished-routing-key: order.finished
     delay-exchange: shiori.order.delay
     delay-routing-key: order.timeout
     timeout-dlx-exchange: shiori.order.timeout.dlx

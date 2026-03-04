@@ -4,7 +4,7 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import ResultState from '@/components/ResultState.vue'
-import { cancelOrder, getOrderDetail, payOrder } from '@/api/order'
+import { cancelOrderV2, confirmReceiptV2, getOrderDetailV2, getOrderTimelineV2, payOrderV2, type OrderStatus } from '@/api/orderV2'
 import { ApiBizError } from '@/types/result'
 
 const route = useRoute()
@@ -14,8 +14,8 @@ const queryClient = useQueryClient()
 const orderNo = computed(() => String(route.params.orderNo || ''))
 
 const query = useQuery({
-  queryKey: computed(() => ['order-detail', orderNo.value]),
-  queryFn: () => getOrderDetail(orderNo.value),
+  queryKey: computed(() => ['order-detail-v2', orderNo.value]),
+  queryFn: () => getOrderDetailV2(orderNo.value),
   enabled: computed(() => orderNo.value.length > 0),
   refetchInterval: (state) => {
     const status = state.state.data?.status
@@ -23,23 +23,41 @@ const query = useQuery({
   },
 })
 
+const timelineQuery = useQuery({
+  queryKey: computed(() => ['order-timeline-v2', orderNo.value]),
+  queryFn: () => getOrderTimelineV2(orderNo.value, { page: 1, size: 50 }),
+  enabled: computed(() => orderNo.value.length > 0),
+})
+
 const payMutation = useMutation({
-  mutationFn: () => payOrder(orderNo.value, { paymentNo: `web-pay-${Date.now()}` }),
+  mutationFn: () => payOrderV2(orderNo.value, { paymentNo: `web-pay-${Date.now()}` }),
   onSuccess: async () => {
     await query.refetch()
-    await queryClient.invalidateQueries({ queryKey: ['orders'] })
+    await timelineQuery.refetch()
+    await queryClient.invalidateQueries({ queryKey: ['orders-v2'] })
   },
 })
 
 const cancelMutation = useMutation({
-  mutationFn: () => cancelOrder(orderNo.value, { reason: '用户主动取消' }),
+  mutationFn: () => cancelOrderV2(orderNo.value, { reason: '用户主动取消' }),
   onSuccess: async () => {
     await query.refetch()
-    await queryClient.invalidateQueries({ queryKey: ['orders'] })
+    await timelineQuery.refetch()
+    await queryClient.invalidateQueries({ queryKey: ['orders-v2'] })
+  },
+})
+
+const confirmMutation = useMutation({
+  mutationFn: () => confirmReceiptV2(orderNo.value, { reason: '买家已确认收货' }),
+  onSuccess: async () => {
+    await query.refetch()
+    await timelineQuery.refetch()
+    await queryClient.invalidateQueries({ queryKey: ['orders-v2'] })
   },
 })
 
 const detail = computed(() => query.data.value)
+const timelineItems = computed(() => timelineQuery.data.value?.items || [])
 const errorMessage = computed(() => (query.error.value instanceof Error ? query.error.value.message : ''))
 
 function formatMoney(priceCent: number): string {
@@ -58,6 +76,22 @@ function formatTime(raw?: string): string {
   return parsed.toLocaleString('zh-CN')
 }
 
+function statusClass(status: OrderStatus): string {
+  if (status === 'UNPAID') {
+    return 'bg-amber-100 text-amber-700'
+  }
+  if (status === 'PAID') {
+    return 'bg-sky-100 text-sky-700'
+  }
+  if (status === 'DELIVERING') {
+    return 'bg-indigo-100 text-indigo-700'
+  }
+  if (status === 'FINISHED') {
+    return 'bg-emerald-100 text-emerald-700'
+  }
+  return 'bg-stone-200 text-stone-700'
+}
+
 async function handlePay(): Promise<void> {
   try {
     await payMutation.mutateAsync()
@@ -71,6 +105,16 @@ async function handlePay(): Promise<void> {
 async function handleCancel(): Promise<void> {
   try {
     await cancelMutation.mutateAsync()
+  } catch (error) {
+    if (error instanceof ApiBizError) {
+      return
+    }
+  }
+}
+
+async function handleConfirm(): Promise<void> {
+  try {
+    await confirmMutation.mutateAsync()
   } catch (error) {
     if (error instanceof ApiBizError) {
       return
@@ -97,16 +141,7 @@ async function handleCancel(): Promise<void> {
             <p class="mt-1 text-sm text-stone-600">创建于 {{ formatTime(detail.createdAt) }}</p>
             <p v-if="detail.status === 'UNPAID'" class="mt-1 text-xs text-amber-700">状态自动刷新中（每 3 秒）</p>
           </div>
-          <span
-            class="w-fit rounded-full px-3 py-1 text-xs font-semibold"
-            :class="
-              detail.status === 'PAID'
-                ? 'bg-emerald-100 text-emerald-700'
-                : detail.status === 'UNPAID'
-                  ? 'bg-amber-100 text-amber-700'
-                  : 'bg-stone-200 text-stone-700'
-            "
-          >
+          <span class="w-fit rounded-full px-3 py-1 text-xs font-semibold" :class="statusClass(detail.status)">
             {{ detail.status }}
           </span>
         </header>
@@ -145,8 +180,25 @@ async function handleCancel(): Promise<void> {
           </div>
         </section>
 
-        <div class="flex gap-2" v-if="detail.status === 'UNPAID'">
+        <section class="space-y-2">
+          <h2 class="text-base font-semibold text-stone-900">履约时间线</h2>
+          <div class="max-h-64 space-y-2 overflow-auto rounded-xl border border-stone-200 bg-stone-50 p-3">
+            <article v-for="(item, index) in timelineItems" :key="`${item.createdAt}-${index}`" class="rounded-lg bg-white p-3 text-sm">
+              <div class="flex items-center justify-between">
+                <p class="font-medium text-stone-800">{{ item.fromStatus }} -> {{ item.toStatus }}</p>
+                <span class="text-xs text-stone-500">{{ item.source }}</span>
+              </div>
+              <p class="mt-1 text-xs text-stone-600">操作人：{{ item.operatorUserId ?? '-' }}</p>
+              <p class="mt-1 text-xs text-stone-600">时间：{{ formatTime(item.createdAt) }}</p>
+              <p class="mt-1 text-xs text-stone-600">备注：{{ item.reason || '-' }}</p>
+            </article>
+            <p v-if="timelineItems.length === 0" class="text-sm text-stone-500">暂无履约记录</p>
+          </div>
+        </section>
+
+        <div class="flex gap-2" v-if="detail.status === 'UNPAID' || detail.status === 'DELIVERING'">
           <button
+            v-if="detail.status === 'UNPAID'"
             type="button"
             class="rounded-xl bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-70"
             :disabled="payMutation.isPending.value"
@@ -155,6 +207,7 @@ async function handleCancel(): Promise<void> {
             {{ payMutation.isPending.value ? '支付中...' : '立即支付' }}
           </button>
           <button
+            v-if="detail.status === 'UNPAID'"
             type="button"
             class="rounded-xl border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-70"
             :disabled="cancelMutation.isPending.value"
@@ -162,8 +215,18 @@ async function handleCancel(): Promise<void> {
           >
             {{ cancelMutation.isPending.value ? '取消中...' : '取消订单' }}
           </button>
+          <button
+            v-if="detail.status === 'DELIVERING'"
+            type="button"
+            class="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-70"
+            :disabled="confirmMutation.isPending.value"
+            @click="handleConfirm"
+          >
+            {{ confirmMutation.isPending.value ? '提交中...' : '确认收货' }}
+          </button>
         </div>
       </article>
     </ResultState>
   </section>
 </template>
+

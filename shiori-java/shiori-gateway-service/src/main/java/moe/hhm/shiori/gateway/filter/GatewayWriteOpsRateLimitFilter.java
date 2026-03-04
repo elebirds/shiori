@@ -87,7 +87,13 @@ public class GatewayWriteOpsRateLimitFilter implements GlobalFilter, Ordered {
         if ("/api/order/orders".equals(path)) {
             return new EndpointRule("order_create", Math.max(1, properties.getRateLimit().getOrderCreatePerSecond()));
         }
+        if ("/api/v2/order/orders".equals(path)) {
+            return new EndpointRule("order_create", Math.max(1, properties.getRateLimit().getOrderCreatePerSecond()));
+        }
         if (path.startsWith("/api/order/orders/") && path.endsWith("/pay")) {
+            return new EndpointRule("order_pay", Math.max(1, properties.getRateLimit().getOrderPayPerSecond()));
+        }
+        if (path.startsWith("/api/v2/order/orders/") && path.endsWith("/pay")) {
             return new EndpointRule("order_pay", Math.max(1, properties.getRateLimit().getOrderPayPerSecond()));
         }
         return null;

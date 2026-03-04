@@ -3,6 +3,7 @@ package moe.hhm.shiori.product.repository;
 import java.util.List;
 import moe.hhm.shiori.product.model.ProductEntity;
 import moe.hhm.shiori.product.model.ProductRecord;
+import moe.hhm.shiori.product.model.ProductV2Record;
 import moe.hhm.shiori.product.model.SkuEntity;
 import moe.hhm.shiori.product.model.SkuRecord;
 import moe.hhm.shiori.product.model.StockTxnRecord;
@@ -23,6 +24,10 @@ public interface ProductMapper {
                 title,
                 description,
                 cover_object_key,
+                category_code,
+                condition_level,
+                trade_mode,
+                campus_code,
                 status,
                 is_deleted,
                 created_at,
@@ -33,6 +38,10 @@ public interface ProductMapper {
                 #{title},
                 #{description},
                 #{coverObjectKey},
+                #{categoryCode},
+                #{conditionLevel},
+                #{tradeMode},
+                #{campusCode},
                 #{status},
                 0,
                 CURRENT_TIMESTAMP(3),
@@ -47,6 +56,10 @@ public interface ProductMapper {
             SET title = #{title},
                 description = #{description},
                 cover_object_key = #{coverObjectKey},
+                category_code = #{categoryCode},
+                condition_level = #{conditionLevel},
+                trade_mode = #{tradeMode},
+                campus_code = #{campusCode},
                 updated_at = CURRENT_TIMESTAMP(3),
                 version = version + 1
             WHERE id = #{productId}
@@ -55,7 +68,11 @@ public interface ProductMapper {
     int updateProductBase(@Param("productId") Long productId,
                           @Param("title") String title,
                           @Param("description") String description,
-                          @Param("coverObjectKey") String coverObjectKey);
+                          @Param("coverObjectKey") String coverObjectKey,
+                          @Param("categoryCode") String categoryCode,
+                          @Param("conditionLevel") String conditionLevel,
+                          @Param("tradeMode") String tradeMode,
+                          @Param("campusCode") String campusCode);
 
     @Select("""
             SELECT id,
@@ -73,6 +90,37 @@ public interface ProductMapper {
     ProductRecord findProductById(@Param("productId") Long productId);
 
     @Select("""
+            SELECT p.id,
+                   p.product_no AS productNo,
+                   p.owner_user_id AS ownerUserId,
+                   p.title,
+                   p.description,
+                   p.cover_object_key AS coverObjectKey,
+                   p.category_code AS categoryCode,
+                   p.condition_level AS conditionLevel,
+                   p.trade_mode AS tradeMode,
+                   p.campus_code AS campusCode,
+                   p.status,
+                   p.is_deleted AS isDeleted,
+                   agg.min_price_cent AS minPriceCent,
+                   agg.max_price_cent AS maxPriceCent,
+                   agg.total_stock AS totalStock
+            FROM p_product p
+            LEFT JOIN (
+                SELECT product_id,
+                       MIN(price_cent) AS min_price_cent,
+                       MAX(price_cent) AS max_price_cent,
+                       SUM(stock) AS total_stock
+                FROM p_sku
+                WHERE is_deleted = 0
+                GROUP BY product_id
+            ) agg ON agg.product_id = p.id
+            WHERE p.id = #{productId}
+            LIMIT 1
+            """)
+    ProductV2Record findProductV2ById(@Param("productId") Long productId);
+
+    @Select("""
             SELECT id,
                    product_no AS productNo,
                    owner_user_id AS ownerUserId,
@@ -88,6 +136,39 @@ public interface ProductMapper {
             LIMIT 1
             """)
     ProductRecord findOnSaleProductById(@Param("productId") Long productId);
+
+    @Select("""
+            SELECT p.id,
+                   p.product_no AS productNo,
+                   p.owner_user_id AS ownerUserId,
+                   p.title,
+                   p.description,
+                   p.cover_object_key AS coverObjectKey,
+                   p.category_code AS categoryCode,
+                   p.condition_level AS conditionLevel,
+                   p.trade_mode AS tradeMode,
+                   p.campus_code AS campusCode,
+                   p.status,
+                   p.is_deleted AS isDeleted,
+                   agg.min_price_cent AS minPriceCent,
+                   agg.max_price_cent AS maxPriceCent,
+                   agg.total_stock AS totalStock
+            FROM p_product p
+            LEFT JOIN (
+                SELECT product_id,
+                       MIN(price_cent) AS min_price_cent,
+                       MAX(price_cent) AS max_price_cent,
+                       SUM(stock) AS total_stock
+                FROM p_sku
+                WHERE is_deleted = 0
+                GROUP BY product_id
+            ) agg ON agg.product_id = p.id
+            WHERE p.id = #{productId}
+              AND p.is_deleted = 0
+              AND p.status = 2
+            LIMIT 1
+            """)
+    ProductV2Record findOnSaleProductV2ById(@Param("productId") Long productId);
 
     @Select("""
             <script>
@@ -127,6 +208,107 @@ public interface ProductMapper {
             </script>
             """)
     long countOnSaleProducts(@Param("keyword") String keyword);
+
+    @Select("""
+            <script>
+            SELECT p.id,
+                   p.product_no AS productNo,
+                   p.owner_user_id AS ownerUserId,
+                   p.title,
+                   p.description,
+                   p.cover_object_key AS coverObjectKey,
+                   p.category_code AS categoryCode,
+                   p.condition_level AS conditionLevel,
+                   p.trade_mode AS tradeMode,
+                   p.campus_code AS campusCode,
+                   p.status,
+                   p.is_deleted AS isDeleted,
+                   agg.min_price_cent AS minPriceCent,
+                   agg.max_price_cent AS maxPriceCent,
+                   agg.total_stock AS totalStock
+            FROM p_product p
+            LEFT JOIN (
+                SELECT product_id,
+                       MIN(price_cent) AS min_price_cent,
+                       MAX(price_cent) AS max_price_cent,
+                       SUM(stock) AS total_stock
+                FROM p_sku
+                WHERE is_deleted = 0
+                GROUP BY product_id
+            ) agg ON agg.product_id = p.id
+            WHERE p.is_deleted = 0
+              AND p.status = 2
+            <if test="keyword != null and keyword != ''">
+              AND (p.title LIKE CONCAT('%', #{keyword}, '%')
+                   OR p.description LIKE CONCAT('%', #{keyword}, '%')
+                   OR p.product_no LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="categoryCode != null and categoryCode != ''">
+              AND p.category_code = #{categoryCode}
+            </if>
+            <if test="conditionLevel != null and conditionLevel != ''">
+              AND p.condition_level = #{conditionLevel}
+            </if>
+            <if test="tradeMode != null and tradeMode != ''">
+              AND p.trade_mode = #{tradeMode}
+            </if>
+            <if test="campusCode != null and campusCode != ''">
+              AND p.campus_code = #{campusCode}
+            </if>
+            ORDER BY
+            <choose>
+              <when test="sortBy == 'MIN_PRICE'">IFNULL(agg.min_price_cent, 0)</when>
+              <when test="sortBy == 'MAX_PRICE'">IFNULL(agg.max_price_cent, 0)</when>
+              <otherwise>p.created_at</otherwise>
+            </choose>
+            <choose>
+              <when test="sortDir == 'ASC'">ASC</when>
+              <otherwise>DESC</otherwise>
+            </choose>,
+            p.id DESC
+            LIMIT #{size} OFFSET #{offset}
+            </script>
+            """)
+    List<ProductV2Record> listOnSaleProductsV2(@Param("keyword") String keyword,
+                                               @Param("categoryCode") String categoryCode,
+                                               @Param("conditionLevel") String conditionLevel,
+                                               @Param("tradeMode") String tradeMode,
+                                               @Param("campusCode") String campusCode,
+                                               @Param("sortBy") String sortBy,
+                                               @Param("sortDir") String sortDir,
+                                               @Param("size") int size,
+                                               @Param("offset") int offset);
+
+    @Select("""
+            <script>
+            SELECT COUNT(1)
+            FROM p_product p
+            WHERE p.is_deleted = 0
+              AND p.status = 2
+            <if test="keyword != null and keyword != ''">
+              AND (p.title LIKE CONCAT('%', #{keyword}, '%')
+                   OR p.description LIKE CONCAT('%', #{keyword}, '%')
+                   OR p.product_no LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="categoryCode != null and categoryCode != ''">
+              AND p.category_code = #{categoryCode}
+            </if>
+            <if test="conditionLevel != null and conditionLevel != ''">
+              AND p.condition_level = #{conditionLevel}
+            </if>
+            <if test="tradeMode != null and tradeMode != ''">
+              AND p.trade_mode = #{tradeMode}
+            </if>
+            <if test="campusCode != null and campusCode != ''">
+              AND p.campus_code = #{campusCode}
+            </if>
+            </script>
+            """)
+    long countOnSaleProductsV2(@Param("keyword") String keyword,
+                               @Param("categoryCode") String categoryCode,
+                               @Param("conditionLevel") String conditionLevel,
+                               @Param("tradeMode") String tradeMode,
+                               @Param("campusCode") String campusCode);
 
     @Select("""
             <script>
@@ -176,6 +358,117 @@ public interface ProductMapper {
     long countProductsByOwner(@Param("ownerUserId") Long ownerUserId,
                               @Param("keyword") String keyword,
                               @Param("status") Integer status);
+
+    @Select("""
+            <script>
+            SELECT p.id,
+                   p.product_no AS productNo,
+                   p.owner_user_id AS ownerUserId,
+                   p.title,
+                   p.description,
+                   p.cover_object_key AS coverObjectKey,
+                   p.category_code AS categoryCode,
+                   p.condition_level AS conditionLevel,
+                   p.trade_mode AS tradeMode,
+                   p.campus_code AS campusCode,
+                   p.status,
+                   p.is_deleted AS isDeleted,
+                   agg.min_price_cent AS minPriceCent,
+                   agg.max_price_cent AS maxPriceCent,
+                   agg.total_stock AS totalStock
+            FROM p_product p
+            LEFT JOIN (
+                SELECT product_id,
+                       MIN(price_cent) AS min_price_cent,
+                       MAX(price_cent) AS max_price_cent,
+                       SUM(stock) AS total_stock
+                FROM p_sku
+                WHERE is_deleted = 0
+                GROUP BY product_id
+            ) agg ON agg.product_id = p.id
+            WHERE p.is_deleted = 0
+              AND p.owner_user_id = #{ownerUserId}
+            <if test="keyword != null and keyword != ''">
+              AND (p.title LIKE CONCAT('%', #{keyword}, '%')
+                   OR p.description LIKE CONCAT('%', #{keyword}, '%')
+                   OR p.product_no LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="status != null">
+              AND p.status = #{status}
+            </if>
+            <if test="categoryCode != null and categoryCode != ''">
+              AND p.category_code = #{categoryCode}
+            </if>
+            <if test="conditionLevel != null and conditionLevel != ''">
+              AND p.condition_level = #{conditionLevel}
+            </if>
+            <if test="tradeMode != null and tradeMode != ''">
+              AND p.trade_mode = #{tradeMode}
+            </if>
+            <if test="campusCode != null and campusCode != ''">
+              AND p.campus_code = #{campusCode}
+            </if>
+            ORDER BY
+            <choose>
+              <when test="sortBy == 'MIN_PRICE'">IFNULL(agg.min_price_cent, 0)</when>
+              <when test="sortBy == 'MAX_PRICE'">IFNULL(agg.max_price_cent, 0)</when>
+              <otherwise>p.created_at</otherwise>
+            </choose>
+            <choose>
+              <when test="sortDir == 'ASC'">ASC</when>
+              <otherwise>DESC</otherwise>
+            </choose>,
+            p.id DESC
+            LIMIT #{size} OFFSET #{offset}
+            </script>
+            """)
+    List<ProductV2Record> listProductsByOwnerV2(@Param("ownerUserId") Long ownerUserId,
+                                                @Param("keyword") String keyword,
+                                                @Param("status") Integer status,
+                                                @Param("categoryCode") String categoryCode,
+                                                @Param("conditionLevel") String conditionLevel,
+                                                @Param("tradeMode") String tradeMode,
+                                                @Param("campusCode") String campusCode,
+                                                @Param("sortBy") String sortBy,
+                                                @Param("sortDir") String sortDir,
+                                                @Param("size") int size,
+                                                @Param("offset") int offset);
+
+    @Select("""
+            <script>
+            SELECT COUNT(1)
+            FROM p_product p
+            WHERE p.is_deleted = 0
+              AND p.owner_user_id = #{ownerUserId}
+            <if test="keyword != null and keyword != ''">
+              AND (p.title LIKE CONCAT('%', #{keyword}, '%')
+                   OR p.description LIKE CONCAT('%', #{keyword}, '%')
+                   OR p.product_no LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="status != null">
+              AND p.status = #{status}
+            </if>
+            <if test="categoryCode != null and categoryCode != ''">
+              AND p.category_code = #{categoryCode}
+            </if>
+            <if test="conditionLevel != null and conditionLevel != ''">
+              AND p.condition_level = #{conditionLevel}
+            </if>
+            <if test="tradeMode != null and tradeMode != ''">
+              AND p.trade_mode = #{tradeMode}
+            </if>
+            <if test="campusCode != null and campusCode != ''">
+              AND p.campus_code = #{campusCode}
+            </if>
+            </script>
+            """)
+    long countProductsByOwnerV2(@Param("ownerUserId") Long ownerUserId,
+                                @Param("keyword") String keyword,
+                                @Param("status") Integer status,
+                                @Param("categoryCode") String categoryCode,
+                                @Param("conditionLevel") String conditionLevel,
+                                @Param("tradeMode") String tradeMode,
+                                @Param("campusCode") String campusCode);
 
     @Select("""
             <script>
@@ -231,6 +524,121 @@ public interface ProductMapper {
     long countProductsForAdmin(@Param("keyword") String keyword,
                                @Param("status") Integer status,
                                @Param("ownerUserId") Long ownerUserId);
+
+    @Select("""
+            <script>
+            SELECT p.id,
+                   p.product_no AS productNo,
+                   p.owner_user_id AS ownerUserId,
+                   p.title,
+                   p.description,
+                   p.cover_object_key AS coverObjectKey,
+                   p.category_code AS categoryCode,
+                   p.condition_level AS conditionLevel,
+                   p.trade_mode AS tradeMode,
+                   p.campus_code AS campusCode,
+                   p.status,
+                   p.is_deleted AS isDeleted,
+                   agg.min_price_cent AS minPriceCent,
+                   agg.max_price_cent AS maxPriceCent,
+                   agg.total_stock AS totalStock
+            FROM p_product p
+            LEFT JOIN (
+                SELECT product_id,
+                       MIN(price_cent) AS min_price_cent,
+                       MAX(price_cent) AS max_price_cent,
+                       SUM(stock) AS total_stock
+                FROM p_sku
+                WHERE is_deleted = 0
+                GROUP BY product_id
+            ) agg ON agg.product_id = p.id
+            WHERE p.is_deleted = 0
+            <if test="keyword != null and keyword != ''">
+              AND (p.title LIKE CONCAT('%', #{keyword}, '%')
+                   OR p.description LIKE CONCAT('%', #{keyword}, '%')
+                   OR p.product_no LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="status != null">
+              AND p.status = #{status}
+            </if>
+            <if test="ownerUserId != null">
+              AND p.owner_user_id = #{ownerUserId}
+            </if>
+            <if test="categoryCode != null and categoryCode != ''">
+              AND p.category_code = #{categoryCode}
+            </if>
+            <if test="conditionLevel != null and conditionLevel != ''">
+              AND p.condition_level = #{conditionLevel}
+            </if>
+            <if test="tradeMode != null and tradeMode != ''">
+              AND p.trade_mode = #{tradeMode}
+            </if>
+            <if test="campusCode != null and campusCode != ''">
+              AND p.campus_code = #{campusCode}
+            </if>
+            ORDER BY
+            <choose>
+              <when test="sortBy == 'MIN_PRICE'">IFNULL(agg.min_price_cent, 0)</when>
+              <when test="sortBy == 'MAX_PRICE'">IFNULL(agg.max_price_cent, 0)</when>
+              <otherwise>p.created_at</otherwise>
+            </choose>
+            <choose>
+              <when test="sortDir == 'ASC'">ASC</when>
+              <otherwise>DESC</otherwise>
+            </choose>,
+            p.id DESC
+            LIMIT #{size} OFFSET #{offset}
+            </script>
+            """)
+    List<ProductV2Record> listProductsForAdminV2(@Param("keyword") String keyword,
+                                                 @Param("status") Integer status,
+                                                 @Param("ownerUserId") Long ownerUserId,
+                                                 @Param("categoryCode") String categoryCode,
+                                                 @Param("conditionLevel") String conditionLevel,
+                                                 @Param("tradeMode") String tradeMode,
+                                                 @Param("campusCode") String campusCode,
+                                                 @Param("sortBy") String sortBy,
+                                                 @Param("sortDir") String sortDir,
+                                                 @Param("size") int size,
+                                                 @Param("offset") int offset);
+
+    @Select("""
+            <script>
+            SELECT COUNT(1)
+            FROM p_product p
+            WHERE p.is_deleted = 0
+            <if test="keyword != null and keyword != ''">
+              AND (p.title LIKE CONCAT('%', #{keyword}, '%')
+                   OR p.description LIKE CONCAT('%', #{keyword}, '%')
+                   OR p.product_no LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="status != null">
+              AND p.status = #{status}
+            </if>
+            <if test="ownerUserId != null">
+              AND p.owner_user_id = #{ownerUserId}
+            </if>
+            <if test="categoryCode != null and categoryCode != ''">
+              AND p.category_code = #{categoryCode}
+            </if>
+            <if test="conditionLevel != null and conditionLevel != ''">
+              AND p.condition_level = #{conditionLevel}
+            </if>
+            <if test="tradeMode != null and tradeMode != ''">
+              AND p.trade_mode = #{tradeMode}
+            </if>
+            <if test="campusCode != null and campusCode != ''">
+              AND p.campus_code = #{campusCode}
+            </if>
+            </script>
+            """)
+    long countProductsForAdminV2(@Param("keyword") String keyword,
+                                 @Param("status") Integer status,
+                                 @Param("ownerUserId") Long ownerUserId,
+                                 @Param("categoryCode") String categoryCode,
+                                 @Param("conditionLevel") String conditionLevel,
+                                 @Param("tradeMode") String tradeMode,
+                                 @Param("campusCode") String campusCode);
 
     @Update("""
             UPDATE p_product

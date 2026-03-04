@@ -34,18 +34,34 @@ spring:
               uri: lb://shiori-product-service
               predicates:
                 - Path=/api/product/**
+            - id: product-service-v2
+              uri: lb://shiori-product-service
+              predicates:
+                - Path=/api/v2/product/**
             - id: admin-product-service
               uri: lb://shiori-product-service
               predicates:
                 - Path=/api/admin/products/**
+            - id: admin-product-service-v2
+              uri: lb://shiori-product-service
+              predicates:
+                - Path=/api/v2/admin/products/**
             - id: order-service
               uri: lb://shiori-order-service
               predicates:
                 - Path=/api/order/**
+            - id: order-service-v2
+              uri: lb://shiori-order-service
+              predicates:
+                - Path=/api/v2/order/**
             - id: admin-order-service
               uri: lb://shiori-order-service
               predicates:
                 - Path=/api/admin/orders/**
+            - id: admin-order-service-v2
+              uri: lb://shiori-order-service
+              predicates:
+                - Path=/api/v2/admin/orders/**
 
 security:
   auth:
@@ -60,6 +76,7 @@ security:
       - /api/user/auth/logout
     anonymous-get-paths:
       - /api/product/**
+      - /api/v2/product/**
 
 server:
   port: 8080

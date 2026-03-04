@@ -19,6 +19,7 @@ const secureNav = [
   { path: '/sell', label: '发布' },
   { path: '/my-products', label: '我的商品' },
   { path: '/orders', label: '订单' },
+  { path: '/seller/orders', label: '卖家工作台' },
   { path: '/notifications', label: '通知' },
   { path: '/profile', label: '我的' },
 ]

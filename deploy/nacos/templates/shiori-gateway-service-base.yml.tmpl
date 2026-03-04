@@ -4,6 +4,10 @@ spring:
       host: ${REDIS_HOST}
       port: ${REDIS_PORT}
 
+feature:
+  api-v2:
+    enabled: true
+
 security:
   auth:
     whitelist:
@@ -17,6 +21,7 @@ security:
       - /api/user/auth/logout
     anonymous-get-paths:
       - /api/product/**
+      - /api/v2/product/**
   rate-limit:
     enabled: true
     login-per-second: 8

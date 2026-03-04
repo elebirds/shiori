@@ -4,7 +4,14 @@ import { onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { presignProductUpload, uploadByPresignedUrl } from '@/api/media'
-import { createProduct, publishProduct, type SkuInput } from '@/api/product'
+import {
+  createProductV2,
+  publishProductV2,
+  type ProductCategoryCode,
+  type ProductConditionLevel,
+  type ProductTradeMode,
+  type SkuInput,
+} from '@/api/productV2'
 import { ApiBizError } from '@/types/result'
 
 const router = useRouter()
@@ -13,10 +20,34 @@ interface DraftSku extends SkuInput {
   localId: string
 }
 
+const categoryOptions: Array<{ label: string; value: ProductCategoryCode }> = [
+  { label: '教材', value: 'TEXTBOOK' },
+  { label: '考试资料', value: 'EXAM_MATERIAL' },
+  { label: '笔记', value: 'NOTE' },
+  { label: '其他', value: 'OTHER' },
+]
+
+const conditionOptions: Array<{ label: string; value: ProductConditionLevel }> = [
+  { label: '全新', value: 'NEW' },
+  { label: '近新', value: 'LIKE_NEW' },
+  { label: '良好', value: 'GOOD' },
+  { label: '一般', value: 'FAIR' },
+]
+
+const tradeModeOptions: Array<{ label: string; value: ProductTradeMode }> = [
+  { label: '面交', value: 'MEETUP' },
+  { label: '邮寄', value: 'DELIVERY' },
+  { label: '均可', value: 'BOTH' },
+]
+
 const form = reactive({
   title: '',
   description: '',
   coverObjectKey: '',
+  categoryCode: 'TEXTBOOK' as ProductCategoryCode,
+  conditionLevel: 'GOOD' as ProductConditionLevel,
+  tradeMode: 'MEETUP' as ProductTradeMode,
+  campusCode: '',
 })
 
 const skus = ref<DraftSku[]>([
@@ -39,10 +70,14 @@ const selectedCoverName = ref('')
 
 const createMutation = useMutation({
   mutationFn: async () => {
-    const created = await createProduct({
+    const created = await createProductV2({
       title: form.title.trim(),
       description: form.description.trim() || undefined,
       coverObjectKey: form.coverObjectKey.trim() || undefined,
+      categoryCode: form.categoryCode,
+      conditionLevel: form.conditionLevel,
+      tradeMode: form.tradeMode,
+      campusCode: form.campusCode.trim(),
       skus: skus.value.map((item) => ({
         skuName: item.skuName.trim(),
         specJson: item.specJson?.trim() || undefined,
@@ -52,7 +87,7 @@ const createMutation = useMutation({
     })
 
     if (publishDirectly.value) {
-      await publishProduct(created.productId)
+      await publishProductV2(created.productId)
       return {
         ...created,
         status: 'ON_SALE',
@@ -82,6 +117,9 @@ function removeSku(localId: string): void {
 function validate(): string | null {
   if (!form.title.trim()) {
     return '商品标题不能为空'
+  }
+  if (!form.campusCode.trim()) {
+    return '校区编码不能为空'
   }
   if (skus.value.length === 0) {
     return '请至少添加一个 SKU'
@@ -178,7 +216,7 @@ onUnmounted(() => {
   <section class="space-y-4">
     <header class="rounded-2xl border border-stone-200 bg-white/90 p-4">
       <h1 class="font-display text-2xl text-stone-900">发布商品</h1>
-      <p class="mt-1 text-sm text-stone-600">用于 seller 创建商品与多 SKU，支持创建后立即上架。</p>
+      <p class="mt-1 text-sm text-stone-600">v2 商品需填写分类、成色、交易方式与校区信息。</p>
     </header>
 
     <form class="space-y-4 rounded-2xl border border-stone-200 bg-white/95 p-5" @submit.prevent="submit">
@@ -190,6 +228,46 @@ onUnmounted(() => {
             type="text"
             class="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2 outline-none transition focus:border-amber-500"
             placeholder="例如：高等数学（第七版）"
+          />
+        </label>
+
+        <label class="text-sm text-stone-700">
+          分类
+          <select
+            v-model="form.categoryCode"
+            class="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2 outline-none transition focus:border-amber-500"
+          >
+            <option v-for="item in categoryOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+          </select>
+        </label>
+
+        <label class="text-sm text-stone-700">
+          成色
+          <select
+            v-model="form.conditionLevel"
+            class="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2 outline-none transition focus:border-amber-500"
+          >
+            <option v-for="item in conditionOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+          </select>
+        </label>
+
+        <label class="text-sm text-stone-700">
+          交易方式
+          <select
+            v-model="form.tradeMode"
+            class="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2 outline-none transition focus:border-amber-500"
+          >
+            <option v-for="item in tradeModeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+          </select>
+        </label>
+
+        <label class="text-sm text-stone-700">
+          校区编码
+          <input
+            v-model.trim="form.campusCode"
+            type="text"
+            class="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2 outline-none transition focus:border-amber-500"
+            placeholder="如：main_campus"
           />
         </label>
 
@@ -324,3 +402,4 @@ onUnmounted(() => {
     </form>
   </section>
 </template>
+

@@ -21,6 +21,7 @@ import moe.hhm.shiori.product.dto.SkuResponse;
 import moe.hhm.shiori.product.dto.UpdateProductRequest;
 import moe.hhm.shiori.product.model.ProductEntity;
 import moe.hhm.shiori.product.model.ProductRecord;
+import moe.hhm.shiori.product.model.ProductV2Record;
 import moe.hhm.shiori.product.model.SkuEntity;
 import moe.hhm.shiori.product.model.SkuRecord;
 import moe.hhm.shiori.product.repository.ProductMapper;
@@ -127,8 +128,22 @@ public class ProductService {
         ProductRecord product = requireProduct(productId);
         ensureOwnerOrAdmin(product, userId, admin);
         assertCoverObjectKey(request.coverObjectKey());
+        ProductV2Record fullRecord = productMapper.findProductV2ById(productId);
+        String categoryCode = fullRecord == null ? null : fullRecord.categoryCode();
+        String conditionLevel = fullRecord == null ? null : fullRecord.conditionLevel();
+        String tradeMode = fullRecord == null ? null : fullRecord.tradeMode();
+        String campusCode = fullRecord == null ? null : fullRecord.campusCode();
 
-        productMapper.updateProductBase(productId, request.title().trim(), request.description(), request.coverObjectKey());
+        productMapper.updateProductBase(
+                productId,
+                request.title().trim(),
+                request.description(),
+                request.coverObjectKey(),
+                categoryCode,
+                conditionLevel,
+                tradeMode,
+                campusCode
+        );
 
         List<SkuRecord> existingSkus = productMapper.listActiveSkusByProductId(productId);
         Map<Long, SkuRecord> existingMap = new HashMap<>();
