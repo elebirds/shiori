@@ -71,6 +71,17 @@ fail() {
   exit 1
 }
 
+apply_default_if_missing() {
+  local var_name="$1"
+  local default_value="$2"
+  local current_value="${!var_name:-}"
+  if [[ -n "${current_value}" ]]; then
+    return
+  fi
+  export "${var_name}=${default_value}"
+  log "环境变量 ${var_name} 缺失，已使用默认值"
+}
+
 require_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
     fail "缺少依赖命令: $1"
@@ -213,6 +224,10 @@ start_user_service() {
     SPRING_DATASOURCE_URL="jdbc:mysql://localhost:3306/shiori_user?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false" \
     SPRING_DATASOURCE_USERNAME="${USER_DB_USERNAME}" \
     SPRING_DATASOURCE_PASSWORD="${USER_DB_PASSWORD}" \
+    SPRING_RABBITMQ_HOST=localhost \
+    SPRING_RABBITMQ_PORT=5672 \
+    SPRING_RABBITMQ_USERNAME="${USER_RMQ_USERNAME}" \
+    SPRING_RABBITMQ_PASSWORD="${USER_RMQ_PASSWORD}" \
     SPRING_DATA_REDIS_HOST=localhost \
     SPRING_DATA_REDIS_PORT="${REDIS_LOCAL_PORT}" \
     NACOS_USERNAME="${NACOS_IMPORT_USERNAME}" \
@@ -302,6 +317,12 @@ main() {
   export SHIORI_ENV="${SHIORI_ENV:-test}"
   export NACOS_CONFIG_GROUP="${NACOS_CONFIG_GROUP:-SHIORI_TEST}"
 
+  apply_default_if_missing USER_RMQ_USERNAME "${ORDER_RMQ_USERNAME:-user_service}"
+  apply_default_if_missing USER_RMQ_PASSWORD "${ORDER_RMQ_PASSWORD:-}"
+  apply_default_if_missing NOTIFY_DB_USERNAME "notify_service"
+  apply_default_if_missing NOTIFY_DB_PASSWORD "${ORDER_DB_PASSWORD:-}"
+  apply_default_if_missing NOTIFY_JWT_HMAC_SECRET "${JWT_HMAC_SECRET:-}"
+
   require_env MYSQL_ROOT_PASSWORD
   require_env MYSQL_OPS_USERNAME
   require_env MYSQL_OPS_PASSWORD
@@ -309,8 +330,12 @@ main() {
   require_env RABBITMQ_DEFAULT_PASS
   require_env ORDER_RMQ_USERNAME
   require_env ORDER_RMQ_PASSWORD
+  require_env USER_RMQ_USERNAME
+  require_env USER_RMQ_PASSWORD
   require_env NOTIFY_RMQ_USERNAME
   require_env NOTIFY_RMQ_PASSWORD
+  require_env NOTIFY_DB_USERNAME
+  require_env NOTIFY_DB_PASSWORD
   require_env MINIO_ROOT_USER
   require_env MINIO_ROOT_PASSWORD
   require_env MINIO_PRODUCT_ACCESS_KEY
@@ -330,6 +355,7 @@ main() {
   require_env ORDER_DB_USERNAME
   require_env ORDER_DB_PASSWORD
   require_env JWT_HMAC_SECRET
+  require_env NOTIFY_JWT_HMAC_SECRET
   require_env GATEWAY_SIGN_SECRET
 
   docker compose version >/dev/null 2>&1 || fail "docker compose 不可用"
