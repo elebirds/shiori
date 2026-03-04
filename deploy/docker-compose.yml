@@ -392,7 +392,7 @@ services:
       NOTIFY_JWT_ISSUER: ${NOTIFY_JWT_ISSUER:-shiori}
       RABBITMQ_ADDR: amqp://${NOTIFY_RMQ_USERNAME:?missing}:${NOTIFY_RMQ_PASSWORD:?missing}@rabbitmq:5672/
       RABBITMQ_EXCHANGES: shiori.order.event,shiori.user.event
-      RABBITMQ_ROUTING_KEYS: order.created,order.paid,order.canceled,user.status.changed,user.role.changed,user.password.reset
+      RABBITMQ_ROUTING_KEYS: order.created,order.paid,order.canceled,order.delivered,order.finished,user.status.changed,user.role.changed,user.password.reset
     depends_on:
       mysql:
         condition: service_started

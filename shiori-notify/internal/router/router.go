@@ -47,6 +47,11 @@ type orderCanceledPayload struct {
 	SellerUserID json.RawMessage `json:"sellerUserId"`
 }
 
+type orderLifecyclePayload struct {
+	BuyerUserID  json.RawMessage `json:"buyerUserId"`
+	SellerUserID json.RawMessage `json:"sellerUserId"`
+}
+
 type userGovernancePayload struct {
 	TargetUserID json.RawMessage `json:"targetUserId"`
 }
@@ -106,6 +111,12 @@ func (r *Router) extractTargetUserIDs(env event.Envelope) ([]string, error) {
 		var payload orderCanceledPayload
 		if err := json.Unmarshal(env.Payload, &payload); err != nil {
 			return nil, fmt.Errorf("unmarshal order canceled payload: %w", err)
+		}
+		return parseUserIDs(payload.BuyerUserID, payload.SellerUserID)
+	case "OrderDelivered", "OrderFinished":
+		var payload orderLifecyclePayload
+		if err := json.Unmarshal(env.Payload, &payload); err != nil {
+			return nil, fmt.Errorf("unmarshal order lifecycle payload: %w", err)
 		}
 		return parseUserIDs(payload.BuyerUserID, payload.SellerUserID)
 	case "UserStatusChanged", "UserRoleChanged", "UserPasswordReset":

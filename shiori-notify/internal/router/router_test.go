@@ -107,6 +107,40 @@ func TestRouteOrderCreatedToBuyerAndSeller(t *testing.T) {
 	}
 }
 
+func TestRouteOrderFinishedToBuyerAndSeller(t *testing.T) {
+	hub := &mockHub{}
+	logger := zerolog.New(io.Discard)
+	store := &mockStore{saveOK: true}
+	r := New(hub, store, &logger)
+
+	env := event.Envelope{
+		EventID:     "evt-finished",
+		Type:        "OrderFinished",
+		AggregateID: "order-3",
+		CreatedAt:   "2026-03-02T00:00:00Z",
+		Payload:     []byte(`{"buyerUserId":"301","sellerUserId":302}`),
+	}
+
+	if err := r.Route(context.Background(), env); err != nil {
+		t.Fatalf("unexpected route error: %v", err)
+	}
+
+	if len(hub.calls) != 2 {
+		t.Fatalf("expected 2 push calls, got %d", len(hub.calls))
+	}
+	if len(store.saveCalls) != 2 {
+		t.Fatalf("expected save twice, got %d", len(store.saveCalls))
+	}
+
+	users := map[string]bool{}
+	for _, call := range hub.calls {
+		users[call.userID] = true
+	}
+	if !users["301"] || !users["302"] {
+		t.Fatalf("unexpected users routed: %+v", users)
+	}
+}
+
 func TestRouteUserGovernanceEvent(t *testing.T) {
 	hub := &mockHub{}
 	logger := zerolog.New(io.Discard)

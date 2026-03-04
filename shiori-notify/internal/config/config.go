@@ -15,7 +15,7 @@ const (
 	defaultRabbitMQExchange  = "shiori.order.event"
 	defaultRabbitMQExchanges = "shiori.order.event,shiori.user.event"
 	defaultRabbitMQQueue     = "notify.order.event"
-	defaultRabbitMQRouteKeys = "order.paid,order.created,order.canceled,user.status.changed,user.role.changed,user.password.reset"
+	defaultRabbitMQRouteKeys = "order.created,order.paid,order.canceled,order.delivered,order.finished,user.status.changed,user.role.changed,user.password.reset"
 	defaultMetricsEnabled    = true
 	defaultStoreDriver       = "memory"
 	defaultStoreMaxPerUser   = 1000

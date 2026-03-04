@@ -15,6 +15,8 @@ Go 通知服务（Gin + WebSocket + RabbitMQ + MySQL）。
   - `OrderCreated`
   - `OrderPaid`
   - `OrderCanceled`
+  - `OrderDelivered`
+  - `OrderFinished`
   - `UserStatusChanged`
   - `UserRoleChanged`
   - `UserPasswordReset`
@@ -37,7 +39,7 @@ go run .
 | `RABBITMQ_ADDR` | `amqp://localhost:5672/` | RabbitMQ 连接串 |
 | `RABBITMQ_EXCHANGES` | `shiori.order.event,shiori.user.event` | 订阅 exchange 列表 |
 | `RABBITMQ_QUEUE` | `notify.order.event` | 消费队列 |
-| `RABBITMQ_ROUTING_KEYS` | `order.created,order.paid,order.canceled,user.status.changed,user.role.changed,user.password.reset` | 绑定 routing key 列表 |
+| `RABBITMQ_ROUTING_KEYS` | `order.created,order.paid,order.canceled,order.delivered,order.finished,user.status.changed,user.role.changed,user.password.reset` | 绑定 routing key 列表 |
 | `NOTIFY_STORE_DRIVER` | `memory` | `memory` 或 `mysql` |
 | `NOTIFY_MYSQL_DSN` | 空 | `mysql` 驱动必填 |
 | `NOTIFY_AUTH_ENABLED` | `true` | 是否启用 JWT 鉴权 |
@@ -59,4 +61,3 @@ go run ./cmd/ws-smoke \
   -expect-aggregate Oxxxx \
   -timeout 60s
 ```
-
