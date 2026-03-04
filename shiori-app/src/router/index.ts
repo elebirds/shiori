@@ -88,6 +88,7 @@ const router = createRouter({
 router.beforeEach((to) => {
   const authStore = useAuthStore()
   const loggedIn = authStore.isAuthenticated
+  const mustChangePassword = Boolean(authStore.user?.mustChangePassword)
 
   if (to.meta.requiresAuth && !loggedIn) {
     return {
@@ -98,8 +99,17 @@ router.beforeEach((to) => {
     }
   }
 
+  if (loggedIn && mustChangePassword && to.path !== '/profile') {
+    return {
+      path: '/profile',
+      query: {
+        forceChangePassword: '1',
+      },
+    }
+  }
+
   if ((to.path === '/login' || to.path === '/register') && loggedIn) {
-    return { path: '/products' }
+    return { path: mustChangePassword ? '/profile' : '/products' }
   }
 
   return true

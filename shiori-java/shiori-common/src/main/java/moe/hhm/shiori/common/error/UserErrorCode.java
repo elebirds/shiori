@@ -10,7 +10,10 @@ public enum UserErrorCode implements ErrorCode {
     PERMISSION_DENIED(30006, "权限不足"),
     CANNOT_DISABLE_SELF(30007, "不能禁用当前登录账号"),
     CANNOT_REVOKE_SELF_ADMIN(30008, "不能回收当前登录账号的管理员角色"),
-    ADMIN_MIN_ONE_REQUIRED(30009, "系统至少保留一名启用状态管理员");
+    ADMIN_MIN_ONE_REQUIRED(30009, "系统至少保留一名启用状态管理员"),
+    CANNOT_LOCK_SELF(30010, "不能锁定当前登录账号"),
+    USER_NOT_LOCKED(30011, "账号未锁定"),
+    PASSWORD_RESET_INVALID(30012, "重置密码参数不合法");
 
     private final int code;
     private final String message;

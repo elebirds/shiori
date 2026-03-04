@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { useMutation, useQuery } from '@tanstack/vue-query'
-import { reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 
 import ResultState from '@/components/ResultState.vue'
 import { ApiBizError } from '@/types/result'
 import { useAuthStore } from '@/stores/auth'
 
 const authStore = useAuthStore()
+const route = useRoute()
 
 const profileForm = reactive({
   nickname: '',
@@ -61,6 +63,7 @@ const changePasswordMutation = useMutation({
 })
 
 const errorMessage = profileQuery.error.value instanceof Error ? profileQuery.error.value.message : ''
+const mustChangePassword = computed(() => Boolean(authStore.user?.mustChangePassword) || route.query.forceChangePassword === '1')
 
 async function submitProfile(): Promise<void> {
   profileMessage.value = ''
@@ -97,6 +100,10 @@ async function submitPassword(): Promise<void> {
 
 <template>
   <section class="space-y-4">
+    <div v-if="mustChangePassword" class="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+      当前账号需先修改密码后才能访问其他页面。
+    </div>
+
     <header class="rounded-2xl border border-stone-200 bg-white/90 p-4">
       <h1 class="font-display text-2xl text-stone-900">个人中心</h1>
       <p class="mt-1 text-sm text-stone-600">支持查看与更新个人资料，修改登录密码</p>

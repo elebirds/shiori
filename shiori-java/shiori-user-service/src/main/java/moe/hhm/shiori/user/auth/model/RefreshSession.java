@@ -7,6 +7,7 @@ public record RefreshSession(
         String userNo,
         String username,
         List<String> roles,
+        boolean mustChangePassword,
         long issuedAt
 ) {
 }

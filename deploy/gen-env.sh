@@ -126,6 +126,8 @@ sync_value() {
 # Nacos 本机调试别名变量保持与导入账号一致，避免密码不一致导致认证失败。
 sync_value "NACOS_IMPORT_PASSWORD" "NACOS_PASSWORD"
 sync_value "NACOS_IMPORT_USERNAME" "NACOS_USERNAME"
+# notify 默认复用 user-service 的 JWT HMAC 密钥，确保可校验 access token。
+sync_value "JWT_HMAC_SECRET" "NOTIFY_JWT_HMAC_SECRET"
 
 if [ "${FORCE_OVERWRITE}" -eq 1 ] && [ -f "${OUTPUT_FILE}" ]; then
   rm -f "${OUTPUT_FILE}"

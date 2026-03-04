@@ -11,6 +11,7 @@ public record AdminUserRecord(
         Integer status,
         Integer failedLoginCount,
         LocalDateTime lockedUntil,
+        Integer mustChangePassword,
         LocalDateTime lastLoginAt,
         String lastLoginIp,
         String roleCodes,

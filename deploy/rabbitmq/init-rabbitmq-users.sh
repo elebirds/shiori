@@ -60,6 +60,8 @@ require_env RABBITMQ_DEFAULT_USER
 require_env RABBITMQ_DEFAULT_PASS
 require_env ORDER_RMQ_USERNAME
 require_env ORDER_RMQ_PASSWORD
+require_env USER_RMQ_USERNAME
+require_env USER_RMQ_PASSWORD
 require_env NOTIFY_RMQ_USERNAME
 require_env NOTIFY_RMQ_PASSWORD
 
@@ -71,6 +73,7 @@ curl -fsS -u "${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}" \
   -X PUT "${RABBITMQ_API_URL}/api/vhosts/%2F" >/dev/null
 
 upsert_user "${ORDER_RMQ_USERNAME}" "${ORDER_RMQ_PASSWORD}"
+upsert_user "${USER_RMQ_USERNAME}" "${USER_RMQ_PASSWORD}"
 upsert_user "${NOTIFY_RMQ_USERNAME}" "${NOTIFY_RMQ_PASSWORD}"
 
 # order-service: only order exchanges/queues
@@ -80,11 +83,18 @@ upsert_permissions \
   "^(shiori[.]order[.].*|q[.]order[.].*)$" \
   "^(shiori[.]order[.].*|q[.]order[.].*)$"
 
-# notify-service: only consume from order-paid exchange/queue
+# user-service: publish user governance events
+upsert_permissions \
+  "${USER_RMQ_USERNAME}" \
+  "^(shiori[.]user[.]event)$" \
+  "^(shiori[.]user[.]event)$" \
+  "^(shiori[.]user[.]event)$"
+
+# notify-service: consume order + user events
 upsert_permissions \
   "${NOTIFY_RMQ_USERNAME}" \
-  "^(shiori[.]order[.]event|notify[.]order[.]paid)$" \
-  "^(shiori[.]order[.]event|notify[.]order[.]paid)$" \
-  "^(shiori[.]order[.]event|notify[.]order[.]paid)$"
+  "^(shiori[.]order[.]event|shiori[.]user[.]event|notify[.]order[.]event)$" \
+  "^(shiori[.]order[.]event|shiori[.]user[.]event|notify[.]order[.]event)$" \
+  "^(shiori[.]order[.]event|shiori[.]user[.]event|notify[.]order[.]event)$"
 
 log "rabbitmq users and permissions initialized"

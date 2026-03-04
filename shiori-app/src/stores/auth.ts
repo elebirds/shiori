@@ -75,6 +75,17 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem(USER_STORAGE_KEY)
   }
 
+  function setMustChangePassword(required: boolean): void {
+    if (!user.value) {
+      return
+    }
+    user.value = {
+      ...user.value,
+      mustChangePassword: required,
+    }
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user.value))
+  }
+
   async function loginWithPassword(payload: LoginRequest): Promise<void> {
     const tokenPair = await login(payload)
     setSession({
@@ -130,6 +141,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function changeMyPassword(payload: ChangePasswordRequest): Promise<void> {
     await changePassword(payload)
+    setMustChangePassword(false)
   }
 
   return {
@@ -147,6 +159,7 @@ export const useAuthStore = defineStore('auth', () => {
     fetchMyProfile,
     updateMyProfile,
     changeMyPassword,
+    setMustChangePassword,
     syncTokensFromStorage,
     userStorageKey: USER_STORAGE_KEY,
     accessTokenKey: ACCESS_TOKEN_KEY,

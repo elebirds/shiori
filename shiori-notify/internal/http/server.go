@@ -8,26 +8,30 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	notifyauth "github.com/hhm/shiori/shiori-notify/internal/auth"
 	"github.com/hhm/shiori/shiori-notify/internal/config"
-	"github.com/hhm/shiori/shiori-notify/internal/event"
 	"github.com/hhm/shiori/shiori-notify/internal/metrics"
+	"github.com/hhm/shiori/shiori-notify/internal/store"
 	"github.com/hhm/shiori/shiori-notify/internal/ws"
 	"github.com/rs/zerolog"
 )
 
-type ReplayStore interface {
-	List(userID, afterEventID string, limit int) (items []event.Envelope, nextEventID string, hasMore bool)
-}
-
 type Server struct {
-	cfg         config.Config
-	hub         *ws.Hub
-	replayStore ReplayStore
-	logger      *zerolog.Logger
-	engine      *gin.Engine
+	cfg        config.Config
+	hub        *ws.Hub
+	eventStore store.EventStore
+	auth       *notifyauth.JWTVerifier
+	logger     *zerolog.Logger
+	engine     *gin.Engine
 }
 
-func NewServer(cfg config.Config, hub *ws.Hub, replayStore ReplayStore, logger *zerolog.Logger) *Server {
+func NewServer(
+	cfg config.Config,
+	hub *ws.Hub,
+	eventStore store.EventStore,
+	auth *notifyauth.JWTVerifier,
+	logger *zerolog.Logger,
+) *Server {
 	if logger == nil {
 		nop := zerolog.Nop()
 		logger = &nop
@@ -38,11 +42,12 @@ func NewServer(cfg config.Config, hub *ws.Hub, replayStore ReplayStore, logger *
 	engine.Use(gin.Recovery())
 
 	s := &Server{
-		cfg:         cfg,
-		hub:         hub,
-		replayStore: replayStore,
-		logger:      logger,
-		engine:      engine,
+		cfg:        cfg,
+		hub:        hub,
+		eventStore: eventStore,
+		auth:       auth,
+		logger:     logger,
+		engine:     engine,
 	}
 	s.registerRoutes()
 	return s
@@ -84,7 +89,15 @@ func (s *Server) Run(ctx context.Context) error {
 func (s *Server) registerRoutes() {
 	s.engine.GET("/healthz", s.handleHealth)
 	s.engine.GET("/ws", s.handleWS)
-	s.engine.GET("/api/notify/events", s.handleReplayEvents)
+
+	notifyGroup := s.engine.Group("/api/notify")
+	{
+		notifyGroup.GET("/events", s.handleReplayEvents)
+		notifyGroup.POST("/events/:eventId/read", s.handleMarkRead)
+		notifyGroup.POST("/events/read-all", s.handleMarkAllRead)
+		notifyGroup.GET("/summary", s.handleSummary)
+	}
+
 	if s.cfg.MetricsEnabled {
 		s.engine.GET("/metrics", gin.WrapH(metrics.Handler()))
 	}

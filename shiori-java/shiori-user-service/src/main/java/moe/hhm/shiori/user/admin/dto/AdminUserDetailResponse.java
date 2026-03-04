@@ -12,6 +12,7 @@ public record AdminUserDetailResponse(
         String status,
         Integer failedLoginCount,
         LocalDateTime lockedUntil,
+        Boolean mustChangePassword,
         LocalDateTime lastLoginAt,
         String lastLoginIp,
         List<String> roles,

@@ -15,18 +15,26 @@ func main() {
 	cfg := config.Load()
 	logger := notifylog.New(cfg.LogLevel)
 
-	application := app.New(cfg, logger)
+	application, err := app.New(cfg, logger)
+	if err != nil {
+		logger.Error().Err(err).Msg("应用初始化失败")
+		os.Exit(1)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
 	logger.Info().
 		Str("httpAddr", cfg.HTTPAddr).
+		Strs("rabbitmqExchanges", cfg.RabbitMQExchanges).
 		Str("rabbitmqExchange", cfg.RabbitMQExchange).
 		Str("rabbitmqQueue", cfg.RabbitMQQueue).
+		Strs("rabbitmqRoutingKeys", cfg.RabbitMQRoutingKeys).
+		Str("storeDriver", cfg.StoreDriver).
+		Bool("authEnabled", cfg.AuthEnabled).
 		Msg("服务启动中")
 
-	if err := application.Run(ctx); err != nil {
+	if err = application.Run(ctx); err != nil {
 		logger.Error().Err(err).Msg("服务异常退出")
 		os.Exit(1)
 	}
