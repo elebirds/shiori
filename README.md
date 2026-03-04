@@ -624,12 +624,18 @@ curl -X POST http://localhost:8080/api/order/orders/<orderNo>/pay \
   -d '{"paymentNo":"pay-demo-001"}'
 ```
 
-### 3.3) 一键端到端烟测（交易 + 通知 + 管理端）
+### 3.3) 一键端到端烟测（交易 + 聊天 + 通知 + 管理端）
 
 当网关、user/product/order、notify 均已启动后，可运行：
 
 ```bash
 bash scripts/smoke/e2e_trade_notify.sh
+```
+
+聊天链路烟测（Chat Ticket + 会话 API + WS join/send/read）：
+
+```bash
+bash scripts/smoke/e2e_chat_notify.sh
 ```
 
 管理端闭环烟测（管理员角色、用户治理、商品下架、订单取消、审计日志）：
@@ -664,12 +670,27 @@ cd shiori-notify
 go run ./cmd/ws-smoke -base-url ws://localhost:8090/ws -access-token '<access-jwt>' -expect-type OrderPaid -expect-aggregate Oxxxx -timeout 60s
 ```
 
+`chat-smoke` 探针命令（聊天烟测脚本内部会调用）：
+
+```bash
+cd shiori-notify
+go run ./cmd/chat-smoke \
+  -base-url ws://localhost:8090/ws \
+  -buyer-access-token '<buyer-access-jwt>' \
+  -seller-access-token '<seller-access-jwt>' \
+  -chat-ticket '<chat-ticket>' \
+  -conversation-id 11 \
+  -client-msg-id smoke-msg-1 \
+  -content 'hello from smoke' \
+  -timeout 60s
+```
+
 ### 3.4) GitHub Actions CI（PR 全量自动化）
 
 仓库已提供 CI workflow：
 - `.github/workflows/ci.yml`
 - Job 1：`java-test`（`shiori-java` 全量测试）
-- Job 2：`e2e-trade-notify-admin`（基础设施 + 4 个 Java 服务 + notify + 交易通知烟测 + 管理端闭环烟测 + `shiori-app` Playwright E2E + `shiori-admin-web` Playwright E2E）
+- Job 2：`e2e-trade-notify-admin`（基础设施 + 4 个 Java 服务 + notify + 交易通知烟测 + 聊天链路烟测 + 管理端闭环烟测 + `shiori-app` Playwright E2E + `shiori-admin-web` Playwright E2E）
 - Job 3：`perf-baseline-non-blocking`（交易/通知烟测 + k6 基线，`continue-on-error` 非阻塞）
 
 E2E 编排脚本：
@@ -722,6 +743,7 @@ export K6_NOTIFY_HTTP_BASE_URL=http://host.docker.internal:8090
 - 等待 `nacos-config-init` 成功退出
 - 启动 user/product/order/gateway/notify
 - 执行 `scripts/smoke/e2e_trade_notify.sh`
+- 执行 `scripts/smoke/e2e_chat_notify.sh`
 - 执行 `scripts/smoke/e2e_admin_console.sh`
 - 可选执行 `scripts/ci/run_perf_baseline.sh`（当 `RUN_PERF_BASELINE=1`）
 - 执行 `shiori-app` 前端 Playwright 端到端用例
@@ -737,7 +759,7 @@ CI 日志默认落盘到仓库根目录：
 - `java-test` 通过
 - `local-regression-blocking` 通过
 - `perf-stress-non-blocking` 已执行并完成趋势评估
-- `e2e_trade_notify` + `e2e_admin_console` 冒烟通过
+- `e2e_trade_notify` + `e2e_chat_notify` + `e2e_admin_console` 冒烟通过
 
 回滚触发（任一满足即评估回滚）：
 - 核心交易错误率连续 5 分钟 >= 3%

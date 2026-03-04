@@ -104,22 +104,23 @@ ensure_chat_ticket_keypair() {
     return 0
   fi
 
-  tmp_key_dir="$(mktemp -d)"
-  private_key_file="${tmp_key_dir}/chat_ticket_private.pem"
-  public_key_file="${tmp_key_dir}/chat_ticket_public.pem"
+  mkdir -p "${CHAT_KEY_TMP_DIR}"
+  private_key_file="${CHAT_KEY_TMP_DIR}/chat_ticket_private.pem"
+  public_key_file="${CHAT_KEY_TMP_DIR}/chat_ticket_public.pem"
 
-  openssl genrsa -out "${private_key_file}" 2048 >/dev/null 2>&1
+  openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "${private_key_file}" >/dev/null 2>&1
   openssl rsa -in "${private_key_file}" -pubout -out "${public_key_file}" >/dev/null 2>&1
 
   chat_ticket_private_key_b64="$(openssl base64 -A -in "${private_key_file}")"
   chat_ticket_public_key_b64="$(openssl base64 -A -in "${public_key_file}")"
-
-  rm -rf "${tmp_key_dir}"
 }
 
-TMP_FILE="$(mktemp)"
+TMP_ROOT_DIR="$(mktemp -d)"
+TMP_FILE="${TMP_ROOT_DIR}/env.generated"
+CHAT_KEY_TMP_DIR="${TMP_ROOT_DIR}/chatkeys"
+
 cleanup() {
-  rm -f "${TMP_FILE}"
+  rm -rf "${TMP_ROOT_DIR}"
 }
 trap cleanup EXIT
 
@@ -138,52 +139,67 @@ while IFS= read -r line || [ -n "${line}" ]; do
   esac
 done < "${INPUT_FILE}"
 
+read_key_value() {
+  key="$1"
+  awk -v key="${key}" '
+  index($0, key "=") == 1 { value = substr($0, length(key) + 2) }
+  END { print value }
+  ' "${TMP_FILE}"
+}
+
+write_key_value() {
+  key="$1"
+  value="$2"
+  awk -v key="${key}" -v value="${value}" '
+  BEGIN { prefix = key "="; replaced = 0 }
+  index($0, prefix) == 1 {
+    if (replaced == 0) {
+      print prefix value
+      replaced = 1
+    }
+    next
+  }
+  { print }
+  END {
+    if (replaced == 0) {
+      print prefix value
+    }
+  }
+  ' "${TMP_FILE}" > "${TMP_FILE}.next"
+  mv "${TMP_FILE}.next" "${TMP_FILE}"
+}
+
 sync_value() {
   key_from="$1"
   key_to="$2"
-  from_value="$(grep "^${key_from}=" "${TMP_FILE}" | head -n1 | cut -d= -f2- || true)"
-  if [ -n "${from_value}" ] && grep -q "^${key_to}=" "${TMP_FILE}"; then
-    awk -v key_to="${key_to}" -v value="${from_value}" '
-    BEGIN { prefix = key_to "=" }
-    index($0, prefix) == 1 { print prefix value; next }
-    { print }
-    ' "${TMP_FILE}" > "${TMP_FILE}.sync"
-    mv "${TMP_FILE}.sync" "${TMP_FILE}"
+  from_value="$(read_key_value "${key_from}")"
+  if [ -n "${from_value}" ]; then
+    write_key_value "${key_to}" "${from_value}"
   fi
 }
 
 sync_chat_ticket_public_from_private() {
-  private_b64="$(grep '^CHAT_TICKET_PRIVATE_KEY_PEM_BASE64=' "${TMP_FILE}" | head -n1 | cut -d= -f2- || true)"
+  private_b64="$(read_key_value "CHAT_TICKET_PRIVATE_KEY_PEM_BASE64")"
   if [ -z "${private_b64}" ]; then
     return 0
   fi
 
-  tmp_key_dir="$(mktemp -d)"
-  private_key_file="${tmp_key_dir}/chat_ticket_private.pem"
-  public_key_file="${tmp_key_dir}/chat_ticket_public.pem"
+  mkdir -p "${CHAT_KEY_TMP_DIR}"
+  private_key_file="${CHAT_KEY_TMP_DIR}/chat_ticket_private.sync.pem"
+  public_key_file="${CHAT_KEY_TMP_DIR}/chat_ticket_public.sync.pem"
 
   printf '%s' "${private_b64}" | openssl base64 -d -A > "${private_key_file}" 2>/dev/null || {
-    rm -rf "${tmp_key_dir}"
     echo "[gen-env][ERROR] CHAT_TICKET_PRIVATE_KEY_PEM_BASE64 不是合法 base64" >&2
     exit 1
   }
 
   openssl rsa -in "${private_key_file}" -pubout -out "${public_key_file}" >/dev/null 2>&1 || {
-    rm -rf "${tmp_key_dir}"
     echo "[gen-env][ERROR] CHAT_TICKET_PRIVATE_KEY_PEM_BASE64 不是合法 RSA 私钥 PEM" >&2
     exit 1
   }
 
   public_b64="$(openssl base64 -A -in "${public_key_file}")"
-
-  awk -v value="${public_b64}" '
-  BEGIN { key = "NOTIFY_CHAT_TICKET_PUBLIC_KEY_PEM_BASE64=" }
-  index($0, key) == 1 { print key value; next }
-  { print }
-  ' "${TMP_FILE}" > "${TMP_FILE}.chatkey.sync"
-  mv "${TMP_FILE}.chatkey.sync" "${TMP_FILE}"
-
-  rm -rf "${tmp_key_dir}"
+  write_key_value "NOTIFY_CHAT_TICKET_PUBLIC_KEY_PEM_BASE64" "${public_b64}"
 }
 
 # Nacos 本机调试别名变量保持与导入账号一致，避免密码不一致导致认证失败。
@@ -194,9 +210,8 @@ sync_value "JWT_HMAC_SECRET" "NOTIFY_JWT_HMAC_SECRET"
 # 无论模板如何填写，最终都强制由私钥推导公钥，保证签发/验签一致。
 sync_chat_ticket_public_from_private
 
-if [ "${FORCE_OVERWRITE}" -eq 1 ] && [ -f "${OUTPUT_FILE}" ]; then
-  rm -f "${OUTPUT_FILE}"
-fi
+output_dir="$(dirname "${OUTPUT_FILE}")"
+mkdir -p "${output_dir}"
 
 mv "${TMP_FILE}" "${OUTPUT_FILE}"
 trap - EXIT

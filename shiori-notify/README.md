@@ -78,6 +78,21 @@ go run ./cmd/ws-smoke \
   -timeout 60s
 ```
 
+## chat-smoke
+
+```bash
+cd shiori-notify
+go run ./cmd/chat-smoke \
+  -base-url ws://localhost:8090/ws \
+  -buyer-access-token '<buyer-access-jwt>' \
+  -seller-access-token '<seller-access-jwt>' \
+  -chat-ticket '<chat-ticket>' \
+  -conversation-id 11 \
+  -client-msg-id smoke-msg-1 \
+  -content 'hello from smoke' \
+  -timeout 60s
+```
+
 ## Chat WS 协议示例
 
 ```json

@@ -94,6 +94,7 @@ run_rollback() {
 1. 将部署版本切换到 tag: ${ROLLBACK_TO_TAG}
 2. 重新执行 smoke：
    - bash scripts/smoke/e2e_trade_notify.sh
+   - bash scripts/smoke/e2e_chat_notify.sh
    - bash scripts/smoke/e2e_admin_console.sh
 3. 若当前发布 tag 已创建但未生效，可删除远端 tag（按需执行）：
    - git push origin :refs/tags/<failed-tag>

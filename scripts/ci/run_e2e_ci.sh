@@ -8,6 +8,7 @@ NOTIFY_DIR="${ROOT_DIR}/shiori-notify"
 APP_DIR="${ROOT_DIR}/shiori-app"
 ADMIN_WEB_DIR="${ROOT_DIR}/shiori-admin-web"
 SMOKE_SCRIPT="${ROOT_DIR}/scripts/smoke/e2e_trade_notify.sh"
+CHAT_SMOKE_SCRIPT="${ROOT_DIR}/scripts/smoke/e2e_chat_notify.sh"
 ADMIN_SMOKE_SCRIPT="${ROOT_DIR}/scripts/smoke/e2e_admin_console.sh"
 PERF_BASELINE_SCRIPT="${ROOT_DIR}/scripts/ci/run_perf_baseline.sh"
 CI_LOG_DIR="${ROOT_DIR}/ci-logs"
@@ -22,6 +23,7 @@ PERF_NOTIFY_HTTP_BASE_URL="${PERF_NOTIFY_HTTP_BASE_URL:-http://127.0.0.1:8090}"
 K6_GATEWAY_BASE_URL="${K6_GATEWAY_BASE_URL:-${PERF_GATEWAY_BASE_URL}}"
 K6_NOTIFY_WS_BASE_URL="${K6_NOTIFY_WS_BASE_URL:-${PERF_NOTIFY_WS_BASE_URL}}"
 K6_NOTIFY_HTTP_BASE_URL="${K6_NOTIFY_HTTP_BASE_URL:-${PERF_NOTIFY_HTTP_BASE_URL}}"
+LOCAL_NACOS_CONFIG_GROUP="${LOCAL_NACOS_CONFIG_GROUP:-}"
 
 SERVICE_NAMES=()
 SERVICE_PIDS=()
@@ -45,6 +47,7 @@ print_key_logs() {
   dump_tail "${CI_LOG_DIR}/order-service.log"
   dump_tail "${CI_LOG_DIR}/gateway-service.log"
   dump_tail "${CI_LOG_DIR}/notify.log"
+  dump_tail "${CI_LOG_DIR}/chat-smoke.log"
   dump_tail "${CI_LOG_DIR}/admin-smoke.log"
   dump_tail "${CI_LOG_DIR}/perf-baseline.log"
   dump_tail "${CI_LOG_DIR}/perf/k6-order.log"
@@ -55,6 +58,10 @@ print_key_logs() {
   if docker ps -a --format '{{.Names}}' | grep -q '^shiori-nacos-config-init$'; then
     echo "----- docker logs shiori-nacos-config-init -----"
     docker logs shiori-nacos-config-init || true
+  fi
+  if docker ps -a --format '{{.Names}}' | grep -q '^shiori-nacos-config-init-local$'; then
+    echo "----- docker logs shiori-nacos-config-init-local -----"
+    docker logs shiori-nacos-config-init-local || true
   fi
   if docker ps -a --format '{{.Names}}' | grep -q '^shiori-rabbitmq-auth-init$'; then
     echo "----- docker logs shiori-rabbitmq-auth-init -----"
@@ -155,6 +162,41 @@ wait_nacos_init() {
   fail "等待 nacos-config-init 超时(${timeout_seconds}s)"
 }
 
+wait_nacos_init_local() {
+  local timeout_seconds=240
+  local elapsed=0
+  local status=""
+  local exit_code=""
+
+  if ! docker inspect shiori-nacos-config-init-local >/dev/null 2>&1; then
+    log "未检测到 nacos-config-init-local，跳过等待"
+    return 0
+  fi
+
+  log "等待 nacos-config-init-local 执行完成..."
+  while (( elapsed < timeout_seconds )); do
+    status="$(docker inspect -f '{{.State.Status}}' shiori-nacos-config-init-local 2>/dev/null || true)"
+    exit_code="$(docker inspect -f '{{.State.ExitCode}}' shiori-nacos-config-init-local 2>/dev/null || true)"
+
+    if [[ "${status}" == "exited" && "${exit_code}" == "0" ]]; then
+      docker logs shiori-nacos-config-init-local >"${CI_LOG_DIR}/nacos-config-init-local.log" 2>&1 || true
+      log "nacos-config-init-local 成功退出"
+      return 0
+    fi
+
+    if [[ "${status}" == "exited" && "${exit_code}" != "0" ]]; then
+      docker logs shiori-nacos-config-init-local >"${CI_LOG_DIR}/nacos-config-init-local.log" 2>&1 || true
+      fail "nacos-config-init-local 执行失败，exitCode=${exit_code}"
+    fi
+
+    sleep 2
+    elapsed=$((elapsed + 2))
+  done
+
+  docker logs shiori-nacos-config-init-local >"${CI_LOG_DIR}/nacos-config-init-local.log" 2>&1 || true
+  fail "等待 nacos-config-init-local 超时(${timeout_seconds}s)"
+}
+
 wait_rabbitmq_auth_init() {
   local timeout_seconds=180
   local elapsed=0
@@ -196,6 +238,42 @@ assert_container_running() {
   fi
 }
 
+wait_mysql_ready() {
+  local timeout_seconds=180
+  local elapsed=0
+
+  log "等待 MySQL 就绪..."
+  while (( elapsed < timeout_seconds )); do
+    if docker exec shiori-mysql mysqladmin ping -h127.0.0.1 -uroot "-p${MYSQL_ROOT_PASSWORD}" --silent >/dev/null 2>&1; then
+      log "MySQL 已就绪"
+      return 0
+    fi
+    sleep 2
+    elapsed=$((elapsed + 2))
+  done
+
+  fail "MySQL 就绪超时(${timeout_seconds}s)"
+}
+
+wait_notify_mysql_ready() {
+  local timeout_seconds=180
+  local elapsed=0
+
+  log "等待 notify MySQL 账号与库就绪..."
+  while (( elapsed < timeout_seconds )); do
+    if docker exec shiori-mysql \
+      mysql "-u${NOTIFY_DB_USERNAME}" "-p${NOTIFY_DB_PASSWORD}" \
+      -e 'SELECT 1;' shiori_notify >/dev/null 2>&1; then
+      log "notify MySQL 账号与库已就绪"
+      return 0
+    fi
+    sleep 2
+    elapsed=$((elapsed + 2))
+  done
+
+  fail "notify MySQL 账号与库就绪超时(${timeout_seconds}s)"
+}
+
 wait_http_ready() {
   local service_name="$1"
   local url="$2"
@@ -220,7 +298,7 @@ start_user_service() {
   (
     cd "${JAVA_DIR}"
     NACOS_ADDR=localhost:8848 \
-    NACOS_CONFIG_GROUP="${NACOS_CONFIG_GROUP}" \
+    NACOS_CONFIG_GROUP="${LOCAL_NACOS_CONFIG_GROUP}" \
     SPRING_DATASOURCE_URL="jdbc:mysql://localhost:3306/shiori_user?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false" \
     SPRING_DATASOURCE_USERNAME="${USER_DB_USERNAME}" \
     SPRING_DATASOURCE_PASSWORD="${USER_DB_PASSWORD}" \
@@ -241,7 +319,7 @@ start_product_service() {
   (
     cd "${JAVA_DIR}"
     NACOS_ADDR=localhost:8848 \
-    NACOS_CONFIG_GROUP="${NACOS_CONFIG_GROUP}" \
+    NACOS_CONFIG_GROUP="${LOCAL_NACOS_CONFIG_GROUP}" \
     SPRING_DATASOURCE_URL="jdbc:mysql://localhost:3306/shiori_product?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false" \
     SPRING_DATASOURCE_USERNAME="${PRODUCT_DB_USERNAME}" \
     SPRING_DATASOURCE_PASSWORD="${PRODUCT_DB_PASSWORD}" \
@@ -259,7 +337,7 @@ start_order_service() {
   (
     cd "${JAVA_DIR}"
     NACOS_ADDR=localhost:8848 \
-    NACOS_CONFIG_GROUP="${NACOS_CONFIG_GROUP}" \
+    NACOS_CONFIG_GROUP="${LOCAL_NACOS_CONFIG_GROUP}" \
     SPRING_DATASOURCE_URL="jdbc:mysql://localhost:3306/shiori_order?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false" \
     SPRING_DATASOURCE_USERNAME="${ORDER_DB_USERNAME}" \
     SPRING_DATASOURCE_PASSWORD="${ORDER_DB_PASSWORD}" \
@@ -281,7 +359,7 @@ start_gateway_service() {
   (
     cd "${JAVA_DIR}"
     NACOS_ADDR=localhost:8848 \
-    NACOS_CONFIG_GROUP="${NACOS_CONFIG_GROUP}" \
+    NACOS_CONFIG_GROUP="${LOCAL_NACOS_CONFIG_GROUP}" \
     SPRING_DATA_REDIS_HOST=localhost \
     SPRING_DATA_REDIS_PORT="${REDIS_LOCAL_PORT}" \
     NACOS_USERNAME="${NACOS_IMPORT_USERNAME}" \
@@ -294,6 +372,7 @@ start_gateway_service() {
 start_notify_service() {
   (
     cd "${NOTIFY_DIR}"
+    NACOS_CONFIG_GROUP="${LOCAL_NACOS_CONFIG_GROUP}" \
     NOTIFY_HTTP_ADDR=:8090 \
     RABBITMQ_ADDR="amqp://${NOTIFY_RMQ_USERNAME}:${NOTIFY_RMQ_PASSWORD}@localhost:5672/" \
     go run .
@@ -316,6 +395,10 @@ main() {
 
   export SHIORI_ENV="${SHIORI_ENV:-test}"
   export NACOS_CONFIG_GROUP="${NACOS_CONFIG_GROUP:-SHIORI_TEST}"
+  if [[ -z "${LOCAL_NACOS_CONFIG_GROUP}" ]]; then
+    LOCAL_NACOS_CONFIG_GROUP="${NACOS_CONFIG_GROUP_LOCAL:-${NACOS_CONFIG_GROUP}}"
+  fi
+  log "本地服务使用 NACOS_CONFIG_GROUP=${LOCAL_NACOS_CONFIG_GROUP}"
 
   apply_default_if_missing USER_RMQ_USERNAME "${ORDER_RMQ_USERNAME:-user_service}"
   apply_default_if_missing USER_RMQ_PASSWORD "${ORDER_RMQ_PASSWORD:-}"
@@ -360,6 +443,7 @@ main() {
 
   docker compose version >/dev/null 2>&1 || fail "docker compose 不可用"
   [[ -x "${SMOKE_SCRIPT}" ]] || fail "烟测脚本不存在或不可执行: ${SMOKE_SCRIPT}"
+  [[ -x "${CHAT_SMOKE_SCRIPT}" ]] || fail "聊天烟测脚本不存在或不可执行: ${CHAT_SMOKE_SCRIPT}"
   [[ -x "${ADMIN_SMOKE_SCRIPT}" ]] || fail "管理端烟测脚本不存在或不可执行: ${ADMIN_SMOKE_SCRIPT}"
   if [[ "${RUN_PERF_BASELINE}" == "1" ]]; then
     [[ -x "${PERF_BASELINE_SCRIPT}" ]] || fail "性能脚本不存在或不可执行: ${PERF_BASELINE_SCRIPT}"
@@ -373,6 +457,7 @@ main() {
   docker compose -f "${DEPLOY_DIR}/docker-compose.yml" ps >"${CI_LOG_DIR}/docker-compose-ps-initial.log" 2>&1 || true
 
   wait_nacos_init
+  wait_nacos_init_local
   wait_rabbitmq_auth_init
 
   assert_container_running shiori-mysql
@@ -380,6 +465,8 @@ main() {
   assert_container_running shiori-redis
   assert_container_running shiori-nacos
   assert_container_running shiori-minio
+  wait_mysql_ready
+  wait_notify_mysql_ready
 
   log "启动应用服务..."
   start_user_service
@@ -402,6 +489,15 @@ main() {
 
   log "交易通知烟测执行成功"
   dump_tail "${CI_LOG_DIR}/smoke.log"
+
+  log "执行聊天链路烟测..."
+  if ! bash "${CHAT_SMOKE_SCRIPT}" >"${CI_LOG_DIR}/chat-smoke.log" 2>&1; then
+    dump_tail "${CI_LOG_DIR}/chat-smoke.log"
+    fail "聊天链路烟测执行失败"
+  fi
+
+  log "聊天链路烟测执行成功"
+  dump_tail "${CI_LOG_DIR}/chat-smoke.log"
 
   log "执行管理端闭环烟测..."
   if ! bash "${ADMIN_SMOKE_SCRIPT}" >"${CI_LOG_DIR}/admin-smoke.log" 2>&1; then
