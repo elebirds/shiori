@@ -12,7 +12,7 @@ import (
 func (s *Server) handleReplayEvents(c *gin.Context) {
 	if s.eventStore == nil {
 		metrics.IncReplayQuery("api", "store_unavailable")
-		c.JSON(http.StatusServiceUnavailable, gin.H{
+		s.writeJSON(c, http.StatusServiceUnavailable, gin.H{
 			"code":    50300,
 			"message": "replay store unavailable",
 		})
@@ -29,7 +29,7 @@ func (s *Server) handleReplayEvents(c *gin.Context) {
 	limit, valid := s.parseReplayLimit(c.Query("limit"))
 	if !valid {
 		metrics.IncReplayQuery("api", "invalid_param")
-		c.JSON(http.StatusBadRequest, gin.H{
+		s.writeJSON(c, http.StatusBadRequest, gin.H{
 			"code":    40002,
 			"message": "limit must be a positive integer",
 		})
@@ -44,7 +44,7 @@ func (s *Server) handleReplayEvents(c *gin.Context) {
 			Str("afterEventId", afterEventID).
 			Int("limit", limit).
 			Msg("通知补偿查询失败")
-		c.JSON(http.StatusInternalServerError, gin.H{
+		s.writeJSON(c, http.StatusInternalServerError, gin.H{
 			"code":    50001,
 			"message": "query notify events failed",
 		})
@@ -54,7 +54,7 @@ func (s *Server) handleReplayEvents(c *gin.Context) {
 	metrics.IncReplayQuery("api", "success")
 	metrics.AddReplayEvents("api", len(items))
 
-	c.JSON(http.StatusOK, gin.H{
+	s.writeJSON(c, http.StatusOK, gin.H{
 		"code":    0,
 		"message": "success",
 		"data": gin.H{

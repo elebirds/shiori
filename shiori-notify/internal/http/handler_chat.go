@@ -21,7 +21,7 @@ type startConversationRequest struct {
 
 func (s *Server) handleListConversations(c *gin.Context) {
 	if s.chat == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
+		s.writeJSON(c, http.StatusServiceUnavailable, gin.H{
 			"code":    50301,
 			"message": "chat service unavailable",
 		})
@@ -33,7 +33,7 @@ func (s *Server) handleListConversations(c *gin.Context) {
 	}
 	cursor, valid := parseInt64Query(c.Query("cursor"))
 	if !valid {
-		c.JSON(http.StatusBadRequest, gin.H{
+		s.writeJSON(c, http.StatusBadRequest, gin.H{
 			"code":    40010,
 			"message": "cursor must be a valid int64",
 		})
@@ -41,7 +41,7 @@ func (s *Server) handleListConversations(c *gin.Context) {
 	}
 	limit, limitValid := parseIntQuery(c.Query("limit"))
 	if !limitValid {
-		c.JSON(http.StatusBadRequest, gin.H{
+		s.writeJSON(c, http.StatusBadRequest, gin.H{
 			"code":    40011,
 			"message": "limit must be a positive integer",
 		})
@@ -79,7 +79,7 @@ func (s *Server) handleListConversations(c *gin.Context) {
 		nextCursor = item.Conversation.ID
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	s.writeJSON(c, http.StatusOK, gin.H{
 		"code":    0,
 		"message": "success",
 		"data": gin.H{
@@ -92,7 +92,7 @@ func (s *Server) handleListConversations(c *gin.Context) {
 
 func (s *Server) handleListMessages(c *gin.Context) {
 	if s.chat == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
+		s.writeJSON(c, http.StatusServiceUnavailable, gin.H{
 			"code":    50301,
 			"message": "chat service unavailable",
 		})
@@ -104,7 +104,7 @@ func (s *Server) handleListMessages(c *gin.Context) {
 	}
 	conversationID, err := strconv.ParseInt(strings.TrimSpace(c.Param("conversationId")), 10, 64)
 	if err != nil || conversationID <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{
+		s.writeJSON(c, http.StatusBadRequest, gin.H{
 			"code":    40012,
 			"message": "conversationId must be a positive integer",
 		})
@@ -112,7 +112,7 @@ func (s *Server) handleListMessages(c *gin.Context) {
 	}
 	before, beforeValid := parseInt64Query(c.Query("before"))
 	if !beforeValid {
-		c.JSON(http.StatusBadRequest, gin.H{
+		s.writeJSON(c, http.StatusBadRequest, gin.H{
 			"code":    40013,
 			"message": "before must be a valid int64",
 		})
@@ -120,7 +120,7 @@ func (s *Server) handleListMessages(c *gin.Context) {
 	}
 	limit, limitValid := parseIntQuery(c.Query("limit"))
 	if !limitValid {
-		c.JSON(http.StatusBadRequest, gin.H{
+		s.writeJSON(c, http.StatusBadRequest, gin.H{
 			"code":    40011,
 			"message": "limit must be a positive integer",
 		})
@@ -149,7 +149,7 @@ func (s *Server) handleListMessages(c *gin.Context) {
 		nextBefore = item.ID
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	s.writeJSON(c, http.StatusOK, gin.H{
 		"code":    0,
 		"message": "success",
 		"data": gin.H{
@@ -162,7 +162,7 @@ func (s *Server) handleListMessages(c *gin.Context) {
 
 func (s *Server) handleReadConversation(c *gin.Context) {
 	if s.chat == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
+		s.writeJSON(c, http.StatusServiceUnavailable, gin.H{
 			"code":    50301,
 			"message": "chat service unavailable",
 		})
@@ -174,7 +174,7 @@ func (s *Server) handleReadConversation(c *gin.Context) {
 	}
 	conversationID, err := strconv.ParseInt(strings.TrimSpace(c.Param("conversationId")), 10, 64)
 	if err != nil || conversationID <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{
+		s.writeJSON(c, http.StatusBadRequest, gin.H{
 			"code":    40012,
 			"message": "conversationId must be a positive integer",
 		})
@@ -182,7 +182,7 @@ func (s *Server) handleReadConversation(c *gin.Context) {
 	}
 	var request readConversationRequest
 	if bindErr := c.ShouldBindJSON(&request); bindErr != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
+		s.writeJSON(c, http.StatusBadRequest, gin.H{
 			"code":    40014,
 			"message": "invalid request body",
 		})
@@ -194,7 +194,7 @@ func (s *Server) handleReadConversation(c *gin.Context) {
 		s.writeChatError(c, readErr, "update read state failed")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
+	s.writeJSON(c, http.StatusOK, gin.H{
 		"code":    0,
 		"message": "success",
 		"data": gin.H{
@@ -206,7 +206,7 @@ func (s *Server) handleReadConversation(c *gin.Context) {
 
 func (s *Server) handleStartConversation(c *gin.Context) {
 	if s.chat == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
+		s.writeJSON(c, http.StatusServiceUnavailable, gin.H{
 			"code":    50301,
 			"message": "chat service unavailable",
 		})
@@ -219,7 +219,7 @@ func (s *Server) handleStartConversation(c *gin.Context) {
 
 	var request startConversationRequest
 	if bindErr := c.ShouldBindJSON(&request); bindErr != nil || strings.TrimSpace(request.ChatTicket) == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
+		s.writeJSON(c, http.StatusBadRequest, gin.H{
 			"code":    40014,
 			"message": "invalid request body",
 		})
@@ -231,7 +231,7 @@ func (s *Server) handleStartConversation(c *gin.Context) {
 		s.writeChatError(c, err, "start conversation failed")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
+	s.writeJSON(c, http.StatusOK, gin.H{
 		"code":    0,
 		"message": "success",
 		"data": gin.H{
@@ -247,7 +247,7 @@ func (s *Server) handleStartConversation(c *gin.Context) {
 
 func (s *Server) handleChatSummary(c *gin.Context) {
 	if s.chat == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
+		s.writeJSON(c, http.StatusServiceUnavailable, gin.H{
 			"code":    50301,
 			"message": "chat service unavailable",
 		})
@@ -262,7 +262,7 @@ func (s *Server) handleChatSummary(c *gin.Context) {
 		s.writeChatError(c, err, "query chat summary failed")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
+	s.writeJSON(c, http.StatusOK, gin.H{
 		"code":    0,
 		"message": "success",
 		"data": gin.H{
@@ -279,7 +279,7 @@ func (s *Server) resolveChatUserID(c *gin.Context) (int64, bool) {
 	}
 	userID, err := strconv.ParseInt(strings.TrimSpace(userIDText), 10, 64)
 	if err != nil || userID <= 0 {
-		c.JSON(http.StatusUnauthorized, gin.H{
+		s.writeJSON(c, http.StatusUnauthorized, gin.H{
 			"code":    40102,
 			"message": "invalid user id in token",
 		})
@@ -315,23 +315,23 @@ func parseIntQuery(raw string) (int, bool) {
 func (s *Server) writeChatError(c *gin.Context, err error, fallbackMessage string) {
 	switch {
 	case errors.Is(err, chat.ErrForbidden):
-		c.JSON(http.StatusForbidden, gin.H{
+		s.writeJSON(c, http.StatusForbidden, gin.H{
 			"code":    40301,
 			"message": "conversation access forbidden",
 		})
 	case errors.Is(err, chat.ErrConversationAbsent):
-		c.JSON(http.StatusNotFound, gin.H{
+		s.writeJSON(c, http.StatusNotFound, gin.H{
 			"code":    40401,
 			"message": "conversation not found",
 		})
 	case errors.Is(err, chat.ErrInvalidArgument):
-		c.JSON(http.StatusBadRequest, gin.H{
+		s.writeJSON(c, http.StatusBadRequest, gin.H{
 			"code":    40015,
 			"message": "invalid chat request",
 		})
 	default:
 		s.logger.Warn().Err(err).Msg(fallbackMessage)
-		c.JSON(http.StatusInternalServerError, gin.H{
+		s.writeJSON(c, http.StatusInternalServerError, gin.H{
 			"code":    50010,
 			"message": fallbackMessage,
 		})

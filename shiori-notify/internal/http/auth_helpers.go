@@ -20,7 +20,7 @@ func (s *Server) resolveAPIUserID(c *gin.Context) (string, bool) {
 				reason = "missing_token"
 			}
 			metrics.IncAuthFailure("http", reason)
-			c.JSON(http.StatusUnauthorized, gin.H{
+			s.writeJSON(c, http.StatusUnauthorized, gin.H{
 				"code":    40101,
 				"message": "invalid access token",
 			})
@@ -31,7 +31,7 @@ func (s *Server) resolveAPIUserID(c *gin.Context) (string, bool) {
 
 	userID := strings.TrimSpace(c.Query("userId"))
 	if userID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
+		s.writeJSON(c, http.StatusBadRequest, gin.H{
 			"code":    40001,
 			"message": "userId is required when auth disabled",
 		})

@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/hhm/shiori/shiori-notify/internal/chat"
 	"github.com/gorilla/websocket"
 	notifyauth "github.com/hhm/shiori/shiori-notify/internal/auth"
+	"github.com/hhm/shiori/shiori-notify/internal/chat"
 	"github.com/hhm/shiori/shiori-notify/internal/event"
 	"github.com/hhm/shiori/shiori-notify/internal/metrics"
 	"github.com/hhm/shiori/shiori-notify/internal/store"
@@ -76,7 +76,7 @@ func (s *Server) handleWS(c *gin.Context) {
 		s.logger.Info().
 			Str("userId", userID).
 			Int("connections", connections).
-		Msg("WebSocket 连接已断开")
+			Msg("WebSocket 连接已断开")
 	})
 }
 
@@ -287,7 +287,7 @@ func (s *Server) resolveWSUserID(c *gin.Context) (string, bool) {
 				reason = "missing_token"
 			}
 			metrics.IncAuthFailure("ws", reason)
-			c.JSON(http.StatusUnauthorized, gin.H{
+			s.writeJSON(c, http.StatusUnauthorized, gin.H{
 				"code":    40101,
 				"message": "invalid access token",
 			})
@@ -298,7 +298,7 @@ func (s *Server) resolveWSUserID(c *gin.Context) (string, bool) {
 
 	userID := strings.TrimSpace(c.Query("userId"))
 	if userID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
+		s.writeJSON(c, http.StatusBadRequest, gin.H{
 			"code":    40001,
 			"message": "userId is required when auth disabled",
 		})

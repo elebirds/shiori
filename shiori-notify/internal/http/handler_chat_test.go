@@ -1,6 +1,7 @@
 package notifyhttp
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -156,6 +157,15 @@ func TestChatHTTPHandlers(t *testing.T) {
 	srv.engine.ServeHTTP(startRec, startReq)
 	if startRec.Code != http.StatusOK {
 		t.Fatalf("start conversation expected 200, got %d", startRec.Code)
+	}
+	var startResp struct {
+		Timestamp int64 `json:"timestamp"`
+	}
+	if err := json.Unmarshal(startRec.Body.Bytes(), &startResp); err != nil {
+		t.Fatalf("decode start response failed: %v", err)
+	}
+	if startResp.Timestamp <= 0 {
+		t.Fatalf("expected timestamp in start response, body=%s", startRec.Body.String())
 	}
 
 	summaryRec := httptest.NewRecorder()

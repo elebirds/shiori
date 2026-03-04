@@ -7,7 +7,7 @@ import (
 )
 
 func (s *Server) handleHealth(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
+	s.writeJSON(c, http.StatusOK, gin.H{
 		"status":  "ok",
 		"service": "shiori-notify",
 	})
