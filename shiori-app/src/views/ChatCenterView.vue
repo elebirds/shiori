@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
@@ -11,6 +11,8 @@ const authStore = useAuthStore()
 const chatStore = useChatStore()
 
 const draft = ref('')
+const messageViewportRef = ref<HTMLElement | null>(null)
+const loadingOlderMessages = ref(false)
 
 const conversations = computed(() => chatStore.conversations)
 const activeConversationId = computed(() => chatStore.activeConversationId)
@@ -29,8 +31,7 @@ const canLoadOlder = computed(() => {
   if (!conversationId) {
     return false
   }
-  const state = chatStore.messagesByConversation[conversationId]
-  return Boolean(state && state.length > 0)
+  return chatStore.hasOlderMessages(conversationId)
 })
 
 onMounted(async () => {
@@ -83,11 +84,27 @@ async function submitMessage(): Promise<void> {
   draft.value = ''
 }
 
-async function loadOlder(): Promise<void> {
-  if (!activeConversationId.value) {
+async function loadOlderByScrollTop(): Promise<void> {
+  const conversationId = activeConversationId.value
+  const viewport = messageViewportRef.value
+  if (!conversationId || !viewport || loadingOlderMessages.value || !canLoadOlder.value) {
     return
   }
-  await chatStore.loadOlderMessages(activeConversationId.value)
+  if (viewport.scrollTop > 36) {
+    return
+  }
+  loadingOlderMessages.value = true
+  const prevHeight = viewport.scrollHeight
+  const prevTop = viewport.scrollTop
+  await chatStore.loadOlderMessages(conversationId)
+  await nextTick()
+  const increased = viewport.scrollHeight - prevHeight
+  viewport.scrollTop = prevTop + increased
+  loadingOlderMessages.value = false
+}
+
+function handleMessageScroll(): void {
+  void loadOlderByScrollTop()
 }
 </script>
 
@@ -141,16 +158,7 @@ async function loadOlder(): Promise<void> {
           <p class="mt-1 text-xs text-stone-500">{{ activeConversation?.listingTitle || '' }}</p>
         </header>
 
-        <div class="flex-1 space-y-3 overflow-y-auto px-4 py-3">
-          <button
-            v-if="activeConversation && canLoadOlder"
-            type="button"
-            class="rounded-lg border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
-            @click="loadOlder"
-          >
-            加载更多历史
-          </button>
-
+        <div ref="messageViewportRef" class="flex-1 space-y-3 overflow-y-auto px-4 py-3" @scroll.passive="handleMessageScroll">
           <article
             v-for="item in activeMessages"
             :key="`${item.messageId}-${item.clientMsgId}`"

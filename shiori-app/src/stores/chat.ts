@@ -149,6 +149,13 @@ export const useChatStore = defineStore('chat', () => {
     await loadMessages(conversationId, cursor.before)
   }
 
+  function hasOlderMessages(conversationId: number): boolean {
+    if (!conversationId) {
+      return false
+    }
+    return Boolean(messageCursorByConversation.value[conversationId]?.hasMore)
+  }
+
   async function loadMessages(conversationId: number, before = 0): Promise<void> {
     try {
       const response = await listMessages(conversationId, {
@@ -519,6 +526,7 @@ export const useChatStore = defineStore('chat', () => {
     loadConversations,
     openConversation,
     loadOlderMessages,
+    hasOlderMessages,
     sendMessage,
     refreshSummary,
     initialize,
