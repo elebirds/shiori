@@ -10,6 +10,7 @@ public class OrderMetrics {
     private static final String OUTBOX_RELAY_TOTAL = "shiori_order_outbox_relay_total";
     private static final String TIMEOUT_CONSUME_TOTAL = "shiori_order_timeout_consume_total";
     private static final String STATE_TRANSITION_TOTAL = "shiori_order_state_transition_total";
+    private static final String TRANSITION_TOTAL = "shiori_order_transition_total";
     private static final String IDEMPOTENCY_TOTAL = "shiori_order_idempotency_total";
 
     private final MeterRegistry meterRegistry;
@@ -38,6 +39,26 @@ public class OrderMetrics {
                 STATE_TRANSITION_TOTAL,
                 "from", sanitize(from),
                 "to", sanitize(to)
+        ).increment();
+        meterRegistry.counter(
+                TRANSITION_TOTAL,
+                "from", sanitize(from),
+                "to", sanitize(to),
+                "source", "unknown"
+        ).increment();
+    }
+
+    public void incStateTransition(String from, String to, String source) {
+        meterRegistry.counter(
+                STATE_TRANSITION_TOTAL,
+                "from", sanitize(from),
+                "to", sanitize(to)
+        ).increment();
+        meterRegistry.counter(
+                TRANSITION_TOTAL,
+                "from", sanitize(from),
+                "to", sanitize(to),
+                "source", sanitize(source)
         ).increment();
     }
 

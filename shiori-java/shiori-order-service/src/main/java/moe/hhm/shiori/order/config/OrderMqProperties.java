@@ -12,6 +12,8 @@ public class OrderMqProperties {
     private String orderCreatedRoutingKey = "order.created";
     private String orderPaidRoutingKey = "order.paid";
     private String orderCanceledRoutingKey = "order.canceled";
+    private String orderDeliveredRoutingKey = "order.delivered";
+    private String orderFinishedRoutingKey = "order.finished";
     private String delayExchange = "shiori.order.delay";
     private String delayRoutingKey = "order.timeout";
     private String timeoutDlxExchange = "shiori.order.timeout.dlx";
@@ -57,6 +59,22 @@ public class OrderMqProperties {
 
     public void setOrderCanceledRoutingKey(String orderCanceledRoutingKey) {
         this.orderCanceledRoutingKey = orderCanceledRoutingKey;
+    }
+
+    public String getOrderDeliveredRoutingKey() {
+        return orderDeliveredRoutingKey;
+    }
+
+    public void setOrderDeliveredRoutingKey(String orderDeliveredRoutingKey) {
+        this.orderDeliveredRoutingKey = orderDeliveredRoutingKey;
+    }
+
+    public String getOrderFinishedRoutingKey() {
+        return orderFinishedRoutingKey;
+    }
+
+    public void setOrderFinishedRoutingKey(String orderFinishedRoutingKey) {
+        this.orderFinishedRoutingKey = orderFinishedRoutingKey;
     }
 
     public String getDelayExchange() {

@@ -40,6 +40,18 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/seller/orders',
+      name: 'seller-orders',
+      component: () => import('@/views/SellerOrderListView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/seller/orders/:orderNo',
+      name: 'seller-order-detail',
+      component: () => import('@/views/SellerOrderDetailView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/orders/:orderNo',
       name: 'order-detail',
       component: () => import('@/views/OrderDetailView.vue'),
@@ -88,6 +100,7 @@ const router = createRouter({
 router.beforeEach((to) => {
   const authStore = useAuthStore()
   const loggedIn = authStore.isAuthenticated
+  const mustChangePassword = Boolean(authStore.user?.mustChangePassword)
 
   if (to.meta.requiresAuth && !loggedIn) {
     return {
@@ -98,8 +111,17 @@ router.beforeEach((to) => {
     }
   }
 
+  if (loggedIn && mustChangePassword && to.path !== '/profile') {
+    return {
+      path: '/profile',
+      query: {
+        forceChangePassword: '1',
+      },
+    }
+  }
+
   if ((to.path === '/login' || to.path === '/register') && loggedIn) {
-    return { path: '/products' }
+    return { path: mustChangePassword ? '/profile' : '/products' }
   }
 
   return true

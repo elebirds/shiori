@@ -1,6 +1,9 @@
 spring:
   datasource:
     url: ${USER_DB_URL}
+  rabbitmq:
+    host: ${USER_RMQ_HOST}
+    port: ${USER_RMQ_PORT}
   data:
     redis:
       host: ${REDIS_HOST}
@@ -23,3 +26,16 @@ management:
   endpoint:
     health:
       show-details: never
+
+user:
+  outbox:
+    enabled: ${USER_OUTBOX_ENABLED:true}
+    relay-fixed-delay-ms: ${USER_OUTBOX_RELAY_FIXED_DELAY_MS:3000}
+    relay-batch-size: ${USER_OUTBOX_RELAY_BATCH_SIZE:100}
+    max-backoff-seconds: ${USER_OUTBOX_MAX_BACKOFF_SECONDS:300}
+  mq:
+    enabled: ${USER_MQ_ENABLED:true}
+    event-exchange: ${USER_EVENT_EXCHANGE:shiori.user.event}
+    user-status-changed-routing-key: ${USER_STATUS_CHANGED_ROUTING_KEY:user.status.changed}
+    user-role-changed-routing-key: ${USER_ROLE_CHANGED_ROUTING_KEY:user.role.changed}
+    user-password-reset-routing-key: ${USER_PASSWORD_RESET_ROUTING_KEY:user.password.reset}

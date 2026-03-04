@@ -21,6 +21,10 @@ var (
 	mqRouteDuration   *prometheus.HistogramVec
 	replayQueryTotal  *prometheus.CounterVec
 	replayEventsTotal *prometheus.CounterVec
+	storeWriteTotal   *prometheus.CounterVec
+	readOpTotal       *prometheus.CounterVec
+	readMarkedTotal   *prometheus.CounterVec
+	authFailureTotal  *prometheus.CounterVec
 )
 
 func register() {
@@ -50,6 +54,22 @@ func register() {
 			Name: "shiori_notify_replay_events_total",
 			Help: "Total replay events delivered grouped by source",
 		}, []string{"source"})
+		storeWriteTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "shiori_notify_store_write_total",
+			Help: "Total notification store writes grouped by driver and result",
+		}, []string{"driver", "result"})
+		readOpTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "shiori_notify_read_op_total",
+			Help: "Total read operations grouped by action and result",
+		}, []string{"action", "result"})
+		readMarkedTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "shiori_notify_read_marked_total",
+			Help: "Total marked-read events grouped by action",
+		}, []string{"action"})
+		authFailureTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "shiori_notify_auth_failure_total",
+			Help: "Total auth failures grouped by source and reason",
+		}, []string{"source", "reason"})
 
 		prometheus.MustRegister(
 			wsConnections,
@@ -58,6 +78,10 @@ func register() {
 			mqRouteDuration,
 			replayQueryTotal,
 			replayEventsTotal,
+			storeWriteTotal,
+			readOpTotal,
+			readMarkedTotal,
+			authFailureTotal,
 		)
 	})
 }
@@ -101,6 +125,38 @@ func AddReplayEvents(source string, count int) {
 	}
 	register()
 	replayEventsTotal.WithLabelValues(sanitizeLabel(source)).Add(float64(count))
+}
+
+func IncStoreWrite(driver, result string) {
+	register()
+	storeWriteTotal.WithLabelValues(
+		sanitizeLabel(driver),
+		sanitizeLabel(result),
+	).Inc()
+}
+
+func IncReadOp(action, result string) {
+	register()
+	readOpTotal.WithLabelValues(
+		sanitizeLabel(action),
+		sanitizeLabel(result),
+	).Inc()
+}
+
+func AddReadMarked(action string, count int) {
+	if count <= 0 {
+		return
+	}
+	register()
+	readMarkedTotal.WithLabelValues(sanitizeLabel(action)).Add(float64(count))
+}
+
+func IncAuthFailure(source, reason string) {
+	register()
+	authFailureTotal.WithLabelValues(
+		sanitizeLabel(source),
+		sanitizeLabel(reason),
+	).Inc()
 }
 
 func sanitizeLabel(value string) string {

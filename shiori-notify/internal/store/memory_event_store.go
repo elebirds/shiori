@@ -1,7 +1,9 @@
 package store
 
 import (
+	"encoding/json"
 	"sync"
+	"time"
 
 	"github.com/hhm/shiori/shiori-notify/internal/event"
 )
@@ -13,15 +15,27 @@ const (
 )
 
 type EventStore interface {
-	Save(userID string, env event.Envelope) bool
-	List(userID, afterEventID string, limit int) (items []event.Envelope, nextEventID string, hasMore bool)
+	Save(userID string, env event.Envelope) (bool, error)
+	List(userID, afterEventID string, limit int) (items []NotificationEvent, nextEventID string, hasMore bool, err error)
+	MarkRead(userID, eventID string) (bool, error)
+	MarkAllRead(userID string) (int64, error)
+	UnreadCount(userID string) (int64, error)
+}
+
+type NotificationEvent struct {
+	EventID     string          `json:"eventId"`
+	Type        string          `json:"type"`
+	AggregateID string          `json:"aggregateId"`
+	CreatedAt   string          `json:"createdAt"`
+	Payload     json.RawMessage `json:"payload"`
+	Read        bool            `json:"read"`
+	ReadAt      string          `json:"readAt,omitempty"`
 }
 
 type MemoryEventStore struct {
 	mu         sync.RWMutex
 	maxPerUser int
-	seen       map[string]struct{}
-	byUser     map[string][]event.Envelope
+	byUser     map[string][]NotificationEvent
 	index      map[string]map[string]int
 }
 
@@ -31,45 +45,50 @@ func NewMemoryEventStore(maxPerUser int) *MemoryEventStore {
 	}
 	return &MemoryEventStore{
 		maxPerUser: maxPerUser,
-		seen:       make(map[string]struct{}),
-		byUser:     make(map[string][]event.Envelope),
+		byUser:     make(map[string][]NotificationEvent),
 		index:      make(map[string]map[string]int),
 	}
 }
 
-func (s *MemoryEventStore) Save(userID string, env event.Envelope) bool {
+func (s *MemoryEventStore) Save(userID string, env event.Envelope) (bool, error) {
 	if userID == "" || env.EventID == "" {
-		return false
+		return false, nil
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.seen[env.EventID]; exists {
-		return false
-	}
-
-	cloned := cloneEnvelope(env)
-	s.byUser[userID] = append(s.byUser[userID], cloned)
 	if _, ok := s.index[userID]; !ok {
 		s.index[userID] = make(map[string]int)
 	}
-	s.index[userID][cloned.EventID] = len(s.byUser[userID]) - 1
-	s.seen[cloned.EventID] = struct{}{}
+	if _, exists := s.index[userID][env.EventID]; exists {
+		return false, nil
+	}
+
+	clonedPayload := append([]byte(nil), env.Payload...)
+	entry := NotificationEvent{
+		EventID:     env.EventID,
+		Type:        env.Type,
+		AggregateID: env.AggregateID,
+		CreatedAt:   env.CreatedAt,
+		Payload:     clonedPayload,
+		Read:        false,
+		ReadAt:      "",
+	}
+	s.byUser[userID] = append(s.byUser[userID], entry)
+	s.index[userID][entry.EventID] = len(s.byUser[userID]) - 1
 
 	if len(s.byUser[userID]) > s.maxPerUser {
-		evicted := s.byUser[userID][0]
 		s.byUser[userID] = s.byUser[userID][1:]
-		delete(s.seen, evicted.EventID)
 		s.rebuildIndexLocked(userID)
 	}
 
-	return true
+	return true, nil
 }
 
-func (s *MemoryEventStore) List(userID, afterEventID string, limit int) ([]event.Envelope, string, bool) {
+func (s *MemoryEventStore) List(userID, afterEventID string, limit int) ([]NotificationEvent, string, bool, error) {
 	if userID == "" {
-		return nil, "", false
+		return nil, "", false, nil
 	}
 
 	if limit <= 0 {
@@ -84,7 +103,7 @@ func (s *MemoryEventStore) List(userID, afterEventID string, limit int) ([]event
 
 	events := s.byUser[userID]
 	if len(events) == 0 {
-		return nil, "", false
+		return nil, "", false, nil
 	}
 
 	start := 0
@@ -95,7 +114,7 @@ func (s *MemoryEventStore) List(userID, afterEventID string, limit int) ([]event
 	}
 
 	if start >= len(events) {
-		return nil, "", false
+		return nil, "", false, nil
 	}
 
 	end := start + limit
@@ -103,9 +122,9 @@ func (s *MemoryEventStore) List(userID, afterEventID string, limit int) ([]event
 		end = len(events)
 	}
 
-	items := make([]event.Envelope, 0, end-start)
+	items := make([]NotificationEvent, 0, end-start)
 	for i := start; i < end; i++ {
-		items = append(items, cloneEnvelope(events[i]))
+		items = append(items, cloneNotificationEvent(events[i]))
 	}
 
 	nextEventID := ""
@@ -113,7 +132,75 @@ func (s *MemoryEventStore) List(userID, afterEventID string, limit int) ([]event
 		nextEventID = items[len(items)-1].EventID
 	}
 	hasMore := end < len(events)
-	return items, nextEventID, hasMore
+	return items, nextEventID, hasMore, nil
+}
+
+func (s *MemoryEventStore) MarkRead(userID, eventID string) (bool, error) {
+	if userID == "" || eventID == "" {
+		return false, nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	idx, ok := s.index[userID][eventID]
+	if !ok {
+		return false, nil
+	}
+	if idx < 0 || idx >= len(s.byUser[userID]) {
+		return false, nil
+	}
+	if s.byUser[userID][idx].Read {
+		return false, nil
+	}
+
+	s.byUser[userID][idx].Read = true
+	s.byUser[userID][idx].ReadAt = time.Now().UTC().Format(time.RFC3339Nano)
+	return true, nil
+}
+
+func (s *MemoryEventStore) MarkAllRead(userID string) (int64, error) {
+	if userID == "" {
+		return 0, nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	events := s.byUser[userID]
+	if len(events) == 0 {
+		return 0, nil
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	var affected int64
+	for i := range events {
+		if events[i].Read {
+			continue
+		}
+		events[i].Read = true
+		events[i].ReadAt = now
+		affected++
+	}
+	s.byUser[userID] = events
+	return affected, nil
+}
+
+func (s *MemoryEventStore) UnreadCount(userID string) (int64, error) {
+	if userID == "" {
+		return 0, nil
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var unread int64
+	for _, item := range s.byUser[userID] {
+		if !item.Read {
+			unread++
+		}
+	}
+	return unread, nil
 }
 
 func (s *MemoryEventStore) rebuildIndexLocked(userID string) {
@@ -124,7 +211,7 @@ func (s *MemoryEventStore) rebuildIndexLocked(userID string) {
 	s.index[userID] = m
 }
 
-func cloneEnvelope(src event.Envelope) event.Envelope {
+func cloneNotificationEvent(src NotificationEvent) NotificationEvent {
 	clone := src
 	if src.Payload != nil {
 		clone.Payload = append([]byte(nil), src.Payload...)

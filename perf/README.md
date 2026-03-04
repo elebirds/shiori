@@ -1,8 +1,8 @@
 # Shiori Perf Baseline (k6)
 
-本目录提供 v0.2 的基础性能基线脚本：
+本目录提供交易链路性能基线脚本：
 
-1. `k6-order.js`：下单 -> 支付 -> 订单详情 的交易链路压测。
+1. `k6-order.js`：下单 -> 支付 -> 卖家发货 -> 买家确认收货 -> 订单详情 的 v2 履约链路压测。
 2. `k6-ws.js`：WebSocket 建连后触发支付并统计通知到达时延。
 
 ## 前置条件
@@ -45,9 +45,11 @@ k6 run k6-ws.js
 
 1. HTTP 失败率：`http_req_failed < 1%`
 2. 订单链路：
-   1. `shiori_perf_order_create_duration_ms p95 < 300ms`
-   2. `shiori_perf_order_pay_duration_ms p95 < 300ms`
-   3. `shiori_perf_order_detail_duration_ms p95 < 300ms`
+   1. `shiori_perf_order_create_duration_ms p95 < 400ms`
+   2. `shiori_perf_order_pay_duration_ms p95 < 400ms`
+   3. `shiori_perf_order_deliver_duration_ms p95 < 400ms`
+   4. `shiori_perf_order_confirm_duration_ms p95 < 400ms`
+   5. `shiori_perf_order_detail_duration_ms p95 < 400ms`
 3. WS 通知：
    1. `shiori_perf_ws_notification_latency_ms p95 < 2000ms`
    2. `shiori_perf_ws_timeout_total == 0`

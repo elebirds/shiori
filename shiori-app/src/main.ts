@@ -44,10 +44,10 @@ setAuthFailureHandler(() => {
 })
 
 watch(
-  () => authStore.user?.userId,
-  (userId) => {
-    if (userId) {
-      notifyStore.connect(String(userId))
+  () => authStore.accessToken,
+  (accessToken) => {
+    if (accessToken) {
+      notifyStore.connect(accessToken)
     } else {
       notifyStore.disconnect()
       notifyStore.clearMessages()

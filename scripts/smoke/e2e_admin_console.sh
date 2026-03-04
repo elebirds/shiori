@@ -327,6 +327,30 @@ disable_resp="$(call_api POST "/api/admin/users/${buyer_user_id}/status" "${admi
 enable_resp="$(call_api POST "/api/admin/users/${buyer_user_id}/status" "${admin_token}" '{"status":"ENABLED","reason":"烟测启用"}')"
 [[ "$(extract_required "${enable_resp}" '.data.status' "buyer.status.enabled")" == "ENABLED" ]] || fail "启用用户失败"
 
+lock_resp="$(call_api POST "/api/admin/users/${buyer_user_id}/lock" "${admin_token}" '{"durationMinutes":15,"reason":"烟测锁定"}')"
+[[ "$(extract_required "${lock_resp}" '.data.status' "buyer.status.locked")" == "LOCKED" ]] || fail "锁定用户失败"
+unlock_resp="$(call_api POST "/api/admin/users/${buyer_user_id}/unlock" "${admin_token}" '{"reason":"烟测解锁"}')"
+[[ "$(extract_required "${unlock_resp}" '.data.status' "buyer.status.unlocked")" == "ENABLED" ]] || fail "解锁用户失败"
+
+reset_password="R${id_suffix}b!"
+reset_payload="$(jq -nc --arg newPassword "${reset_password}" --arg reason "烟测重置密码" \
+  '{newPassword:$newPassword,forceChangePassword:true,reason:$reason}')"
+reset_resp="$(call_api POST "/api/admin/users/${buyer_user_id}/password/reset" "${admin_token}" "${reset_payload}")"
+[[ "$(extract_required "${reset_resp}" '.data.status' "buyer.status.reset")" == "ENABLED" ]] || fail "重置密码后状态异常"
+
+buyer_login_after_reset_payload="$(jq -nc --arg username "${buyer_username}" --arg password "${reset_password}" '{username:$username,password:$password}')"
+buyer_login_after_reset_resp="$(call_api POST "/api/user/auth/login" "" "${buyer_login_after_reset_payload}")"
+must_change_password="$(extract_required "${buyer_login_after_reset_resp}" '.data.user.mustChangePassword | tostring' "buyer.mustChangePassword")"
+[[ "${must_change_password}" == "true" ]] || fail "重置密码后 mustChangePassword 非 true"
+
+buyer_audits_resp="$(call_api GET "/api/admin/users/${buyer_user_id}/audits?page=1&size=50" "${admin_token}" "")"
+has_user_lock_audit="$(echo "${buyer_audits_resp}" | jq -r '.data.items | map(.action=="USER_LOCK") | any')"
+has_user_unlock_audit="$(echo "${buyer_audits_resp}" | jq -r '.data.items | map(.action=="USER_UNLOCK") | any')"
+has_user_password_reset_audit="$(echo "${buyer_audits_resp}" | jq -r '.data.items | map(.action=="USER_PASSWORD_RESET") | any')"
+[[ "${has_user_lock_audit}" == "true" ]] || fail "审计日志缺少 USER_LOCK"
+[[ "${has_user_unlock_audit}" == "true" ]] || fail "审计日志缺少 USER_UNLOCK"
+[[ "${has_user_password_reset_audit}" == "true" ]] || fail "审计日志缺少 USER_PASSWORD_RESET"
+
 grant_resp="$(call_api PUT "/api/admin/users/${seller_user_id}/admin-role" "${admin_token}" '{"grantAdmin":true,"reason":"烟测授予管理员"}')"
 [[ "$(echo "${grant_resp}" | jq -r '.data.admin')" == "true" ]] || fail "授予管理员失败"
 revoke_resp="$(call_api PUT "/api/admin/users/${seller_user_id}/admin-role" "${admin_token}" '{"grantAdmin":false,"reason":"烟测回收管理员"}')"

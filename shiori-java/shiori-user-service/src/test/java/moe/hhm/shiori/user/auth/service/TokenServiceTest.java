@@ -13,6 +13,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+import org.springframework.data.redis.core.SetOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import tools.jackson.databind.ObjectMapper;
@@ -28,6 +31,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class TokenServiceTest {
 
     @Mock
@@ -35,6 +39,9 @@ class TokenServiceTest {
 
     @Mock
     private ValueOperations<String, String> valueOperations;
+
+    @Mock
+    private SetOperations<String, String> setOperations;
 
     private TokenService tokenService;
 
@@ -52,9 +59,10 @@ class TokenServiceTest {
     @Test
     void shouldIssueTokenPairAndStoreOpaqueRefresh() {
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(redisTemplate.opsForSet()).thenReturn(setOperations);
 
         TokenPairResponse response = tokenService.issueTokenPair(
-                1L, "U202603030001", "alice", List.of("ROLE_USER")
+                1L, "U202603030001", "alice", List.of("ROLE_USER"), false
         );
 
         assertThat(response.accessToken()).isNotBlank();
@@ -72,9 +80,10 @@ class TokenServiceTest {
     @Test
     void shouldRotateRefreshTokenOnRefresh() throws Exception {
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(redisTemplate.opsForSet()).thenReturn(setOperations);
 
         RefreshSession session = new RefreshSession(
-                1L, "U202603030001", "alice", List.of("ROLE_USER"), System.currentTimeMillis()
+                1L, "U202603030001", "alice", List.of("ROLE_USER"), false, System.currentTimeMillis()
         );
         String oldRefresh = "old-refresh-token";
         String oldKey = "auth:refresh:" + GatewaySignUtils.sha256Hex(oldRefresh);
@@ -97,6 +106,7 @@ class TokenServiceTest {
     @Test
     void shouldRejectInvalidRefreshToken() {
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(redisTemplate.opsForSet()).thenReturn(setOperations);
         when(valueOperations.get(anyString())).thenReturn(null);
 
         assertThatThrownBy(() -> tokenService.refresh("missing-token"))
@@ -109,6 +119,9 @@ class TokenServiceTest {
     void shouldDeleteRefreshSessionOnLogout() {
         String refresh = "refresh-token";
         String expectedKey = "auth:refresh:" + GatewaySignUtils.sha256Hex(refresh);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(redisTemplate.opsForSet()).thenReturn(setOperations);
+        when(valueOperations.get(expectedKey)).thenReturn(null);
 
         tokenService.logout(refresh);
 

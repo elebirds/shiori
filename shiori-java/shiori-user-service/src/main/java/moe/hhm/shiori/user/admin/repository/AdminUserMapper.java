@@ -1,10 +1,14 @@
 package moe.hhm.shiori.user.admin.repository;
 
 import java.util.List;
+import moe.hhm.shiori.user.admin.model.AdminUserAuditRecord;
 import moe.hhm.shiori.user.admin.model.AdminRoleRecord;
 import moe.hhm.shiori.user.admin.model.AdminUserRecord;
+import moe.hhm.shiori.user.outbox.model.UserOutboxEventEntity;
+import moe.hhm.shiori.user.outbox.model.UserOutboxEventRecord;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Options;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
@@ -22,6 +26,7 @@ public interface AdminUserMapper {
                    u.status,
                    u.failed_login_count AS failedLoginCount,
                    u.locked_until AS lockedUntil,
+                   u.must_change_password AS mustChangePassword,
                    u.last_login_at AS lastLoginAt,
                    u.last_login_ip AS lastLoginIp,
                    GROUP_CONCAT(DISTINCT r.role_code ORDER BY r.id SEPARATOR ',') AS roleCodes,
@@ -103,6 +108,7 @@ public interface AdminUserMapper {
                    u.status,
                    u.failed_login_count AS failedLoginCount,
                    u.locked_until AS lockedUntil,
+                   u.must_change_password AS mustChangePassword,
                    u.last_login_at AS lastLoginAt,
                    u.last_login_ip AS lastLoginIp,
                    GROUP_CONCAT(DISTINCT r.role_code ORDER BY r.id SEPARATOR ',') AS roleCodes,
@@ -123,12 +129,58 @@ public interface AdminUserMapper {
     @Update("""
             UPDATE u_user
             SET status = #{status},
+                failed_login_count = CASE
+                    WHEN #{status} = 1 THEN 0
+                    ELSE failed_login_count
+                END,
+                locked_until = CASE
+                    WHEN #{status} = 1 THEN NULL
+                    ELSE locked_until
+                END,
                 updated_at = CURRENT_TIMESTAMP(3),
                 version = version + 1
             WHERE id = #{userId}
               AND is_deleted = 0
             """)
     int updateUserStatus(@Param("userId") Long userId, @Param("status") Integer status);
+
+    @Update("""
+            UPDATE u_user
+            SET status = #{status},
+                locked_until = #{lockedUntil},
+                updated_at = CURRENT_TIMESTAMP(3),
+                version = version + 1
+            WHERE id = #{userId}
+              AND is_deleted = 0
+            """)
+    int updateUserLockState(@Param("userId") Long userId,
+                            @Param("status") Integer status,
+                            @Param("lockedUntil") java.time.LocalDateTime lockedUntil);
+
+    @Update("""
+            UPDATE u_user
+            SET status = 1,
+                failed_login_count = 0,
+                locked_until = NULL,
+                updated_at = CURRENT_TIMESTAMP(3),
+                version = version + 1
+            WHERE id = #{userId}
+              AND is_deleted = 0
+            """)
+    int unlockUser(@Param("userId") Long userId);
+
+    @Update("""
+            UPDATE u_user
+            SET password_hash = #{passwordHash},
+                must_change_password = #{mustChangePassword},
+                updated_at = CURRENT_TIMESTAMP(3),
+                version = version + 1
+            WHERE id = #{userId}
+              AND is_deleted = 0
+            """)
+    int updatePasswordByAdmin(@Param("userId") Long userId,
+                              @Param("passwordHash") String passwordHash,
+                              @Param("mustChangePassword") Integer mustChangePassword);
 
     @Select("""
             SELECT COUNT(DISTINCT u.id)
@@ -220,4 +272,119 @@ public interface AdminUserMapper {
                             @Param("beforeJson") String beforeJson,
                             @Param("afterJson") String afterJson,
                             @Param("reason") String reason);
+
+    @Select("""
+            <script>
+            SELECT COUNT(1)
+            FROM u_admin_audit_log
+            WHERE target_user_id = #{targetUserId}
+            <if test="action != null and action != ''">
+              AND action = #{action}
+            </if>
+            </script>
+            """)
+    long countAdminAudits(@Param("targetUserId") Long targetUserId, @Param("action") String action);
+
+    @Select("""
+            <script>
+            SELECT id,
+                   operator_user_id AS operatorUserId,
+                   target_user_id AS targetUserId,
+                   action,
+                   before_json AS beforeJson,
+                   after_json AS afterJson,
+                   reason,
+                   created_at AS createdAt
+            FROM u_admin_audit_log
+            WHERE target_user_id = #{targetUserId}
+            <if test="action != null and action != ''">
+              AND action = #{action}
+            </if>
+            ORDER BY id DESC
+            LIMIT #{size} OFFSET #{offset}
+            </script>
+            """)
+    List<AdminUserAuditRecord> listAdminAudits(@Param("targetUserId") Long targetUserId,
+                                               @Param("action") String action,
+                                               @Param("size") int size,
+                                               @Param("offset") int offset);
+
+    @Insert("""
+            INSERT INTO u_outbox_event (
+                event_id,
+                aggregate_id,
+                type,
+                payload,
+                exchange_name,
+                routing_key,
+                status,
+                retry_count,
+                last_error,
+                next_retry_at,
+                created_at,
+                sent_at
+            ) VALUES (
+                #{eventId},
+                #{aggregateId},
+                #{type},
+                #{payload},
+                #{exchangeName},
+                #{routingKey},
+                #{status},
+                #{retryCount},
+                #{lastError},
+                #{nextRetryAt},
+                CURRENT_TIMESTAMP(3),
+                #{sentAt}
+            )
+            """)
+    @Options(useGeneratedKeys = true, keyProperty = "id", keyColumn = "id")
+    int insertOutboxEvent(UserOutboxEventEntity outboxEventEntity);
+
+    @Select("""
+            SELECT id,
+                   event_id AS eventId,
+                   aggregate_id AS aggregateId,
+                   type,
+                   payload,
+                   exchange_name AS exchangeName,
+                   routing_key AS routingKey,
+                   status,
+                   retry_count AS retryCount,
+                   last_error AS lastError,
+                   next_retry_at AS nextRetryAt,
+                   created_at AS createdAt,
+                   sent_at AS sentAt
+            FROM u_outbox_event
+            WHERE status = 'PENDING'
+               OR (status = 'FAILED'
+                   AND (next_retry_at IS NULL OR next_retry_at <= CURRENT_TIMESTAMP(3)))
+            ORDER BY id ASC
+            LIMIT #{limit}
+            """)
+    List<UserOutboxEventRecord> listOutboxRelayCandidates(@Param("limit") int limit);
+
+    @Update("""
+            UPDATE u_outbox_event
+            SET status = 'SENT',
+                sent_at = CURRENT_TIMESTAMP(3),
+                last_error = NULL,
+                next_retry_at = NULL
+            WHERE id = #{id}
+              AND status IN ('PENDING', 'FAILED')
+            """)
+    int markOutboxSent(@Param("id") Long id);
+
+    @Update("""
+            UPDATE u_outbox_event
+            SET status = 'FAILED',
+                retry_count = #{retryCount},
+                last_error = #{lastError},
+                next_retry_at = #{nextRetryAt}
+            WHERE id = #{id}
+            """)
+    int markOutboxFailed(@Param("id") Long id,
+                         @Param("retryCount") int retryCount,
+                         @Param("lastError") String lastError,
+                         @Param("nextRetryAt") java.time.LocalDateTime nextRetryAt);
 }

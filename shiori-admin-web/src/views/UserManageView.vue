@@ -5,7 +5,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import {
   getAdminUser,
   listAdminRoles,
+  listAdminUserAudits,
   listAdminUsers,
+  lockAdminUser,
+  resetAdminUserPassword,
+  unlockAdminUser,
   updateAdminRole,
   updateAdminUserStatus,
   type AdminUserSummary,
@@ -20,6 +24,17 @@ const status = ref('')
 const role = ref('')
 const selectedUserId = ref<number | null>(null)
 const actionError = ref('')
+
+const lockDurationMinutes = ref(15)
+const lockReason = ref('后台手动锁定用户')
+const unlockReason = ref('后台手动解锁用户')
+const resetPassword = ref('')
+const resetReason = ref('后台重置密码')
+const forceChangePassword = ref(true)
+
+const auditPage = ref(1)
+const auditSize = ref(10)
+const auditAction = ref('')
 
 const usersQuery = useQuery({
   queryKey: computed(() => ['admin-users', page.value, size.value, keyword.value, status.value, role.value]),
@@ -44,21 +59,26 @@ const selectedUserQuery = useQuery({
   enabled: computed(() => selectedUserId.value !== null),
 })
 
+const auditsQuery = useQuery({
+  queryKey: computed(() => ['admin-user-audits', selectedUserId.value, auditPage.value, auditSize.value, auditAction.value]),
+  queryFn: () =>
+    listAdminUserAudits(selectedUserId.value as number, {
+      page: auditPage.value,
+      size: auditSize.value,
+      action: auditAction.value || undefined,
+    }),
+  enabled: computed(() => selectedUserId.value !== null),
+})
+
 const statusMutation = useMutation({
   mutationFn: ({ user, nextStatus }: { user: AdminUserSummary; nextStatus: 'ENABLED' | 'DISABLED' }) =>
     updateAdminUserStatus(user.userId, {
       status: nextStatus,
       reason: `后台手动${nextStatus === 'DISABLED' ? '禁用' : '启用'}用户`,
     }),
-  onSuccess: async () => {
-    actionError.value = ''
-    await queryClient.invalidateQueries({ queryKey: ['admin-users'] })
-    if (selectedUserId.value != null) {
-      await queryClient.invalidateQueries({ queryKey: ['admin-user-detail', selectedUserId.value] })
-    }
-  },
+  onSuccess: () => handleMutationSuccess(),
   onError: (error) => {
-    actionError.value = error instanceof ApiBizError ? error.message : '操作失败'
+    actionError.value = resolveError(error)
   },
 })
 
@@ -68,15 +88,48 @@ const roleMutation = useMutation({
       grantAdmin,
       reason: grantAdmin ? '后台授予管理员角色' : '后台回收管理员角色',
     }),
-  onSuccess: async () => {
-    actionError.value = ''
-    await queryClient.invalidateQueries({ queryKey: ['admin-users'] })
-    if (selectedUserId.value != null) {
-      await queryClient.invalidateQueries({ queryKey: ['admin-user-detail', selectedUserId.value] })
-    }
+  onSuccess: () => handleMutationSuccess(),
+  onError: (error) => {
+    actionError.value = resolveError(error)
+  },
+})
+
+const lockMutation = useMutation({
+  mutationFn: (userId: number) =>
+    lockAdminUser(userId, {
+      durationMinutes: lockDurationMinutes.value,
+      reason: lockReason.value || undefined,
+    }),
+  onSuccess: () => handleMutationSuccess(),
+  onError: (error) => {
+    actionError.value = resolveError(error)
+  },
+})
+
+const unlockMutation = useMutation({
+  mutationFn: (userId: number) =>
+    unlockAdminUser(userId, {
+      reason: unlockReason.value || undefined,
+    }),
+  onSuccess: () => handleMutationSuccess(),
+  onError: (error) => {
+    actionError.value = resolveError(error)
+  },
+})
+
+const resetPasswordMutation = useMutation({
+  mutationFn: (userId: number) =>
+    resetAdminUserPassword(userId, {
+      newPassword: resetPassword.value,
+      forceChangePassword: forceChangePassword.value,
+      reason: resetReason.value || undefined,
+    }),
+  onSuccess: () => {
+    resetPassword.value = ''
+    handleMutationSuccess()
   },
   onError: (error) => {
-    actionError.value = error instanceof ApiBizError ? error.message : '操作失败'
+    actionError.value = resolveError(error)
   },
 })
 
@@ -85,12 +138,27 @@ const totalPage = computed(() => {
   return Math.max(Math.ceil(total / size.value), 1)
 })
 
+const auditTotalPage = computed(() => {
+  const total = auditsQuery.data.value?.total || 0
+  return Math.max(Math.ceil(total / auditSize.value), 1)
+})
+
+const selectedUser = computed(() => selectedUserQuery.data.value)
+const currentSelectedUserId = computed(() => selectedUserId.value)
+
 function onSearch() {
   page.value = 1
 }
 
+function onAuditSearch() {
+  auditPage.value = 1
+}
+
 function selectUser(userId: number) {
   selectedUserId.value = userId
+  auditPage.value = 1
+  auditAction.value = ''
+  actionError.value = ''
 }
 
 function toggleUserStatus(user: AdminUserSummary) {
@@ -102,13 +170,51 @@ function toggleAdminRole(user: AdminUserSummary) {
   const hasAdmin = user.roles.some((item) => item.toUpperCase() === 'ROLE_ADMIN')
   roleMutation.mutate({ user, grantAdmin: !hasAdmin })
 }
+
+function executeLock() {
+  if (!currentSelectedUserId.value) {
+    return
+  }
+  lockMutation.mutate(currentSelectedUserId.value)
+}
+
+function executeUnlock() {
+  if (!currentSelectedUserId.value) {
+    return
+  }
+  unlockMutation.mutate(currentSelectedUserId.value)
+}
+
+function executeResetPassword() {
+  if (!currentSelectedUserId.value) {
+    return
+  }
+  if (!resetPassword.value || resetPassword.value.length < 8) {
+    actionError.value = '重置密码长度至少 8 位'
+    return
+  }
+  resetPasswordMutation.mutate(currentSelectedUserId.value)
+}
+
+function resolveError(error: unknown): string {
+  return error instanceof ApiBizError ? error.message : '操作失败'
+}
+
+function handleMutationSuccess() {
+  actionError.value = ''
+  void queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+  if (selectedUserId.value != null) {
+    void queryClient.invalidateQueries({ queryKey: ['admin-user-detail', selectedUserId.value] })
+    void queryClient.invalidateQueries({ queryKey: ['admin-user-audits', selectedUserId.value] })
+  }
+}
 </script>
 
 <template>
   <section class="space-y-6">
     <div>
       <h1 class="text-2xl font-semibold text-slate-900">用户管理</h1>
-      <p class="mt-1 text-sm text-slate-500">检索用户、启用/禁用账号、授予或回收管理员角色。</p>
+      <p class="mt-1 text-sm text-slate-500">检索用户、启用/禁用、锁定/解锁、重置密码与审计查询。</p>
     </div>
 
     <div class="rounded-xl border border-slate-200 bg-white p-4">
@@ -174,17 +280,96 @@ function toggleAdminRole(user: AdminUserSummary) {
         </div>
       </div>
 
-      <aside class="rounded-xl border border-slate-200 bg-white p-4">
-        <h2 class="text-lg font-semibold text-slate-900">用户详情</h2>
-        <div v-if="selectedUserQuery.data.value" class="mt-3 space-y-2 text-sm text-slate-700">
-          <p>用户名：{{ selectedUserQuery.data.value.username }}</p>
-          <p>昵称：{{ selectedUserQuery.data.value.nickname }}</p>
-          <p>状态：{{ selectedUserQuery.data.value.status }}</p>
-          <p>角色：{{ selectedUserQuery.data.value.roles.join(', ') || '-' }}</p>
-          <p>最后登录IP：{{ selectedUserQuery.data.value.lastLoginIp || '-' }}</p>
-        </div>
-        <p v-else class="mt-3 text-sm text-slate-400">点击左侧用户名查看详情</p>
+      <aside class="space-y-4">
+        <section class="rounded-xl border border-slate-200 bg-white p-4">
+          <h2 class="text-lg font-semibold text-slate-900">用户详情</h2>
+          <div v-if="selectedUser" class="mt-3 space-y-2 text-sm text-slate-700">
+            <p>用户名：{{ selectedUser.username }}</p>
+            <p>昵称：{{ selectedUser.nickname }}</p>
+            <p>状态：{{ selectedUser.status }}</p>
+            <p>角色：{{ selectedUser.roles.join(', ') || '-' }}</p>
+            <p>最后登录IP：{{ selectedUser.lastLoginIp || '-' }}</p>
+            <p>最后登录时间：{{ selectedUser.lastLoginAt || '-' }}</p>
+            <p>必须改密：{{ selectedUser.mustChangePassword ? '是' : '否' }}</p>
+          </div>
+          <p v-else class="mt-3 text-sm text-slate-400">点击左侧用户名查看详情</p>
+        </section>
+
+        <section v-if="selectedUser" class="rounded-xl border border-slate-200 bg-white p-4">
+          <h2 class="text-base font-semibold text-slate-900">治理操作</h2>
+
+          <div class="mt-3 space-y-2">
+            <label class="block text-xs text-slate-600">锁定时长（分钟）</label>
+            <input v-model.number="lockDurationMinutes" type="number" min="1" class="w-full rounded border border-slate-300 px-2 py-1 text-sm" />
+            <input v-model.trim="lockReason" type="text" placeholder="锁定原因" class="w-full rounded border border-slate-300 px-2 py-1 text-sm" />
+            <button class="w-full rounded bg-amber-600 px-2 py-1.5 text-xs text-white" @click="executeLock">锁定用户</button>
+          </div>
+
+          <div class="mt-3 space-y-2">
+            <input v-model.trim="unlockReason" type="text" placeholder="解锁原因" class="w-full rounded border border-slate-300 px-2 py-1 text-sm" />
+            <button class="w-full rounded bg-emerald-600 px-2 py-1.5 text-xs text-white" @click="executeUnlock">解锁用户</button>
+          </div>
+
+          <div class="mt-3 space-y-2">
+            <input
+              v-model="resetPassword"
+              type="text"
+              placeholder="新密码（至少 8 位）"
+              class="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+            />
+            <input v-model.trim="resetReason" type="text" placeholder="重置原因" class="w-full rounded border border-slate-300 px-2 py-1 text-sm" />
+            <label class="flex items-center gap-2 text-xs text-slate-600">
+              <input v-model="forceChangePassword" type="checkbox" />
+              强制下次登录改密
+            </label>
+            <button class="w-full rounded bg-rose-600 px-2 py-1.5 text-xs text-white" @click="executeResetPassword">重置密码</button>
+          </div>
+        </section>
       </aside>
     </div>
+
+    <section v-if="selectedUser" class="rounded-xl border border-slate-200 bg-white p-4">
+      <div class="flex flex-wrap items-center gap-2">
+        <h2 class="text-base font-semibold text-slate-900">治理审计日志</h2>
+        <input
+          v-model.trim="auditAction"
+          type="text"
+          placeholder="按 action 过滤，如 USER_LOCK"
+          class="rounded border border-slate-300 px-2 py-1 text-sm"
+        />
+        <button class="rounded bg-slate-800 px-2 py-1 text-xs text-white" @click="onAuditSearch">查询</button>
+      </div>
+
+      <div class="mt-3 overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead class="bg-slate-50 text-slate-600">
+            <tr>
+              <th class="px-3 py-2 text-left">时间</th>
+              <th class="px-3 py-2 text-left">动作</th>
+              <th class="px-3 py-2 text-left">操作人</th>
+              <th class="px-3 py-2 text-left">原因</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in auditsQuery.data.value?.items || []" :key="item.id" class="border-t border-slate-100">
+              <td class="px-3 py-2">{{ item.createdAt }}</td>
+              <td class="px-3 py-2">{{ item.action }}</td>
+              <td class="px-3 py-2">{{ item.operatorUserId }}</td>
+              <td class="px-3 py-2">{{ item.reason || '-' }}</td>
+            </tr>
+            <tr v-if="(auditsQuery.data.value?.items || []).length === 0">
+              <td colspan="4" class="px-3 py-6 text-center text-slate-400">暂无审计记录</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="mt-2 flex items-center justify-end gap-2 text-sm">
+        <button class="rounded border px-2 py-1" :disabled="auditPage <= 1" @click="auditPage -= 1">上一页</button>
+        <span>{{ auditPage }} / {{ auditTotalPage }}</span>
+        <button class="rounded border px-2 py-1" :disabled="auditPage >= auditTotalPage" @click="auditPage += 1">下一页</button>
+      </div>
+    </section>
   </section>
 </template>
+

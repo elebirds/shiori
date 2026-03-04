@@ -33,7 +33,7 @@
 通过检查 `affected_rows` 判断是否扣减成功，天然支持多实例并发扣减不超卖。
 
 * **事件驱动与最终一致性（Transactional Outbox + Relay）**
-  订单服务在**同一数据库事务**中写入业务数据与 Outbox 事件（如 `OrderCreated / OrderPaid / OrderCanceled`），避免“写库成功但发消息失败”。
+  订单服务在**同一数据库事务**中写入业务数据与 Outbox 事件（如 `OrderCreated / OrderPaid / OrderCanceled / OrderDelivered / OrderFinished`），避免“写库成功但发消息失败”。
   通过 **Outbox Relay** 可靠投递到 MQ（可重试/可观测），实现最终一致性而不引入重型强事务框架。
 
 * **At-Least-Once 投递语义下的幂等闭环**
@@ -97,6 +97,40 @@
           ├─ 已支付：忽略（幂等）
           └─ 未支付：关单 + 回滚库存 + Outbox(OrderCanceled) → MQ
 ```
+
+---
+
+## 🆕 v0.4-b 商品与订单扩展（`/api/v2`）
+
+### 商品域
+
+1. 新增商品字段：`categoryCode`、`conditionLevel`、`tradeMode`、`campusCode`。
+2. 新增商品查询参数：`categoryCode/conditionLevel/tradeMode/campusCode/sortBy/sortDir`。
+3. 商品列表/详情新增聚合字段：`minPriceCent/maxPriceCent/totalStock`。
+4. 管理端新增批量下架：`POST /api/v2/admin/products/batch-off-shelf`。
+
+### 订单域
+
+1. 卖家工作台接口：
+   1. `GET /api/v2/order/seller/orders`
+   2. `GET /api/v2/order/seller/orders/{orderNo}`
+2. 买家确认收货：
+   1. `POST /api/v2/order/orders/{orderNo}/confirm-receipt`
+3. 履约时间线：
+   1. `GET /api/v2/order/orders/{orderNo}/timeline`
+4. 管理端履约操作：
+   1. `POST /api/v2/admin/orders/{orderNo}/deliver`
+   2. `POST /api/v2/admin/orders/{orderNo}/finish`
+
+### 开关、迁移与指标
+
+1. v2 灰度开关：`feature.api-v2.enabled=true`（Nacos 模板已提供）。
+2. 数据库迁移：
+   1. `shiori-product-service`：`V5__add_product_v2_fields.sql`
+   2. `shiori-order-service`：`V6__add_order_v2_indexes.sql`
+3. 新增指标：
+   1. `shiori_order_transition_total{from,to,source}`
+   2. `shiori_product_query_total{filter_combo}`
 
 ---
 
@@ -267,7 +301,7 @@ docker compose run --rm nacos-config-init
 ```
 
 RabbitMQ 与 MinIO 也会通过一次性容器完成最小权限初始化：
-- `rabbitmq-auth-init`：创建 `order-service` 与 `notify-service` 独立账号并写入受限权限。
+- `rabbitmq-auth-init`：创建 `order-service`、`user-service` 与 `notify-service` 独立账号并写入受限权限。
 - `minio-init`：创建商品桶、商品服务专用访问账号与桶级读写策略。
 
 并启动 MinIO（商品图片对象存储）：
@@ -396,9 +430,14 @@ go run .
 ```bash
 export NOTIFY_HTTP_ADDR=:8090
 export RABBITMQ_ADDR=amqp://<rmq-username>:<rmq-password>@localhost:5672/
-export RABBITMQ_EXCHANGE=shiori.order.event
-export RABBITMQ_QUEUE=notify.order.paid
-export RABBITMQ_ROUTING_KEY=order.paid
+export RABBITMQ_EXCHANGES=shiori.order.event,shiori.user.event
+export RABBITMQ_QUEUE=notify.order.event
+export RABBITMQ_ROUTING_KEYS=order.created,order.paid,order.canceled,order.delivered,order.finished,user.status.changed,user.role.changed,user.password.reset
+export NOTIFY_STORE_DRIVER=mysql
+export NOTIFY_MYSQL_DSN='<notify-mysql-dsn>'
+export NOTIFY_AUTH_ENABLED=true
+export NOTIFY_JWT_HMAC_SECRET='<jwt-hmac-secret>'
+export NOTIFY_JWT_ISSUER=shiori
 ```
 
 鉴权快速验证（示例）：
@@ -522,7 +561,7 @@ export MYSQL_OPS_PASSWORD=<mysql-ops-password>
 
 ```bash
 cd shiori-notify
-go run ./cmd/ws-smoke -base-url ws://localhost:8090/ws -user-id 1001 -expect-type OrderPaid -expect-aggregate Oxxxx -timeout 60s
+go run ./cmd/ws-smoke -base-url ws://localhost:8090/ws -access-token '<access-jwt>' -expect-type OrderPaid -expect-aggregate Oxxxx -timeout 60s
 ```
 
 ### 3.4) GitHub Actions CI（PR 全量自动化）

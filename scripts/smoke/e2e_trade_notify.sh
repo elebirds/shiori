@@ -192,7 +192,7 @@ log "启动 WS 探针（buyer/seller）等待 OrderPaid..."
   cd "${ROOT_DIR}/shiori-notify"
   go run ./cmd/ws-smoke \
     -base-url "${NOTIFY_WS_BASE_URL}" \
-    -user-id "${buyer_user_id}" \
+    -access-token "${buyer_access_token}" \
     -expect-type "OrderPaid" \
     -expect-aggregate "${order_no_1}" \
     -timeout "${SMOKE_TIMEOUT_SECONDS}s"
@@ -203,7 +203,7 @@ BUYER_WS_PID=$!
   cd "${ROOT_DIR}/shiori-notify"
   go run ./cmd/ws-smoke \
     -base-url "${NOTIFY_WS_BASE_URL}" \
-    -user-id "${seller_user_id}" \
+    -access-token "${seller_access_token}" \
     -expect-type "OrderPaid" \
     -expect-aggregate "${order_no_1}" \
     -timeout "${SMOKE_TIMEOUT_SECONDS}s"

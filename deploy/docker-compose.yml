@@ -12,6 +12,8 @@ services:
       PRODUCT_DB_PASSWORD: ${PRODUCT_DB_PASSWORD:?missing}
       ORDER_DB_USERNAME: ${ORDER_DB_USERNAME:?missing}
       ORDER_DB_PASSWORD: ${ORDER_DB_PASSWORD:?missing}
+      NOTIFY_DB_USERNAME: ${NOTIFY_DB_USERNAME:?missing}
+      NOTIFY_DB_PASSWORD: ${NOTIFY_DB_PASSWORD:?missing}
     ports:
       - "3306:3306"
     volumes:
@@ -52,6 +54,8 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:?missing}
       ORDER_RMQ_USERNAME: ${ORDER_RMQ_USERNAME:?missing}
       ORDER_RMQ_PASSWORD: ${ORDER_RMQ_PASSWORD:?missing}
+      USER_RMQ_USERNAME: ${USER_RMQ_USERNAME:?missing}
+      USER_RMQ_PASSWORD: ${USER_RMQ_PASSWORD:?missing}
       NOTIFY_RMQ_USERNAME: ${NOTIFY_RMQ_USERNAME:?missing}
       NOTIFY_RMQ_PASSWORD: ${NOTIFY_RMQ_PASSWORD:?missing}
     volumes:
@@ -110,6 +114,10 @@ services:
       ORDER_RMQ_PORT: ${ORDER_RMQ_PORT_DOCKER:-5672}
       ORDER_RMQ_USERNAME: ${ORDER_RMQ_USERNAME:?missing}
       ORDER_RMQ_PASSWORD: ${ORDER_RMQ_PASSWORD:?missing}
+      USER_RMQ_HOST: ${USER_RMQ_HOST_DOCKER:-rabbitmq}
+      USER_RMQ_PORT: ${USER_RMQ_PORT_DOCKER:-5672}
+      USER_RMQ_USERNAME: ${USER_RMQ_USERNAME:?missing}
+      USER_RMQ_PASSWORD: ${USER_RMQ_PASSWORD:?missing}
       PRODUCT_OSS_ENDPOINT: ${PRODUCT_OSS_ENDPOINT_DOCKER:-http://minio:9000}
       ORDER_PRODUCT_SERVICE_BASE_URL: ${ORDER_PRODUCT_SERVICE_BASE_URL_DOCKER:-http://shiori-product-service}
       MINIO_PRODUCT_ACCESS_KEY: ${MINIO_PRODUCT_ACCESS_KEY:?missing}
@@ -153,6 +161,10 @@ services:
       ORDER_RMQ_PORT: ${ORDER_RMQ_PORT_LOCAL:-5672}
       ORDER_RMQ_USERNAME: ${ORDER_RMQ_USERNAME:?missing}
       ORDER_RMQ_PASSWORD: ${ORDER_RMQ_PASSWORD:?missing}
+      USER_RMQ_HOST: ${USER_RMQ_HOST_LOCAL:-127.0.0.1}
+      USER_RMQ_PORT: ${USER_RMQ_PORT_LOCAL:-5672}
+      USER_RMQ_USERNAME: ${USER_RMQ_USERNAME:?missing}
+      USER_RMQ_PASSWORD: ${USER_RMQ_PASSWORD:?missing}
       PRODUCT_OSS_ENDPOINT: ${PRODUCT_OSS_ENDPOINT_LOCAL:-http://127.0.0.1:9000}
       ORDER_PRODUCT_SERVICE_BASE_URL: ${ORDER_PRODUCT_SERVICE_BASE_URL_LOCAL:-http://shiori-product-service}
       MINIO_PRODUCT_ACCESS_KEY: ${MINIO_PRODUCT_ACCESS_KEY:?missing}
@@ -373,8 +385,17 @@ services:
     container_name: shiori-notify-service
     environment:
       NOTIFY_HTTP_ADDR: :8090
+      NOTIFY_STORE_DRIVER: mysql
+      NOTIFY_MYSQL_DSN: ${NOTIFY_DB_USERNAME:?missing}:${NOTIFY_DB_PASSWORD:?missing}@tcp(mysql:3306)/${NOTIFY_DB_NAME_DOCKER:-shiori_notify}?charset=utf8mb4&parseTime=true&loc=UTC
+      NOTIFY_AUTH_ENABLED: "true"
+      NOTIFY_JWT_HMAC_SECRET: ${NOTIFY_JWT_HMAC_SECRET:?missing}
+      NOTIFY_JWT_ISSUER: ${NOTIFY_JWT_ISSUER:-shiori}
       RABBITMQ_ADDR: amqp://${NOTIFY_RMQ_USERNAME:?missing}:${NOTIFY_RMQ_PASSWORD:?missing}@rabbitmq:5672/
+      RABBITMQ_EXCHANGES: shiori.order.event,shiori.user.event
+      RABBITMQ_ROUTING_KEYS: order.created,order.paid,order.canceled,order.delivered,order.finished,user.status.changed,user.role.changed,user.password.reset
     depends_on:
+      mysql:
+        condition: service_started
       rabbitmq:
         condition: service_started
       rabbitmq-auth-init:

@@ -10,27 +10,31 @@ import (
 	"github.com/rs/zerolog"
 )
 
-type mockHub struct {
+type hubCall struct {
 	userID  string
 	payload []byte
-	calls   int
+}
+
+type mockHub struct {
+	calls []hubCall
 }
 
 func (m *mockHub) SendToUser(userID string, payload []byte) (int, error) {
-	m.calls++
-	m.userID = userID
-	m.payload = payload
+	m.calls = append(m.calls, hubCall{
+		userID:  userID,
+		payload: append([]byte(nil), payload...),
+	})
 	return 1, nil
 }
 
 type mockStore struct {
-	saveCalls int
+	saveCalls []string
 	saveOK    bool
 }
 
-func (m *mockStore) Save(_ string, _ event.Envelope) bool {
-	m.saveCalls++
-	return m.saveOK
+func (m *mockStore) Save(userID string, _ event.Envelope) (bool, error) {
+	m.saveCalls = append(m.saveCalls, userID)
+	return m.saveOK, nil
 }
 
 func TestRouteOrderPaid(t *testing.T) {
@@ -50,18 +54,18 @@ func TestRouteOrderPaid(t *testing.T) {
 	if err := r.Route(context.Background(), env); err != nil {
 		t.Fatalf("unexpected route error: %v", err)
 	}
-	if hub.calls != 1 {
-		t.Fatalf("expected 1 call, got %d", hub.calls)
+	if len(hub.calls) != 1 {
+		t.Fatalf("expected 1 push call, got %d", len(hub.calls))
 	}
-	if store.saveCalls != 1 {
-		t.Fatalf("expected save once, got %d", store.saveCalls)
+	if len(store.saveCalls) != 1 {
+		t.Fatalf("expected save once, got %d", len(store.saveCalls))
 	}
-	if hub.userID != "u1" {
-		t.Fatalf("unexpected routed user: %s", hub.userID)
+	if hub.calls[0].userID != "u1" {
+		t.Fatalf("unexpected routed user: %s", hub.calls[0].userID)
 	}
 
 	var got event.Envelope
-	if err := json.Unmarshal(hub.payload, &got); err != nil {
+	if err := json.Unmarshal(hub.calls[0].payload, &got); err != nil {
 		t.Fatalf("payload should be envelope json: %v", err)
 	}
 	if got.EventID != env.EventID {
@@ -69,31 +73,96 @@ func TestRouteOrderPaid(t *testing.T) {
 	}
 }
 
-func TestRouteOrderPaidWithNumericUserID(t *testing.T) {
+func TestRouteOrderCreatedToBuyerAndSeller(t *testing.T) {
 	hub := &mockHub{}
 	logger := zerolog.New(io.Discard)
 	store := &mockStore{saveOK: true}
 	r := New(hub, store, &logger)
 
 	env := event.Envelope{
-		EventID:     "evt-1n",
-		Type:        "OrderPaid",
-		AggregateID: "order-1n",
+		EventID:     "evt-created",
+		Type:        "OrderCreated",
+		AggregateID: "order-2",
 		CreatedAt:   "2026-03-02T00:00:00Z",
-		Payload:     []byte(`{"userId":123}`),
+		Payload:     []byte(`{"buyerUserId":101,"sellerUserId":"202"}`),
 	}
 
 	if err := r.Route(context.Background(), env); err != nil {
 		t.Fatalf("unexpected route error: %v", err)
 	}
-	if hub.calls != 1 {
-		t.Fatalf("expected 1 call, got %d", hub.calls)
+
+	if len(hub.calls) != 2 {
+		t.Fatalf("expected 2 push calls, got %d", len(hub.calls))
 	}
-	if store.saveCalls != 1 {
-		t.Fatalf("expected save once, got %d", store.saveCalls)
+	if len(store.saveCalls) != 2 {
+		t.Fatalf("expected save twice, got %d", len(store.saveCalls))
 	}
-	if hub.userID != "123" {
-		t.Fatalf("unexpected routed user: %s", hub.userID)
+
+	users := map[string]bool{}
+	for _, call := range hub.calls {
+		users[call.userID] = true
+	}
+	if !users["101"] || !users["202"] {
+		t.Fatalf("unexpected users routed: %+v", users)
+	}
+}
+
+func TestRouteOrderFinishedToBuyerAndSeller(t *testing.T) {
+	hub := &mockHub{}
+	logger := zerolog.New(io.Discard)
+	store := &mockStore{saveOK: true}
+	r := New(hub, store, &logger)
+
+	env := event.Envelope{
+		EventID:     "evt-finished",
+		Type:        "OrderFinished",
+		AggregateID: "order-3",
+		CreatedAt:   "2026-03-02T00:00:00Z",
+		Payload:     []byte(`{"buyerUserId":"301","sellerUserId":302}`),
+	}
+
+	if err := r.Route(context.Background(), env); err != nil {
+		t.Fatalf("unexpected route error: %v", err)
+	}
+
+	if len(hub.calls) != 2 {
+		t.Fatalf("expected 2 push calls, got %d", len(hub.calls))
+	}
+	if len(store.saveCalls) != 2 {
+		t.Fatalf("expected save twice, got %d", len(store.saveCalls))
+	}
+
+	users := map[string]bool{}
+	for _, call := range hub.calls {
+		users[call.userID] = true
+	}
+	if !users["301"] || !users["302"] {
+		t.Fatalf("unexpected users routed: %+v", users)
+	}
+}
+
+func TestRouteUserGovernanceEvent(t *testing.T) {
+	hub := &mockHub{}
+	logger := zerolog.New(io.Discard)
+	store := &mockStore{saveOK: true}
+	r := New(hub, store, &logger)
+
+	env := event.Envelope{
+		EventID:     "evt-user-1",
+		Type:        "UserPasswordReset",
+		AggregateID: "10001",
+		CreatedAt:   "2026-03-02T00:00:00Z",
+		Payload:     []byte(`{"targetUserId":"10001","mustChangePassword":true}`),
+	}
+
+	if err := r.Route(context.Background(), env); err != nil {
+		t.Fatalf("unexpected route error: %v", err)
+	}
+	if len(hub.calls) != 1 {
+		t.Fatalf("expected 1 push call, got %d", len(hub.calls))
+	}
+	if hub.calls[0].userID != "10001" {
+		t.Fatalf("unexpected target user: %s", hub.calls[0].userID)
 	}
 }
 
@@ -103,22 +172,22 @@ func TestRouteUnknownEvent(t *testing.T) {
 	r := New(hub, nil, &logger)
 
 	env := event.Envelope{
-		EventID:     "evt-2",
-		Type:        "OrderCanceled",
-		AggregateID: "order-2",
+		EventID:     "evt-unknown",
+		Type:        "UnsupportedType",
+		AggregateID: "x-1",
 		CreatedAt:   "2026-03-02T00:00:00Z",
-		Payload:     []byte(`{"userId":"u2"}`),
+		Payload:     []byte(`{"any":"value"}`),
 	}
 
 	if err := r.Route(context.Background(), env); err != nil {
 		t.Fatalf("unexpected route error: %v", err)
 	}
-	if hub.calls != 0 {
-		t.Fatalf("unknown event should not route, got calls=%d", hub.calls)
+	if len(hub.calls) != 0 {
+		t.Fatalf("unknown event should not push, got calls=%d", len(hub.calls))
 	}
 }
 
-func TestRouteOrderPaidDeduplicated(t *testing.T) {
+func TestRouteDeduplicated(t *testing.T) {
 	hub := &mockHub{}
 	logger := zerolog.New(io.Discard)
 	store := &mockStore{saveOK: false}
@@ -135,10 +204,10 @@ func TestRouteOrderPaidDeduplicated(t *testing.T) {
 	if err := r.Route(context.Background(), env); err != nil {
 		t.Fatalf("unexpected route error: %v", err)
 	}
-	if store.saveCalls != 1 {
-		t.Fatalf("expected save once, got %d", store.saveCalls)
+	if len(store.saveCalls) != 1 {
+		t.Fatalf("expected save once, got %d", len(store.saveCalls))
 	}
-	if hub.calls != 0 {
-		t.Fatalf("deduplicated event should not push, got calls=%d", hub.calls)
+	if len(hub.calls) != 0 {
+		t.Fatalf("deduplicated event should not push, got calls=%d", len(hub.calls))
 	}
 }

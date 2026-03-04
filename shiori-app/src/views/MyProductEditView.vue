@@ -5,12 +5,41 @@ import { useRoute, useRouter } from 'vue-router'
 
 import ResultState from '@/components/ResultState.vue'
 import { presignProductUpload, uploadByPresignedUrl } from '@/api/media'
-import { getMyProductDetail, offShelfProduct, publishProduct, updateProduct, type SkuInput } from '@/api/product'
+import {
+  getMyProductDetailV2,
+  offShelfProductV2,
+  publishProductV2,
+  updateProductV2,
+  type ProductCategoryCode,
+  type ProductConditionLevel,
+  type ProductTradeMode,
+  type SkuInput,
+} from '@/api/productV2'
 import { ApiBizError } from '@/types/result'
 
 interface DraftSku extends SkuInput {
   localId: string
 }
+
+const categoryOptions: Array<{ label: string; value: ProductCategoryCode }> = [
+  { label: '教材', value: 'TEXTBOOK' },
+  { label: '考试资料', value: 'EXAM_MATERIAL' },
+  { label: '笔记', value: 'NOTE' },
+  { label: '其他', value: 'OTHER' },
+]
+
+const conditionOptions: Array<{ label: string; value: ProductConditionLevel }> = [
+  { label: '全新', value: 'NEW' },
+  { label: '近新', value: 'LIKE_NEW' },
+  { label: '良好', value: 'GOOD' },
+  { label: '一般', value: 'FAIR' },
+]
+
+const tradeModeOptions: Array<{ label: string; value: ProductTradeMode }> = [
+  { label: '面交', value: 'MEETUP' },
+  { label: '邮寄', value: 'DELIVERY' },
+  { label: '均可', value: 'BOTH' },
+]
 
 const route = useRoute()
 const router = useRouter()
@@ -21,6 +50,10 @@ const form = reactive({
   title: '',
   description: '',
   coverObjectKey: '',
+  categoryCode: 'TEXTBOOK' as ProductCategoryCode,
+  conditionLevel: 'GOOD' as ProductConditionLevel,
+  tradeMode: 'MEETUP' as ProductTradeMode,
+  campusCode: '',
 })
 const skus = ref<DraftSku[]>([])
 
@@ -32,8 +65,8 @@ const resultMessage = ref('')
 const resultError = ref('')
 
 const detailQuery = useQuery({
-  queryKey: computed(() => ['my-product-detail', productId.value]),
-  queryFn: () => getMyProductDetail(productId.value),
+  queryKey: computed(() => ['my-product-detail-v2', productId.value]),
+  queryFn: () => getMyProductDetailV2(productId.value),
   enabled: computed(() => Number.isFinite(productId.value) && productId.value > 0),
 })
 
@@ -46,6 +79,10 @@ watch(
     form.title = detail.title || ''
     form.description = detail.description || ''
     form.coverObjectKey = detail.coverObjectKey || ''
+    form.categoryCode = detail.categoryCode
+    form.conditionLevel = detail.conditionLevel
+    form.tradeMode = detail.tradeMode
+    form.campusCode = detail.campusCode || ''
     skus.value = detail.skus.map((sku) => ({
       localId: crypto.randomUUID(),
       id: sku.skuId,
@@ -60,10 +97,14 @@ watch(
 
 const updateMutation = useMutation({
   mutationFn: () =>
-    updateProduct(productId.value, {
+    updateProductV2(productId.value, {
       title: form.title.trim(),
       description: form.description.trim() || undefined,
       coverObjectKey: form.coverObjectKey.trim() || undefined,
+      categoryCode: form.categoryCode,
+      conditionLevel: form.conditionLevel,
+      tradeMode: form.tradeMode,
+      campusCode: form.campusCode.trim(),
       skus: skus.value.map((item) => ({
         id: item.id,
         skuName: item.skuName.trim(),
@@ -75,14 +116,14 @@ const updateMutation = useMutation({
 })
 
 const publishMutation = useMutation({
-  mutationFn: () => publishProduct(productId.value),
+  mutationFn: () => publishProductV2(productId.value),
   onSuccess: async () => {
     await detailQuery.refetch()
   },
 })
 
 const offShelfMutation = useMutation({
-  mutationFn: () => offShelfProduct(productId.value),
+  mutationFn: () => offShelfProductV2(productId.value),
   onSuccess: async () => {
     await detailQuery.refetch()
   },
@@ -111,6 +152,9 @@ function removeSku(localId: string): void {
 function validate(): string | null {
   if (!form.title.trim()) {
     return '商品标题不能为空'
+  }
+  if (!form.campusCode.trim()) {
+    return '校区编码不能为空'
   }
   if (skus.value.length === 0) {
     return '请至少保留一个 SKU'
@@ -262,6 +306,45 @@ onUnmounted(() => {
             商品标题
             <input
               v-model.trim="form.title"
+              type="text"
+              class="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2 outline-none transition focus:border-amber-500"
+            />
+          </label>
+
+          <label class="text-sm text-stone-700">
+            分类
+            <select
+              v-model="form.categoryCode"
+              class="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2 outline-none transition focus:border-amber-500"
+            >
+              <option v-for="item in categoryOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+            </select>
+          </label>
+
+          <label class="text-sm text-stone-700">
+            成色
+            <select
+              v-model="form.conditionLevel"
+              class="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2 outline-none transition focus:border-amber-500"
+            >
+              <option v-for="item in conditionOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+            </select>
+          </label>
+
+          <label class="text-sm text-stone-700">
+            交易方式
+            <select
+              v-model="form.tradeMode"
+              class="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2 outline-none transition focus:border-amber-500"
+            >
+              <option v-for="item in tradeModeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+            </select>
+          </label>
+
+          <label class="text-sm text-stone-700">
+            校区编码
+            <input
+              v-model.trim="form.campusCode"
               type="text"
               class="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2 outline-none transition focus:border-amber-500"
             />

@@ -21,6 +21,7 @@ public interface AuthUserMapper {
                    status,
                    failed_login_count AS failedLoginCount,
                    locked_until AS lockedUntil,
+                   must_change_password AS mustChangePassword,
                    is_deleted AS isDeleted
             FROM u_user
             WHERE username = #{username}
@@ -43,6 +44,7 @@ public interface AuthUserMapper {
                    status,
                    failed_login_count AS failedLoginCount,
                    locked_until AS lockedUntil,
+                   must_change_password AS mustChangePassword,
                    is_deleted AS isDeleted
             FROM u_user
             WHERE id = #{userId}
@@ -86,20 +88,46 @@ public interface AuthUserMapper {
     @Update("""
             UPDATE u_user
             SET failed_login_count = failed_login_count + 1,
+                status = CASE
+                    WHEN failed_login_count + 1 >= #{lockThreshold} THEN 3
+                    ELSE status
+                END,
+                locked_until = CASE
+                    WHEN failed_login_count + 1 >= #{lockThreshold} THEN #{lockUntil}
+                    ELSE locked_until
+                END,
                 updated_at = CURRENT_TIMESTAMP(3)
             WHERE id = #{userId}
+              AND is_deleted = 0
             """)
-    int increaseFailedLoginCount(@Param("userId") Long userId);
+    int recordLoginFailure(@Param("userId") Long userId,
+                           @Param("lockThreshold") int lockThreshold,
+                           @Param("lockUntil") java.time.LocalDateTime lockUntil);
 
     @Update("""
             UPDATE u_user
             SET failed_login_count = 0,
+                status = 1,
+                locked_until = NULL,
                 last_login_at = CURRENT_TIMESTAMP(3),
                 last_login_ip = #{ip},
                 updated_at = CURRENT_TIMESTAMP(3)
             WHERE id = #{userId}
+              AND is_deleted = 0
             """)
     int markLoginSuccess(@Param("userId") Long userId, @Param("ip") String ip);
+
+    @Update("""
+            UPDATE u_user
+            SET failed_login_count = 0,
+                status = 1,
+                locked_until = NULL,
+                updated_at = CURRENT_TIMESTAMP(3),
+                version = version + 1
+            WHERE id = #{userId}
+              AND is_deleted = 0
+            """)
+    int unlockUser(@Param("userId") Long userId);
 
     @Insert("""
             INSERT INTO u_user (
@@ -148,4 +176,17 @@ public interface AuthUserMapper {
               AND is_deleted = 0
             """)
     int updatePasswordHashById(@Param("userId") Long userId, @Param("passwordHash") String passwordHash);
+
+    @Update("""
+            UPDATE u_user
+            SET password_hash = #{passwordHash},
+                must_change_password = #{mustChangePassword},
+                updated_at = CURRENT_TIMESTAMP(3),
+                version = version + 1
+            WHERE id = #{userId}
+              AND is_deleted = 0
+            """)
+    int updatePasswordHashByAdmin(@Param("userId") Long userId,
+                                  @Param("passwordHash") String passwordHash,
+                                  @Param("mustChangePassword") int mustChangePassword);
 }

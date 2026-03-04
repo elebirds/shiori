@@ -10,6 +10,7 @@ public record UserAuthRecord(
         Integer status,
         Integer failedLoginCount,
         LocalDateTime lockedUntil,
+        Integer mustChangePassword,
         Integer isDeleted
 ) {
 }

@@ -10,7 +10,7 @@ import (
 )
 
 func (s *Server) handleReplayEvents(c *gin.Context) {
-	if s.replayStore == nil {
+	if s.eventStore == nil {
 		metrics.IncReplayQuery("api", "store_unavailable")
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"code":    50300,
@@ -19,19 +19,15 @@ func (s *Server) handleReplayEvents(c *gin.Context) {
 		return
 	}
 
-	userID := strings.TrimSpace(c.Query("userId"))
-	if userID == "" {
-		metrics.IncReplayQuery("api", "invalid_param")
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code":    40001,
-			"message": "userId is required",
-		})
+	userID, ok := s.resolveAPIUserID(c)
+	if !ok {
+		metrics.IncReplayQuery("api", "auth_failed")
 		return
 	}
 
 	afterEventID := strings.TrimSpace(c.Query("afterEventId"))
-	limit, ok := s.parseReplayLimit(c.Query("limit"))
-	if !ok {
+	limit, valid := s.parseReplayLimit(c.Query("limit"))
+	if !valid {
 		metrics.IncReplayQuery("api", "invalid_param")
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    40002,
@@ -40,7 +36,21 @@ func (s *Server) handleReplayEvents(c *gin.Context) {
 		return
 	}
 
-	items, nextEventID, hasMore := s.replayStore.List(userID, afterEventID, limit)
+	items, nextEventID, hasMore, err := s.eventStore.List(userID, afterEventID, limit)
+	if err != nil {
+		metrics.IncReplayQuery("api", "store_error")
+		s.logger.Warn().Err(err).
+			Str("userId", userID).
+			Str("afterEventId", afterEventID).
+			Int("limit", limit).
+			Msg("通知补偿查询失败")
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    50001,
+			"message": "query notify events failed",
+		})
+		return
+	}
+
 	metrics.IncReplayQuery("api", "success")
 	metrics.AddReplayEvents("api", len(items))
 
@@ -48,7 +58,6 @@ func (s *Server) handleReplayEvents(c *gin.Context) {
 		"code":    0,
 		"message": "success",
 		"data": gin.H{
-			"userId":       userID,
 			"afterEventId": afterEventID,
 			"limit":        limit,
 			"items":        items,

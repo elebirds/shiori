@@ -2,12 +2,16 @@ package notifyhttp
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	notifyauth "github.com/hhm/shiori/shiori-notify/internal/auth"
+	"github.com/hhm/shiori/shiori-notify/internal/event"
 	"github.com/hhm/shiori/shiori-notify/internal/metrics"
+	"github.com/hhm/shiori/shiori-notify/internal/store"
 	"github.com/hhm/shiori/shiori-notify/internal/ws"
 )
 
@@ -20,9 +24,8 @@ var wsUpgrader = websocket.Upgrader{
 }
 
 func (s *Server) handleWS(c *gin.Context) {
-	userID := strings.TrimSpace(c.Query("userId"))
-	if userID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "userId is required"})
+	userID, ok := s.resolveWSUserID(c)
+	if !ok {
 		return
 	}
 	lastEventID := strings.TrimSpace(c.Query("lastEventId"))
@@ -56,8 +59,38 @@ func (s *Server) handleWS(c *gin.Context) {
 	})
 }
 
+func (s *Server) resolveWSUserID(c *gin.Context) (string, bool) {
+	if s.auth != nil && s.auth.Enabled() {
+		accessToken := strings.TrimSpace(c.Query("accessToken"))
+		userID, err := s.auth.ParseUserIDFromToken(accessToken)
+		if err != nil {
+			reason := "invalid_token"
+			if errors.Is(err, notifyauth.ErrMissingToken) {
+				reason = "missing_token"
+			}
+			metrics.IncAuthFailure("ws", reason)
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"code":    40101,
+				"message": "invalid access token",
+			})
+			return "", false
+		}
+		return userID, true
+	}
+
+	userID := strings.TrimSpace(c.Query("userId"))
+	if userID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    40001,
+			"message": "userId is required when auth disabled",
+		})
+		return "", false
+	}
+	return userID, true
+}
+
 func (s *Server) replayForWS(userID, afterEventID string, client *ws.Client) {
-	if s.replayStore == nil || client == nil {
+	if s.eventStore == nil || client == nil {
 		return
 	}
 
@@ -65,7 +98,15 @@ func (s *Server) replayForWS(userID, afterEventID string, client *ws.Client) {
 	if limit <= 0 {
 		limit = s.cfg.ReplayDefaultLimit
 	}
-	items, nextEventID, hasMore := s.replayStore.List(userID, afterEventID, limit)
+	items, nextEventID, hasMore, err := s.eventStore.List(userID, afterEventID, limit)
+	if err != nil {
+		metrics.IncReplayQuery("ws", "store_error")
+		s.logger.Warn().Err(err).
+			Str("userId", userID).
+			Str("afterEventId", afterEventID).
+			Msg("WebSocket 补偿查询失败")
+		return
+	}
 	metrics.IncReplayQuery("ws", "success")
 	metrics.AddReplayEvents("ws", len(items))
 	if len(items) == 0 {
@@ -74,18 +115,18 @@ func (s *Server) replayForWS(userID, afterEventID string, client *ws.Client) {
 
 	delivered := 0
 	for i := range items {
-		payload, err := json.Marshal(items[i])
-		if err != nil {
+		payload, marshalErr := json.Marshal(toEnvelope(items[i]))
+		if marshalErr != nil {
 			metrics.IncReplayQuery("ws", "marshal_error")
-			s.logger.Warn().Err(err).
+			s.logger.Warn().Err(marshalErr).
 				Str("eventId", items[i].EventID).
 				Str("userId", userID).
 				Msg("补偿事件序列化失败，跳过")
 			continue
 		}
-		if err := client.Send(payload); err != nil {
+		if sendErr := client.Send(payload); sendErr != nil {
 			metrics.IncReplayQuery("ws", "send_error")
-			s.logger.Warn().Err(err).
+			s.logger.Warn().Err(sendErr).
 				Str("eventId", items[i].EventID).
 				Str("userId", userID).
 				Msg("补偿事件发送失败")
@@ -101,4 +142,14 @@ func (s *Server) replayForWS(userID, afterEventID string, client *ws.Client) {
 		Int("delivered", delivered).
 		Bool("hasMore", hasMore).
 		Msg("WebSocket 补偿事件回放完成")
+}
+
+func toEnvelope(item store.NotificationEvent) event.Envelope {
+	return event.Envelope{
+		EventID:     item.EventID,
+		Type:        item.Type,
+		AggregateID: item.AggregateID,
+		CreatedAt:   item.CreatedAt,
+		Payload:     append([]byte(nil), item.Payload...),
+	}
 }

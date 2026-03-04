@@ -255,6 +255,75 @@ public interface OrderMapper {
             <script>
             SELECT COUNT(1)
             FROM o_order
+            WHERE seller_user_id = #{sellerUserId}
+              AND is_deleted = 0
+            <if test="orderNo != null and orderNo != ''">
+              AND order_no = #{orderNo}
+            </if>
+            <if test="status != null">
+              AND status = #{status}
+            </if>
+            <if test="createdFrom != null">
+              AND created_at <![CDATA[ >= ]]> #{createdFrom}
+            </if>
+            <if test="createdTo != null">
+              AND created_at <![CDATA[ <= ]]> #{createdTo}
+            </if>
+            </script>
+            """)
+    long countOrdersBySeller(@Param("sellerUserId") Long sellerUserId,
+                             @Param("orderNo") String orderNo,
+                             @Param("status") Integer status,
+                             @Param("createdFrom") LocalDateTime createdFrom,
+                             @Param("createdTo") LocalDateTime createdTo);
+
+    @Select("""
+            <script>
+            SELECT id,
+                   order_no AS orderNo,
+                   buyer_user_id AS buyerUserId,
+                   seller_user_id AS sellerUserId,
+                   status,
+                   total_amount_cent AS totalAmountCent,
+                   item_count AS itemCount,
+                   payment_no AS paymentNo,
+                   cancel_reason AS cancelReason,
+                   timeout_at AS timeoutAt,
+                   paid_at AS paidAt,
+                   is_deleted AS isDeleted,
+                   created_at AS createdAt,
+                   updated_at AS updatedAt
+            FROM o_order
+            WHERE seller_user_id = #{sellerUserId}
+              AND is_deleted = 0
+            <if test="orderNo != null and orderNo != ''">
+              AND order_no = #{orderNo}
+            </if>
+            <if test="status != null">
+              AND status = #{status}
+            </if>
+            <if test="createdFrom != null">
+              AND created_at <![CDATA[ >= ]]> #{createdFrom}
+            </if>
+            <if test="createdTo != null">
+              AND created_at <![CDATA[ <= ]]> #{createdTo}
+            </if>
+            ORDER BY id DESC
+            LIMIT #{size} OFFSET #{offset}
+            </script>
+            """)
+    List<OrderRecord> listOrdersBySeller(@Param("sellerUserId") Long sellerUserId,
+                                         @Param("orderNo") String orderNo,
+                                         @Param("status") Integer status,
+                                         @Param("createdFrom") LocalDateTime createdFrom,
+                                         @Param("createdTo") LocalDateTime createdTo,
+                                         @Param("size") int size,
+                                         @Param("offset") int offset);
+
+    @Select("""
+            <script>
+            SELECT COUNT(1)
+            FROM o_order
             WHERE is_deleted = 0
             <if test="orderNo != null and orderNo != ''">
               AND order_no = #{orderNo}
@@ -423,6 +492,21 @@ public interface OrderMapper {
                                  @Param("expectStatus") Integer expectStatus,
                                  @Param("finishedStatus") Integer finishedStatus);
 
+    @Update("""
+            UPDATE o_order
+            SET status = #{finishedStatus},
+                updated_at = CURRENT_TIMESTAMP(3),
+                version = version + 1
+            WHERE order_no = #{orderNo}
+              AND buyer_user_id = #{buyerUserId}
+              AND status = #{expectStatus}
+              AND is_deleted = 0
+            """)
+    int markOrderFinishedByBuyer(@Param("orderNo") String orderNo,
+                                 @Param("buyerUserId") Long buyerUserId,
+                                 @Param("expectStatus") Integer expectStatus,
+                                 @Param("finishedStatus") Integer finishedStatus);
+
     @Insert("""
             INSERT INTO o_outbox_event (
                 event_id,
@@ -578,4 +662,22 @@ public interface OrderMapper {
     List<OrderStatusAuditRecord> listStatusAuditByOrderNo(@Param("orderNo") String orderNo,
                                                           @Param("size") int size,
                                                           @Param("offset") int offset);
+
+    @Select("""
+            SELECT id,
+                   target_order_no AS orderNo,
+                   operator_user_id AS operatorUserId,
+                   source,
+                   from_status AS fromStatus,
+                   to_status AS toStatus,
+                   reason,
+                   created_at AS createdAt
+            FROM o_order_status_audit_log
+            WHERE target_order_no = #{orderNo}
+            ORDER BY id ASC
+            LIMIT #{size} OFFSET #{offset}
+            """)
+    List<OrderStatusAuditRecord> listStatusAuditTimelineByOrderNo(@Param("orderNo") String orderNo,
+                                                                   @Param("size") int size,
+                                                                   @Param("offset") int offset);
 }
