@@ -28,8 +28,13 @@ Go 通知服务（Gin + WebSocket + RabbitMQ + MySQL）。
 
 ```bash
 cd shiori-notify
+./gen-env.sh -f            # 默认生成 memory 模式 .env
+# ./gen-env.sh -f -m mysql # 需要本地可用的 shiori_notify 库
 go run .
 ```
+
+> 若 `deploy/.env` 不在默认路径，可使用 `./gen-env.sh -i <path-to-env> -f`。
+> `go run .` 会自动尝试读取当前目录 `.env`。如需指定文件，可设置 `NOTIFY_ENV_FILE=/path/to/file.env`。
 
 ## 环境变量
 

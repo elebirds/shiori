@@ -2,16 +2,21 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
+	"github.com/joho/godotenv"
 	"github.com/hhm/shiori/shiori-notify/internal/app"
 	"github.com/hhm/shiori/shiori-notify/internal/config"
 	notifylog "github.com/hhm/shiori/shiori-notify/internal/log"
 )
 
 func main() {
+	loadDotEnvIfPresent()
 	cfg := config.Load()
 	logger := notifylog.New(cfg.LogLevel)
 
@@ -40,4 +45,18 @@ func main() {
 	}
 
 	logger.Info().Msg("服务已停止")
+}
+
+func loadDotEnvIfPresent() {
+	envFile := strings.TrimSpace(os.Getenv("NOTIFY_ENV_FILE"))
+	if envFile == "" {
+		envFile = ".env"
+	}
+
+	if err := godotenv.Load(envFile); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return
+		}
+		_, _ = fmt.Fprintf(os.Stderr, "[shiori-notify] 加载 env 文件失败(%s): %v\n", envFile, err)
+	}
 }

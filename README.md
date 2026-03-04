@@ -422,6 +422,8 @@ cd deploy
 docker compose up -d rabbitmq
 
 cd ../shiori-notify
+./gen-env.sh -f
+set -a; source .env; set +a
 go run .
 ```
 
