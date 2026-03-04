@@ -25,7 +25,8 @@ func main() {
 	var (
 		wsURL           string
 		baseURL         string
-		userID          string
+		accessToken     string
+		lastEventID     string
 		expectType      string
 		expectAggregate string
 		timeoutText     string
@@ -33,14 +34,15 @@ func main() {
 
 	flag.StringVar(&wsURL, "url", "", "完整 WebSocket URL（可选）")
 	flag.StringVar(&baseURL, "base-url", "ws://localhost:8090/ws", "WebSocket 基础地址")
-	flag.StringVar(&userID, "user-id", "", "目标 userId（必填）")
+	flag.StringVar(&accessToken, "access-token", "", "访问令牌（必填）")
+	flag.StringVar(&lastEventID, "last-event-id", "", "补偿游标（可选）")
 	flag.StringVar(&expectType, "expect-type", "OrderPaid", "期望事件类型")
 	flag.StringVar(&expectAggregate, "expect-aggregate", "", "期望 aggregateId（可选）")
 	flag.StringVar(&timeoutText, "timeout", "60s", "等待超时时间")
 	flag.Parse()
 
-	if strings.TrimSpace(userID) == "" {
-		exitf("user-id 不能为空")
+	if strings.TrimSpace(accessToken) == "" {
+		exitf("access-token 不能为空")
 	}
 
 	timeout, err := time.ParseDuration(timeoutText)
@@ -48,7 +50,7 @@ func main() {
 		exitf("timeout 无效: %s", timeoutText)
 	}
 
-	targetURL, err := resolveTargetURL(wsURL, baseURL, userID)
+	targetURL, err := resolveTargetURL(wsURL, baseURL, accessToken, lastEventID)
 	if err != nil {
 		exitf("构建 ws URL 失败: %v", err)
 	}
@@ -90,7 +92,7 @@ func main() {
 	}
 }
 
-func resolveTargetURL(rawURL, baseURL, userID string) (string, error) {
+func resolveTargetURL(rawURL, baseURL, accessToken, lastEventID string) (string, error) {
 	if strings.TrimSpace(rawURL) == "" {
 		rawURL = baseURL
 	}
@@ -99,7 +101,10 @@ func resolveTargetURL(rawURL, baseURL, userID string) (string, error) {
 		return "", err
 	}
 	q := u.Query()
-	q.Set("userId", userID)
+	q.Set("accessToken", accessToken)
+	if strings.TrimSpace(lastEventID) != "" {
+		q.Set("lastEventId", strings.TrimSpace(lastEventID))
+	}
 	u.RawQuery = q.Encode()
 	return u.String(), nil
 }

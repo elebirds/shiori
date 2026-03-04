@@ -100,8 +100,10 @@ func (c *Consumer) consumeOnce(ctx context.Context) error {
 
 	c.logger.Info().
 		Str("exchange", c.cfg.RabbitMQExchange).
+		Strs("exchanges", c.cfg.RabbitMQExchanges).
 		Str("queue", c.cfg.RabbitMQQueue).
 		Str("routingKey", c.cfg.RabbitMQRoutingKey).
+		Strs("routingKeys", c.cfg.RabbitMQRoutingKeys).
 		Msg("MQ 消费器已启动")
 
 	for {

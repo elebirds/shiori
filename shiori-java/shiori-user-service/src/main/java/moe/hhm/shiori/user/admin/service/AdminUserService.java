@@ -1,23 +1,43 @@
 package moe.hhm.shiori.user.admin.service;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import moe.hhm.shiori.common.error.CommonErrorCode;
 import moe.hhm.shiori.common.error.UserErrorCode;
 import moe.hhm.shiori.common.exception.BizException;
 import moe.hhm.shiori.user.admin.dto.AdminRoleResponse;
 import moe.hhm.shiori.user.admin.dto.AdminUserAdminRoleUpdateRequest;
+import moe.hhm.shiori.user.admin.dto.AdminUserAuditItemResponse;
+import moe.hhm.shiori.user.admin.dto.AdminUserAuditPageResponse;
 import moe.hhm.shiori.user.admin.dto.AdminUserDetailResponse;
+import moe.hhm.shiori.user.admin.dto.AdminUserLockRequest;
+import moe.hhm.shiori.user.admin.dto.AdminUserPasswordResetRequest;
 import moe.hhm.shiori.user.admin.dto.AdminUserPageResponse;
 import moe.hhm.shiori.user.admin.dto.AdminUserStatusResponse;
 import moe.hhm.shiori.user.admin.dto.AdminUserStatusUpdateRequest;
 import moe.hhm.shiori.user.admin.dto.AdminUserSummaryResponse;
+import moe.hhm.shiori.user.admin.dto.AdminUserUnlockRequest;
+import moe.hhm.shiori.user.admin.model.AdminUserAuditRecord;
 import moe.hhm.shiori.user.admin.model.AdminUserRecord;
 import moe.hhm.shiori.user.admin.repository.AdminUserMapper;
+import moe.hhm.shiori.user.auth.service.TokenService;
+import moe.hhm.shiori.user.config.UserMqProperties;
+import moe.hhm.shiori.user.config.UserOutboxProperties;
 import moe.hhm.shiori.user.domain.UserStatus;
+import moe.hhm.shiori.user.event.EventEnvelope;
+import moe.hhm.shiori.user.event.UserPasswordResetPayload;
+import moe.hhm.shiori.user.event.UserRoleChangedPayload;
+import moe.hhm.shiori.user.event.UserStatusChangedPayload;
+import moe.hhm.shiori.user.outbox.model.UserOutboxEventEntity;
+import moe.hhm.shiori.user.auth.config.UserSecurityProperties;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -28,13 +48,32 @@ import tools.jackson.databind.ObjectMapper;
 public class AdminUserService {
 
     private static final String ROLE_ADMIN = "ROLE_ADMIN";
+    private static final String EVENT_USER_STATUS_CHANGED = "UserStatusChanged";
+    private static final String EVENT_USER_ROLE_CHANGED = "UserRoleChanged";
+    private static final String EVENT_USER_PASSWORD_RESET = "UserPasswordReset";
 
     private final AdminUserMapper adminUserMapper;
     private final ObjectMapper objectMapper;
+    private final PasswordEncoder passwordEncoder;
+    private final TokenService tokenService;
+    private final UserMqProperties userMqProperties;
+    private final UserOutboxProperties userOutboxProperties;
+    private final UserSecurityProperties userSecurityProperties;
 
-    public AdminUserService(AdminUserMapper adminUserMapper, ObjectMapper objectMapper) {
+    public AdminUserService(AdminUserMapper adminUserMapper,
+                            ObjectMapper objectMapper,
+                            PasswordEncoder passwordEncoder,
+                            TokenService tokenService,
+                            UserMqProperties userMqProperties,
+                            UserOutboxProperties userOutboxProperties,
+                            UserSecurityProperties userSecurityProperties) {
         this.adminUserMapper = adminUserMapper;
         this.objectMapper = objectMapper;
+        this.passwordEncoder = passwordEncoder;
+        this.tokenService = tokenService;
+        this.userMqProperties = userMqProperties;
+        this.userOutboxProperties = userOutboxProperties;
+        this.userSecurityProperties = userSecurityProperties;
     }
 
     public AdminUserPageResponse listUsers(String keyword, String status, String role, int page, int size) {
@@ -53,6 +92,31 @@ public class AdminUserService {
     public AdminUserDetailResponse getUserDetail(Long userId) {
         AdminUserRecord record = requireUser(userId);
         return toDetail(record);
+    }
+
+    public AdminUserAuditPageResponse listUserAudits(Long userId, String action, int page, int size) {
+        requireUser(userId);
+
+        int normalizedPage = Math.max(page, 1);
+        int normalizedSize = Math.min(Math.max(size, 1), 100);
+        int offset = (normalizedPage - 1) * normalizedSize;
+        String normalizedAction = StringUtils.hasText(action) ? action.trim().toUpperCase() : null;
+
+        long total = adminUserMapper.countAdminAudits(userId, normalizedAction);
+        List<AdminUserAuditRecord> records = adminUserMapper.listAdminAudits(userId, normalizedAction, normalizedSize, offset);
+        List<AdminUserAuditItemResponse> items = records.stream()
+                .map(record -> new AdminUserAuditItemResponse(
+                        record.id(),
+                        record.operatorUserId(),
+                        record.targetUserId(),
+                        record.action(),
+                        record.beforeJson(),
+                        record.afterJson(),
+                        record.reason(),
+                        record.createdAt()
+                ))
+                .toList();
+        return new AdminUserAuditPageResponse(total, normalizedPage, normalizedSize, items);
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -74,6 +138,13 @@ public class AdminUserService {
 
         if (currentStatus != targetStatus) {
             adminUserMapper.updateUserStatus(targetUserId, targetStatus.getCode());
+            appendStatusChangedOutbox(
+                    targetUserId,
+                    currentStatus.name(),
+                    targetStatus.name(),
+                    operatorUserId,
+                    request.reason()
+            );
         }
 
         AdminUserRecord after = requireUser(targetUserId);
@@ -118,12 +189,113 @@ public class AdminUserService {
         }
 
         AdminUserRecord after = requireUser(targetUserId);
+        boolean afterAdmin = hasAdminRole(after.roleCodes());
         insertAudit(
                 operatorUserId,
                 targetUserId,
                 "USER_ADMIN_ROLE_UPDATE",
                 stateSnapshot(before),
                 stateSnapshot(after),
+                request.reason()
+        );
+        if (beforeAdmin != afterAdmin) {
+            appendRoleChangedOutbox(
+                    targetUserId,
+                    ROLE_ADMIN,
+                    afterAdmin,
+                    operatorUserId,
+                    request.reason()
+            );
+        }
+        return new AdminUserStatusResponse(after.userId(), resolveStatus(after.status()).name(), afterAdmin);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public AdminUserStatusResponse lockUser(Long operatorUserId, Long targetUserId, AdminUserLockRequest request) {
+        AdminUserRecord before = requireUser(targetUserId);
+        if (operatorUserId.equals(targetUserId)) {
+            throw new BizException(UserErrorCode.CANNOT_LOCK_SELF, HttpStatus.BAD_REQUEST);
+        }
+
+        long durationMinutes = request != null && request.durationMinutes() != null
+                ? Math.max(request.durationMinutes(), 1)
+                : Math.max(userSecurityProperties.getLockMinutes(), 1);
+        LocalDateTime lockUntil = LocalDateTime.now().plusMinutes(durationMinutes);
+        adminUserMapper.updateUserLockState(targetUserId, UserStatus.LOCKED.getCode(), lockUntil);
+
+        AdminUserRecord after = requireUser(targetUserId);
+        insertAudit(
+                operatorUserId,
+                targetUserId,
+                "USER_LOCK",
+                stateSnapshot(before),
+                stateSnapshot(after),
+                request == null ? null : request.reason()
+        );
+        appendStatusChangedOutbox(
+                targetUserId,
+                resolveStatus(before.status()).name(),
+                resolveStatus(after.status()).name(),
+                operatorUserId,
+                request == null ? null : request.reason()
+        );
+        return new AdminUserStatusResponse(after.userId(), resolveStatus(after.status()).name(), hasAdminRole(after.roleCodes()));
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public AdminUserStatusResponse unlockUser(Long operatorUserId, Long targetUserId, AdminUserUnlockRequest request) {
+        AdminUserRecord before = requireUser(targetUserId);
+        boolean isLocked = resolveStatus(before.status()) == UserStatus.LOCKED || before.lockedUntil() != null;
+        if (!isLocked) {
+            throw new BizException(UserErrorCode.USER_NOT_LOCKED, HttpStatus.CONFLICT);
+        }
+
+        adminUserMapper.unlockUser(targetUserId);
+        AdminUserRecord after = requireUser(targetUserId);
+        insertAudit(
+                operatorUserId,
+                targetUserId,
+                "USER_UNLOCK",
+                stateSnapshot(before),
+                stateSnapshot(after),
+                request == null ? null : request.reason()
+        );
+        appendStatusChangedOutbox(
+                targetUserId,
+                resolveStatus(before.status()).name(),
+                resolveStatus(after.status()).name(),
+                operatorUserId,
+                request == null ? null : request.reason()
+        );
+        return new AdminUserStatusResponse(after.userId(), resolveStatus(after.status()).name(), hasAdminRole(after.roleCodes()));
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public AdminUserStatusResponse resetPassword(Long operatorUserId,
+                                                 Long targetUserId,
+                                                 AdminUserPasswordResetRequest request) {
+        AdminUserRecord before = requireUser(targetUserId);
+        boolean forceChangePassword = request.forceChangePassword() == null || request.forceChangePassword();
+        adminUserMapper.updatePasswordByAdmin(
+                targetUserId,
+                passwordEncoder.encode(request.newPassword()),
+                forceChangePassword ? 1 : 0
+        );
+        tokenService.revokeAllSessionsByUserId(targetUserId);
+
+        AdminUserRecord after = requireUser(targetUserId);
+        insertAudit(
+                operatorUserId,
+                targetUserId,
+                "USER_PASSWORD_RESET",
+                stateSnapshot(before),
+                stateSnapshot(after),
+                request.reason()
+        );
+        appendPasswordResetOutbox(
+                targetUserId,
+                operatorUserId,
+                forceChangePassword,
                 request.reason()
         );
         return new AdminUserStatusResponse(after.userId(), resolveStatus(after.status()).name(), hasAdminRole(after.roleCodes()));
@@ -152,11 +324,14 @@ public class AdminUserService {
 
     private String stateSnapshot(AdminUserRecord record) {
         Map<String, Object> snapshot = Map.of(
-                "status", resolveStatus(record.status()).name(),
-                "roles", parseRoles(record.roleCodes())
+                "status", resolveStatus(record.status()).name()
         );
+        Map<String, Object> mutable = new LinkedHashMap<>(snapshot);
+        mutable.put("roles", parseRoles(record.roleCodes()));
+        mutable.put("lockedUntil", record.lockedUntil() == null ? "" : record.lockedUntil().toString());
+        mutable.put("mustChangePassword", record.mustChangePassword() != null && record.mustChangePassword() == 1);
         try {
-            return objectMapper.writeValueAsString(snapshot);
+            return objectMapper.writeValueAsString(mutable);
         } catch (JacksonException e) {
             return "{}";
         }
@@ -185,6 +360,7 @@ public class AdminUserService {
                 resolveStatus(record.status()).name(),
                 record.failedLoginCount(),
                 record.lockedUntil(),
+                record.mustChangePassword() != null && record.mustChangePassword() == 1,
                 record.lastLoginAt(),
                 record.lastLoginIp(),
                 parseRoles(record.roleCodes()),
@@ -261,5 +437,86 @@ public class AdminUserService {
                 afterJson,
                 StringUtils.hasText(reason) ? reason.trim() : null
         );
+    }
+
+    private void appendStatusChangedOutbox(Long targetUserId,
+                                           String beforeStatus,
+                                           String afterStatus,
+                                           Long operatorUserId,
+                                           String reason) {
+        UserStatusChangedPayload payload = new UserStatusChangedPayload(
+                targetUserId,
+                beforeStatus,
+                afterStatus,
+                operatorUserId,
+                normalizeReason(reason)
+        );
+        appendOutbox(targetUserId, EVENT_USER_STATUS_CHANGED, payload, userMqProperties.getUserStatusChangedRoutingKey());
+    }
+
+    private void appendRoleChangedOutbox(Long targetUserId,
+                                         String roleCode,
+                                         boolean granted,
+                                         Long operatorUserId,
+                                         String reason) {
+        UserRoleChangedPayload payload = new UserRoleChangedPayload(
+                targetUserId,
+                roleCode,
+                granted,
+                operatorUserId,
+                normalizeReason(reason)
+        );
+        appendOutbox(targetUserId, EVENT_USER_ROLE_CHANGED, payload, userMqProperties.getUserRoleChangedRoutingKey());
+    }
+
+    private void appendPasswordResetOutbox(Long targetUserId,
+                                           Long operatorUserId,
+                                           boolean mustChangePassword,
+                                           String reason) {
+        UserPasswordResetPayload payload = new UserPasswordResetPayload(
+                targetUserId,
+                operatorUserId,
+                mustChangePassword,
+                normalizeReason(reason)
+        );
+        appendOutbox(targetUserId, EVENT_USER_PASSWORD_RESET, payload, userMqProperties.getUserPasswordResetRoutingKey());
+    }
+
+    private void appendOutbox(Long targetUserId, String type, Object payload, String routingKey) {
+        if (!userOutboxProperties.isEnabled() || !userMqProperties.isEnabled()) {
+            return;
+        }
+        if (!StringUtils.hasText(routingKey)) {
+            return;
+        }
+
+        EventEnvelope envelope = new EventEnvelope(
+                UUID.randomUUID().toString(),
+                type,
+                String.valueOf(targetUserId),
+                Instant.now().toString(),
+                objectMapper.valueToTree(payload)
+        );
+        String envelopeJson;
+        try {
+            envelopeJson = objectMapper.writeValueAsString(envelope);
+        } catch (JacksonException e) {
+            throw new IllegalStateException("构建 user outbox 事件失败", e);
+        }
+
+        UserOutboxEventEntity entity = new UserOutboxEventEntity();
+        entity.setEventId(envelope.eventId());
+        entity.setAggregateId(envelope.aggregateId());
+        entity.setType(envelope.type());
+        entity.setPayload(envelopeJson);
+        entity.setExchangeName(userMqProperties.getEventExchange());
+        entity.setRoutingKey(routingKey);
+        entity.setStatus("PENDING");
+        entity.setRetryCount(0);
+        adminUserMapper.insertOutboxEvent(entity);
+    }
+
+    private String normalizeReason(String reason) {
+        return StringUtils.hasText(reason) ? reason.trim() : null;
     }
 }

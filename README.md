@@ -301,7 +301,7 @@ docker compose run --rm nacos-config-init
 ```
 
 RabbitMQ 与 MinIO 也会通过一次性容器完成最小权限初始化：
-- `rabbitmq-auth-init`：创建 `order-service` 与 `notify-service` 独立账号并写入受限权限。
+- `rabbitmq-auth-init`：创建 `order-service`、`user-service` 与 `notify-service` 独立账号并写入受限权限。
 - `minio-init`：创建商品桶、商品服务专用访问账号与桶级读写策略。
 
 并启动 MinIO（商品图片对象存储）：
@@ -430,9 +430,14 @@ go run .
 ```bash
 export NOTIFY_HTTP_ADDR=:8090
 export RABBITMQ_ADDR=amqp://<rmq-username>:<rmq-password>@localhost:5672/
-export RABBITMQ_EXCHANGE=shiori.order.event
-export RABBITMQ_QUEUE=notify.order.paid
-export RABBITMQ_ROUTING_KEY=order.paid
+export RABBITMQ_EXCHANGES=shiori.order.event,shiori.user.event
+export RABBITMQ_QUEUE=notify.order.event
+export RABBITMQ_ROUTING_KEYS=order.created,order.paid,order.canceled,user.status.changed,user.role.changed,user.password.reset
+export NOTIFY_STORE_DRIVER=mysql
+export NOTIFY_MYSQL_DSN='<notify-mysql-dsn>'
+export NOTIFY_AUTH_ENABLED=true
+export NOTIFY_JWT_HMAC_SECRET='<jwt-hmac-secret>'
+export NOTIFY_JWT_ISSUER=shiori
 ```
 
 鉴权快速验证（示例）：
@@ -556,7 +561,7 @@ export MYSQL_OPS_PASSWORD=<mysql-ops-password>
 
 ```bash
 cd shiori-notify
-go run ./cmd/ws-smoke -base-url ws://localhost:8090/ws -user-id 1001 -expect-type OrderPaid -expect-aggregate Oxxxx -timeout 60s
+go run ./cmd/ws-smoke -base-url ws://localhost:8090/ws -access-token '<access-jwt>' -expect-type OrderPaid -expect-aggregate Oxxxx -timeout 60s
 ```
 
 ### 3.4) GitHub Actions CI（PR 全量自动化）

@@ -6,6 +6,7 @@ public record AuthUserInfo(
         Long userId,
         String userNo,
         String username,
-        List<String> roles
+        List<String> roles,
+        boolean mustChangePassword
 ) {
 }

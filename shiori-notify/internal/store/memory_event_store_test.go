@@ -8,11 +8,14 @@ import (
 
 func TestMemoryEventStoreSaveListAndCursor(t *testing.T) {
 	s := NewMemoryEventStore(10)
-	s.Save("u1", envelope("evt-1"))
-	s.Save("u1", envelope("evt-2"))
-	s.Save("u1", envelope("evt-3"))
+	_, _ = s.Save("u1", envelope("evt-1"))
+	_, _ = s.Save("u1", envelope("evt-2"))
+	_, _ = s.Save("u1", envelope("evt-3"))
 
-	items, next, hasMore := s.List("u1", "", 2)
+	items, next, hasMore, err := s.List("u1", "", 2)
+	if err != nil {
+		t.Fatalf("list failed: %v", err)
+	}
 	if len(items) != 2 {
 		t.Fatalf("expected 2 items, got %d", len(items))
 	}
@@ -23,7 +26,10 @@ func TestMemoryEventStoreSaveListAndCursor(t *testing.T) {
 		t.Fatalf("expected hasMore=true")
 	}
 
-	items, next, hasMore = s.List("u1", "evt-2", 2)
+	items, next, hasMore, err = s.List("u1", "evt-2", 2)
+	if err != nil {
+		t.Fatalf("list with cursor failed: %v", err)
+	}
 	if len(items) != 1 || items[0].EventID != "evt-3" {
 		t.Fatalf("unexpected cursor list result: %+v", items)
 	}
@@ -35,27 +41,32 @@ func TestMemoryEventStoreSaveListAndCursor(t *testing.T) {
 	}
 }
 
-func TestMemoryEventStoreDeduplicateByEventID(t *testing.T) {
+func TestMemoryEventStoreDeduplicateByUserIDAndEventID(t *testing.T) {
 	s := NewMemoryEventStore(10)
-	if !s.Save("u1", envelope("evt-1")) {
+	ok, _ := s.Save("u1", envelope("evt-1"))
+	if !ok {
 		t.Fatalf("first save should succeed")
 	}
-	if s.Save("u1", envelope("evt-1")) {
+	ok, _ = s.Save("u1", envelope("evt-1"))
+	if ok {
 		t.Fatalf("duplicate save should fail")
 	}
-	items, _, _ := s.List("u1", "", 10)
-	if len(items) != 1 {
-		t.Fatalf("expected 1 item, got %d", len(items))
+	ok, _ = s.Save("u2", envelope("evt-1"))
+	if !ok {
+		t.Fatalf("same eventId for different user should succeed")
 	}
 }
 
 func TestMemoryEventStoreRetention(t *testing.T) {
 	s := NewMemoryEventStore(2)
-	s.Save("u1", envelope("evt-1"))
-	s.Save("u1", envelope("evt-2"))
-	s.Save("u1", envelope("evt-3"))
+	_, _ = s.Save("u1", envelope("evt-1"))
+	_, _ = s.Save("u1", envelope("evt-2"))
+	_, _ = s.Save("u1", envelope("evt-3"))
 
-	items, _, _ := s.List("u1", "", 10)
+	items, _, _, err := s.List("u1", "", 10)
+	if err != nil {
+		t.Fatalf("list failed: %v", err)
+	}
 	if len(items) != 2 {
 		t.Fatalf("expected 2 items, got %d", len(items))
 	}
@@ -63,10 +74,58 @@ func TestMemoryEventStoreRetention(t *testing.T) {
 		t.Fatalf("unexpected retained items: %+v", items)
 	}
 
-	// 已淘汰的 cursor 不存在时，会从可用窗口头部返回。
-	items, _, _ = s.List("u1", "evt-1", 10)
+	items, _, _, err = s.List("u1", "evt-1", 10)
+	if err != nil {
+		t.Fatalf("list with evicted cursor failed: %v", err)
+	}
 	if len(items) != 2 || items[0].EventID != "evt-2" {
 		t.Fatalf("unexpected list after evicted cursor: %+v", items)
+	}
+}
+
+func TestMemoryEventStoreReadOps(t *testing.T) {
+	s := NewMemoryEventStore(10)
+	_, _ = s.Save("u1", envelope("evt-1"))
+	_, _ = s.Save("u1", envelope("evt-2"))
+
+	unread, err := s.UnreadCount("u1")
+	if err != nil {
+		t.Fatalf("unread count failed: %v", err)
+	}
+	if unread != 2 {
+		t.Fatalf("expected unread=2, got %d", unread)
+	}
+
+	marked, err := s.MarkRead("u1", "evt-1")
+	if err != nil {
+		t.Fatalf("mark read failed: %v", err)
+	}
+	if !marked {
+		t.Fatalf("expected mark read success")
+	}
+
+	unread, err = s.UnreadCount("u1")
+	if err != nil {
+		t.Fatalf("unread count failed: %v", err)
+	}
+	if unread != 1 {
+		t.Fatalf("expected unread=1, got %d", unread)
+	}
+
+	affected, err := s.MarkAllRead("u1")
+	if err != nil {
+		t.Fatalf("mark all read failed: %v", err)
+	}
+	if affected != 1 {
+		t.Fatalf("expected affected=1, got %d", affected)
+	}
+
+	unread, err = s.UnreadCount("u1")
+	if err != nil {
+		t.Fatalf("unread count failed: %v", err)
+	}
+	if unread != 0 {
+		t.Fatalf("expected unread=0, got %d", unread)
 	}
 }
 
@@ -79,3 +138,4 @@ func envelope(eventID string) event.Envelope {
 		Payload:     []byte(`{"userId":"u1"}`),
 	}
 }
+

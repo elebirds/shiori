@@ -6,11 +6,18 @@ import moe.hhm.shiori.user.admin.dto.AdminUserAdminRoleUpdateRequest;
 import moe.hhm.shiori.user.admin.dto.AdminUserStatusUpdateRequest;
 import moe.hhm.shiori.user.admin.model.AdminUserRecord;
 import moe.hhm.shiori.user.admin.repository.AdminUserMapper;
+import moe.hhm.shiori.user.auth.config.UserSecurityProperties;
+import moe.hhm.shiori.user.auth.service.TokenService;
+import moe.hhm.shiori.user.config.UserMqProperties;
+import moe.hhm.shiori.user.config.UserOutboxProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import tools.jackson.databind.ObjectMapper;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -20,16 +27,47 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class AdminUserServiceTest {
 
     @Mock
     private AdminUserMapper adminUserMapper;
 
+    @Mock
+    private PasswordEncoder passwordEncoder;
+
+    @Mock
+    private TokenService tokenService;
+
+    @Mock
+    private UserMqProperties userMqProperties;
+
+    @Mock
+    private UserOutboxProperties userOutboxProperties;
+
+    @Mock
+    private UserSecurityProperties userSecurityProperties;
+
     private AdminUserService adminUserService;
 
     @BeforeEach
     void setUp() {
-        adminUserService = new AdminUserService(adminUserMapper, new ObjectMapper());
+        when(userMqProperties.getEventExchange()).thenReturn("shiori.user.event");
+        when(userMqProperties.getUserStatusChangedRoutingKey()).thenReturn("user.status.changed");
+        when(userMqProperties.getUserRoleChangedRoutingKey()).thenReturn("user.role.changed");
+        when(userMqProperties.getUserPasswordResetRoutingKey()).thenReturn("user.password.reset");
+        when(userMqProperties.isEnabled()).thenReturn(true);
+        when(userOutboxProperties.isEnabled()).thenReturn(true);
+        when(userSecurityProperties.getLockMinutes()).thenReturn(15L);
+        adminUserService = new AdminUserService(
+                adminUserMapper,
+                new ObjectMapper(),
+                passwordEncoder,
+                tokenService,
+                userMqProperties,
+                userOutboxProperties,
+                userSecurityProperties
+        );
     }
 
     @Test
@@ -94,6 +132,7 @@ class AdminUserServiceTest {
                 status,
                 0,
                 null,
+                0,
                 null,
                 null,
                 roleCodes,

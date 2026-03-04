@@ -32,7 +32,7 @@ function payloadPreview(payload: Record<string, unknown>): string {
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 class="font-display text-2xl text-stone-900">通知中心</h1>
-          <p class="mt-1 text-sm text-stone-600">实时消费 notify WebSocket 的事件消息。</p>
+          <p class="mt-1 text-sm text-stone-600">实时接收并展示订单与用户治理通知，已读状态由服务端持久化。</p>
         </div>
         <div class="flex items-center gap-2">
           <span
@@ -53,13 +53,6 @@ function payloadPreview(payload: Record<string, unknown>): string {
         @click="notifyStore.markAllRead"
       >
         全部标记已读
-      </button>
-      <button
-        type="button"
-        class="rounded-lg border border-rose-300 px-3 py-1.5 text-sm text-rose-700 transition hover:bg-rose-50"
-        @click="notifyStore.clearMessages"
-      >
-        清空通知
       </button>
     </section>
 
@@ -90,8 +83,7 @@ function payloadPreview(payload: Record<string, unknown>): string {
     </section>
 
     <section v-else class="rounded-2xl border border-stone-200 bg-white/90 p-8 text-center text-sm text-stone-500">
-      还没有通知消息，完成支付后会在这里出现 `OrderPaid` 事件。
+      还没有通知消息，完成下单/支付/取消或用户治理操作后会在这里显示。
     </section>
   </section>
 </template>
-

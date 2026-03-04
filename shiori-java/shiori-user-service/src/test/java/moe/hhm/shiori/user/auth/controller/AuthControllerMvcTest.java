@@ -51,7 +51,7 @@ class AuthControllerMvcTest {
     void shouldLoginSuccess() throws Exception {
         TokenPairResponse response = new TokenPairResponse(
                 "access", 900, "refresh", 604800, "Bearer",
-                new AuthUserInfo(1L, "U202603030001", "alice", List.of("ROLE_USER"))
+                new AuthUserInfo(1L, "U202603030001", "alice", List.of("ROLE_USER"), false)
         );
         when(authService.login("alice", "pwd", "127.0.0.1")).thenReturn(response);
 
@@ -101,7 +101,7 @@ class AuthControllerMvcTest {
     void shouldRefreshAndLogout() throws Exception {
         TokenPairResponse response = new TokenPairResponse(
                 "new-access", 900, "new-refresh", 604800, "Bearer",
-                new AuthUserInfo(1L, "U202603030001", "alice", List.of("ROLE_USER"))
+                new AuthUserInfo(1L, "U202603030001", "alice", List.of("ROLE_USER"), false)
         );
         when(authService.refresh("r1")).thenReturn(response);
 

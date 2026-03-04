@@ -29,6 +29,7 @@ export interface AuthUserInfo {
   userNo: string
   username: string
   roles: string[]
+  mustChangePassword?: boolean
 }
 
 export interface TokenPairResponse {

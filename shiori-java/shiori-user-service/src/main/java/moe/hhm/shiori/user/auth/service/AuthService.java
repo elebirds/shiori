@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import moe.hhm.shiori.common.error.UserErrorCode;
 import moe.hhm.shiori.common.exception.BizException;
+import moe.hhm.shiori.user.auth.config.UserSecurityProperties;
 import moe.hhm.shiori.user.auth.dto.RegisterResponse;
 import moe.hhm.shiori.user.auth.model.RegisterUserEntity;
 import moe.hhm.shiori.user.auth.dto.TokenPairResponse;
@@ -23,11 +24,16 @@ public class AuthService {
     private final AuthUserMapper authUserMapper;
     private final PasswordEncoder passwordEncoder;
     private final TokenService tokenService;
+    private final UserSecurityProperties userSecurityProperties;
 
-    public AuthService(AuthUserMapper authUserMapper, PasswordEncoder passwordEncoder, TokenService tokenService) {
+    public AuthService(AuthUserMapper authUserMapper,
+                       PasswordEncoder passwordEncoder,
+                       TokenService tokenService,
+                       UserSecurityProperties userSecurityProperties) {
         this.authUserMapper = authUserMapper;
         this.passwordEncoder = passwordEncoder;
         this.tokenService = tokenService;
+        this.userSecurityProperties = userSecurityProperties;
     }
 
     public TokenPairResponse login(String username, String password, String loginIp) {
@@ -43,15 +49,25 @@ public class AuthService {
         if (status == UserStatus.LOCKED && isStillLocked(user.lockedUntil())) {
             throw new BizException(UserErrorCode.ACCOUNT_LOCKED, HttpStatus.FORBIDDEN);
         }
+        if (status == UserStatus.LOCKED) {
+            authUserMapper.unlockUser(user.id());
+            user = authUserMapper.findById(user.id());
+            if (user == null || isDeleted(user)) {
+                throw new BizException(UserErrorCode.USER_NOT_FOUND, HttpStatus.UNAUTHORIZED);
+            }
+        }
 
         if (!passwordEncoder.matches(password, user.passwordHash())) {
-            authUserMapper.increaseFailedLoginCount(user.id());
+            int lockThreshold = Math.max(userSecurityProperties.getLoginFailLockThreshold(), 1);
+            long lockMinutes = Math.max(userSecurityProperties.getLockMinutes(), 1);
+            authUserMapper.recordLoginFailure(user.id(), lockThreshold, LocalDateTime.now().plusMinutes(lockMinutes));
             throw new BizException(UserErrorCode.PASSWORD_INCORRECT, HttpStatus.UNAUTHORIZED);
         }
 
         authUserMapper.markLoginSuccess(user.id(), loginIp);
         List<String> roles = authUserMapper.findRolesByUserId(user.id());
-        return tokenService.issueTokenPair(user.id(), user.userNo(), user.username(), roles);
+        boolean mustChangePassword = user.mustChangePassword() != null && user.mustChangePassword() == 1;
+        return tokenService.issueTokenPair(user.id(), user.userNo(), user.username(), roles, mustChangePassword);
     }
 
     public TokenPairResponse refresh(String refreshToken) {
@@ -103,6 +119,7 @@ public class AuthService {
         }
 
         authUserMapper.updatePasswordHashById(userId, passwordEncoder.encode(newPassword));
+        tokenService.revokeAllSessionsByUserId(userId);
     }
 
     private boolean isDeleted(UserAuthRecord user) {
