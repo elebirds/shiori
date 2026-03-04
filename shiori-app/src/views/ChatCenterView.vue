@@ -3,7 +3,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
-import { useChatStore } from '@/stores/chat'
+import { useChatStore, type ChatMessageVM } from '@/stores/chat'
 
 const route = useRoute()
 const router = useRouter()
@@ -13,6 +13,15 @@ const chatStore = useChatStore()
 const draft = ref('')
 const messageViewportRef = ref<HTMLElement | null>(null)
 const loadingOlderMessages = ref(false)
+const TIME_GROUP_GAP_MS = 5 * 60 * 1000
+const WEEKDAY_LABELS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
+
+interface ChatTimelineEntry {
+  key: string
+  type: 'time' | 'message'
+  label?: string
+  message?: ChatMessageVM
+}
 
 const conversations = computed(() => chatStore.conversations)
 const activeConversationId = computed(() => chatStore.activeConversationId)
@@ -32,6 +41,34 @@ const canLoadOlder = computed(() => {
     return false
   }
   return chatStore.hasOlderMessages(conversationId)
+})
+
+const timelineEntries = computed<ChatTimelineEntry[]>(() => {
+  const entries: ChatTimelineEntry[] = []
+  let previousTimestamp: number | null = null
+  for (const message of activeMessages.value) {
+    const currentTimestamp = parseTimestamp(message.createdAt)
+    const needDivider =
+      entries.length === 0 ||
+      previousTimestamp === null ||
+      currentTimestamp === null ||
+      currentTimestamp - previousTimestamp >= TIME_GROUP_GAP_MS
+
+    if (needDivider) {
+      entries.push({
+        key: `time-${message.messageId}-${message.clientMsgId}`,
+        type: 'time',
+        label: formatDividerTime(message.createdAt),
+      })
+    }
+    entries.push({
+      key: `message-${message.messageId}-${message.clientMsgId}`,
+      type: 'message',
+      message,
+    })
+    previousTimestamp = currentTimestamp
+  }
+  return entries
 })
 
 onMounted(async () => {
@@ -54,12 +91,49 @@ watch(
   },
 )
 
-function formatTime(raw: string): string {
+function parseTimestamp(raw: string): number | null {
+  const timestamp = Date.parse(raw)
+  if (!Number.isFinite(timestamp)) {
+    return null
+  }
+  return timestamp
+}
+
+function formatClock(date: Date): string {
+  const hour = date.getHours()
+  const minute = `${date.getMinutes()}`.padStart(2, '0')
+  return `${hour}:${minute}`
+}
+
+function dayDistanceFromToday(date: Date): number {
+  const todayStart = new Date()
+  todayStart.setHours(0, 0, 0, 0)
+  const targetStart = new Date(date)
+  targetStart.setHours(0, 0, 0, 0)
+  return Math.floor((todayStart.getTime() - targetStart.getTime()) / (24 * 60 * 60 * 1000))
+}
+
+function formatDividerTime(raw: string): string {
   const parsed = new Date(raw)
   if (Number.isNaN(parsed.getTime())) {
     return raw
   }
-  return parsed.toLocaleString('zh-CN')
+  const now = new Date()
+  const distance = dayDistanceFromToday(parsed)
+  const clock = formatClock(parsed)
+  if (distance === 0) {
+    return `今天 ${clock}`
+  }
+  if (distance === 1) {
+    return `昨天 ${clock}`
+  }
+  if (distance > 1 && distance < 7) {
+    return `${WEEKDAY_LABELS[parsed.getDay()]} ${clock}`
+  }
+  if (parsed.getFullYear() === now.getFullYear()) {
+    return `${parsed.getMonth() + 1}月${parsed.getDate()}日 ${clock}`
+  }
+  return `${parsed.getFullYear()}年${parsed.getMonth() + 1}月${parsed.getDate()}日 ${clock}`
 }
 
 function isMine(senderId: number): boolean {
@@ -159,24 +233,33 @@ function handleMessageScroll(): void {
         </header>
 
         <div ref="messageViewportRef" class="flex-1 space-y-3 overflow-y-auto px-4 py-3" @scroll.passive="handleMessageScroll">
-          <article
-            v-for="item in activeMessages"
-            :key="`${item.messageId}-${item.clientMsgId}`"
-            class="flex"
-            :class="isMine(item.senderId) ? 'justify-end' : 'justify-start'"
-          >
-            <div
-              class="max-w-[80%] rounded-2xl px-3 py-2 text-sm"
-              :class="isMine(item.senderId) ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-800'"
+          <template v-for="entry in timelineEntries" :key="entry.key">
+            <p
+              v-if="entry.type === 'time'"
+              class="mx-auto w-fit rounded-full bg-stone-100 px-3 py-1 text-[11px] font-medium tracking-wide text-stone-500"
             >
-              <p class="whitespace-pre-wrap break-words">{{ item.content }}</p>
-              <p class="mt-1 text-[10px]" :class="isMine(item.senderId) ? 'text-stone-300' : 'text-stone-500'">
-                {{ formatTime(item.createdAt) }}
-                <span v-if="isMine(item.senderId) && item.status === 'pending'"> · 发送中</span>
-                <span v-if="isMine(item.senderId) && item.status === 'failed'" class="text-rose-400"> · 发送失败</span>
-              </p>
-            </div>
-          </article>
+              {{ entry.label }}
+            </p>
+            <article
+              v-else
+              class="flex"
+              :class="isMine(entry.message?.senderId || 0) ? 'justify-end' : 'justify-start'"
+            >
+              <div
+                class="max-w-[80%] rounded-2xl px-3 py-2 text-sm"
+                :class="isMine(entry.message?.senderId || 0) ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-800'"
+              >
+                <p class="whitespace-pre-wrap break-words">{{ entry.message?.content }}</p>
+                <p
+                  v-if="isMine(entry.message?.senderId || 0) && (entry.message?.status === 'pending' || entry.message?.status === 'failed')"
+                  class="mt-1 text-[10px]"
+                  :class="entry.message?.status === 'failed' ? 'text-rose-300' : 'text-stone-300'"
+                >
+                  {{ entry.message?.status === 'failed' ? '发送失败' : '发送中' }}
+                </p>
+              </div>
+            </article>
+          </template>
           <p v-if="activeConversation && activeMessages.length === 0" class="text-sm text-stone-500">还没有消息，发送第一条咨询吧。</p>
         </div>
 
