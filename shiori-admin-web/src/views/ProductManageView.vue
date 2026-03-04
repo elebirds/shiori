@@ -298,23 +298,61 @@ function formatMoney(priceCent?: number): string {
 
 .rich-content :deep(ul),
 .rich-content :deep(ol) {
-  margin-left: 1.1rem;
-  padding-left: 0.35rem;
+  margin-left: 0;
+  padding-left: 1.5rem;
+  list-style-position: outside;
 }
 
-.rich-content :deep(.rt-fs-sm) {
-  font-size: 0.875rem;
+.rich-content :deep(ul) {
+  list-style: disc;
 }
 
-.rich-content :deep(.rt-fs-md) {
-  font-size: 1rem;
+.rich-content :deep(ol) {
+  list-style: decimal;
 }
 
-.rich-content :deep(.rt-fs-lg) {
-  font-size: 1.125rem;
+.rich-content :deep(li) {
+  margin: 0.25rem 0;
 }
 
-.rich-content :deep(.rt-fs-xl) {
-  font-size: 1.25rem;
+.rich-content :deep(h1) {
+  margin: 0.75rem 0 0.5rem;
+  font-size: 1.375rem;
+  font-weight: 700;
+}
+
+.rich-content :deep(h2) {
+  margin: 0.75rem 0 0.5rem;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.rich-content :deep(h3) {
+  margin: 0.75rem 0 0.5rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.rich-content :deep(blockquote) {
+  margin: 0.75rem 0;
+  border-left: 3px solid #cbd5e1;
+  padding-left: 0.75rem;
+  color: #475569;
+}
+
+.rich-content :deep(a) {
+  color: #2563eb;
+  text-decoration: underline;
+  word-break: break-all;
+}
+
+.rich-content :deep(s) {
+  text-decoration: line-through;
+}
+
+.rich-content :deep(hr) {
+  margin: 0.75rem 0;
+  border: 0;
+  border-top: 1px solid #cbd5e1;
 }
 </style>

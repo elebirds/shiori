@@ -8,6 +8,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.regex.Pattern;
+import java.net.URI;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import moe.hhm.shiori.common.error.CommonErrorCode;
 import moe.hhm.shiori.common.error.ProductErrorCode;
 import moe.hhm.shiori.common.exception.BizException;
@@ -34,6 +38,8 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.safety.Safelist;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,17 +48,25 @@ import org.springframework.util.StringUtils;
 @Service
 public class ProductV2Service {
 
-    private static final Set<String> ALLOWED_RICH_TEXT_CLASSES = Set.of(
-            "rt-fs-sm",
-            "rt-fs-md",
-            "rt-fs-lg",
-            "rt-fs-xl"
+    private static final Logger log = LoggerFactory.getLogger(ProductV2Service.class);
+    private static final Set<String> ALLOWED_RICH_TEXT_FONT_SIZES = Set.of("12px", "14px", "16px", "18px", "24px");
+    private static final Set<String> ALLOWED_RICH_TEXT_FONT_SIZE_TAGS = Set.of(
+            "span", "p", "h1", "h2", "h3", "li", "blockquote"
     );
+    private static final Set<String> ALLOWED_RICH_TEXT_TEXT_ALIGNS = Set.of("left", "center", "right", "justify");
+    private static final Set<String> ALLOWED_RICH_TEXT_TEXT_ALIGN_TAGS = Set.of(
+            "p", "h1", "h2", "h3", "li", "blockquote"
+    );
+    private static final Pattern RICH_TEXT_FONT_SIZE_PATTERN = Pattern.compile("^(?:[1-9]\\d?|1[0-2]\\d)px$");
+    private static final Pattern RICH_TEXT_PERCENT_PATTERN = Pattern.compile("^(?:100|[1-9]?\\d)(?:\\.\\d+)?%$");
+    private static final Pattern RICH_TEXT_PIXEL_PATTERN = Pattern.compile("^(?:0|[1-9]\\d{0,3})px$");
     private static final Safelist DETAIL_HTML_SAFE_LIST = Safelist.none()
-            .addTags("p", "br", "h1", "h2", "h3", "h4", "ul", "ol", "li", "blockquote", "strong", "em", "u",
-                    "span", "img")
+            .addTags("p", "br", "h1", "h2", "h3", "ul", "ol", "li", "blockquote", "strong", "em", "u", "s",
+                    "span", "a", "hr", "img")
             .addAttributes("img", "src", "alt", "title", "data-object-key")
-            .addAttributes(":all", "class");
+            .addAttributes("a", "href", "target", "rel")
+            .addAttributes(":all", "style")
+            .addProtocols("a", "href", "http", "https", "mailto");
 
     private final ProductMapper productMapper;
     private final OssObjectService ossObjectService;
@@ -453,8 +467,8 @@ public class ProductV2Service {
             return null;
         }
         Document normalized = Jsoup.parseBodyFragment(cleaned);
-        normalizeAllowedClassNames(normalized);
-        if (!StringUtils.hasText(normalized.text()) && normalized.select("img").isEmpty()) {
+        normalizeAllowedStyles(normalized);
+        if (!StringUtils.hasText(normalized.text()) && normalized.select("img,hr").isEmpty()) {
             return null;
         }
         String html = normalized.body().html().trim();
@@ -488,7 +502,7 @@ public class ProductV2Service {
                 image.remove();
             }
         }
-        normalizeAllowedClassNames(document);
+        normalizeAllowedStyles(document);
         String html = document.body().html().trim();
         return StringUtils.hasText(html) ? html : null;
     }
@@ -499,6 +513,8 @@ public class ProductV2Service {
                     firstNonBlank(image.attr("data-object-key"), image.attr("src"))
             );
             if (objectKey == null) {
+                log.warn("Drop rich text image when normalize store html: src={}, data-object-key={}",
+                        image.attr("src"), image.attr("data-object-key"));
                 image.remove();
                 continue;
             }
@@ -507,40 +523,86 @@ public class ProductV2Service {
         }
     }
 
-    private void normalizeAllowedClassNames(Document document) {
-        for (Element element : document.select("[class]")) {
-            String className = normalizeRichTextClassNames(element.attr("class"));
-            if (!StringUtils.hasText(className)) {
-                element.removeAttr("class");
+    private void normalizeAllowedStyles(Document document) {
+        for (Element element : document.select("[style]")) {
+            String style = normalizeRichTextStyle(element.normalName(), element.attr("style"));
+            if (!StringUtils.hasText(style)) {
+                element.removeAttr("style");
                 continue;
             }
-            element.attr("class", className);
+            element.attr("style", style);
         }
     }
 
-    private String normalizeRichTextClassNames(String rawClassNames) {
-        if (!StringUtils.hasText(rawClassNames)) {
+    private String normalizeRichTextStyle(String tagName, String rawStyle) {
+        if (!StringUtils.hasText(rawStyle)) {
             return null;
         }
-        List<String> classNames = new ArrayList<>();
-        for (String className : Arrays.asList(rawClassNames.trim().split("\\s+"))) {
-            if (!ALLOWED_RICH_TEXT_CLASSES.contains(className) || classNames.contains(className)) {
+        List<String> declarations = new ArrayList<>();
+        for (String declaration : Arrays.asList(rawStyle.split(";"))) {
+            if (!StringUtils.hasText(declaration) || !declaration.contains(":")) {
                 continue;
             }
-            classNames.add(className);
+            String[] pair = declaration.split(":", 2);
+            if (pair.length != 2) {
+                continue;
+            }
+            String name = pair[0].trim().toLowerCase();
+            String value = pair[1].trim().toLowerCase();
+            String normalizedValue = normalizeStyleDeclarationValue(tagName, name, value);
+            if (!StringUtils.hasText(normalizedValue)) {
+                continue;
+            }
+            declarations.add(name + ":" + normalizedValue);
         }
-        if (classNames.isEmpty()) {
+        if (declarations.isEmpty()) {
             return null;
         }
-        return String.join(" ", classNames);
+        return String.join(";", declarations);
+    }
+
+    private String normalizeStyleDeclarationValue(String tagName, String name, String value) {
+        if ("font-size".equals(name)) {
+            return ALLOWED_RICH_TEXT_FONT_SIZE_TAGS.contains(tagName) && isAllowedFontSize(value) ? value : null;
+        }
+        if ("text-align".equals(name)) {
+            return ALLOWED_RICH_TEXT_TEXT_ALIGN_TAGS.contains(tagName)
+                    && ALLOWED_RICH_TEXT_TEXT_ALIGNS.contains(value) ? value : null;
+        }
+        if ("img".equals(tagName) && ("width".equals(name) || "max-width".equals(name))) {
+            return isAllowedImageLength(value) ? value : null;
+        }
+        if ("img".equals(tagName) && "height".equals(name)) {
+            return "auto".equals(value) || isAllowedImageLength(value) ? value : null;
+        }
+        return null;
+    }
+
+    private boolean isAllowedFontSize(String value) {
+        return ALLOWED_RICH_TEXT_FONT_SIZES.contains(value) || RICH_TEXT_FONT_SIZE_PATTERN.matcher(value).matches();
+    }
+
+    private boolean isAllowedImageLength(String value) {
+        return RICH_TEXT_PERCENT_PATTERN.matcher(value).matches() || RICH_TEXT_PIXEL_PATTERN.matcher(value).matches();
     }
 
     private String normalizeMediaObjectKey(String rawObjectKey) {
         if (!StringUtils.hasText(rawObjectKey)) {
             return null;
         }
-        String objectKey = rawObjectKey.trim();
-        if (objectKey.length() > 255 || objectKey.contains("..") || objectKey.contains("://")
+        String candidate = rawObjectKey.trim();
+        String objectKey = normalizeObjectKeyPath(candidate);
+        if (objectKey != null) {
+            return objectKey;
+        }
+        return extractObjectKeyFromUrl(candidate);
+    }
+
+    private String normalizeObjectKeyPath(String objectKey) {
+        if (!StringUtils.hasText(objectKey)) {
+            return null;
+        }
+        if (objectKey.length() > 255 || objectKey.contains("..")
                 || objectKey.contains("\\") || objectKey.startsWith("/")) {
             return null;
         }
@@ -548,6 +610,30 @@ public class ProductV2Service {
             return null;
         }
         return objectKey;
+    }
+
+    private String extractObjectKeyFromUrl(String rawUrl) {
+        if (!StringUtils.hasText(rawUrl) || !rawUrl.contains("://")) {
+            return null;
+        }
+        try {
+            URI uri = URI.create(rawUrl);
+            String path = uri.getPath();
+            if (!StringUtils.hasText(path)) {
+                return null;
+            }
+            String decodedPath = URLDecoder.decode(path, StandardCharsets.UTF_8);
+            int markerIndex = decodedPath.indexOf("/product/");
+            if (markerIndex >= 0) {
+                return normalizeObjectKeyPath(decodedPath.substring(markerIndex + 1));
+            }
+            if (decodedPath.startsWith("product/")) {
+                return normalizeObjectKeyPath(decodedPath);
+            }
+            return null;
+        } catch (Exception ex) {
+            return null;
+        }
     }
 
     private String firstNonBlank(String first, String second) {

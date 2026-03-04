@@ -28,8 +28,9 @@ test.describe('交易与通知前端烟测', () => {
     const productTitle = `E2E 商品 ${runId}`
     await page.getByLabel('商品标题').fill(productTitle)
     await page.getByLabel('商品简介').fill('Playwright 端到端烟测商品')
-    await page.getByTestId('rich-editor-content').click()
-    await page.getByTestId('rich-editor-content').fill('E2E 富文本详情内容')
+    const richEditor = page.getByTestId('rich-editor-content').locator('[contenteditable="true"]').first()
+    await richEditor.click()
+    await richEditor.fill('E2E 富文本详情内容')
 
     await page.getByPlaceholder('SKU 1').fill('标准版')
     await page.getByRole('button', { name: '添加 SKU' }).click()

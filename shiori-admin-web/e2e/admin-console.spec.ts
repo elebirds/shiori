@@ -128,7 +128,7 @@ async function prepareData(request: APIRequestContext): Promise<PreparedData> {
     {
       title: productTitle,
       description: 'admin-web e2e',
-      detailHtml: '<p class="rt-fs-lg">后台富文本详情</p>',
+      detailHtml: '<p><span style="font-size:18px;">后台富文本详情</span></p>',
       coverObjectKey: null,
       categoryCode: 'TEXTBOOK',
       conditionLevel: 'GOOD',

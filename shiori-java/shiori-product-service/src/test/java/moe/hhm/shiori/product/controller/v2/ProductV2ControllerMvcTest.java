@@ -63,7 +63,7 @@ class ProductV2ControllerMvcTest {
                                 {
                                   "title":"Java Book",
                                   "description":"summary",
-                                  "detailHtml":"<p class='rt-fs-lg'>detail</p>",
+                                  "detailHtml":"<p><span style='font-size:18px'>detail</span></p><p><img src='product/1001/202603/detail.jpg' data-object-key='product/1001/202603/detail.jpg' style='width:50%'/></p>",
                                   "coverObjectKey":"product/1001/202603/a.jpg",
                                   "categoryCode":"TEXTBOOK",
                                   "conditionLevel":"GOOD",
@@ -114,7 +114,7 @@ class ProductV2ControllerMvcTest {
                 1001L,
                 "Java Book",
                 "summary",
-                "<p class=\"rt-fs-lg\">detail</p>",
+                "<p><span style=\"font-size:18px\">detail</span></p><p><img src=\"http://cdn/detail.jpg\" data-object-key=\"product/1001/202603/detail.jpg\" style=\"width:50%\"/></p>",
                 "product/1001/202603/a.jpg",
                 "http://cdn/a.jpg",
                 "ON_SALE",
@@ -131,6 +131,6 @@ class ProductV2ControllerMvcTest {
         mockMvc.perform(get("/api/v2/product/products/1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data.detailHtml").value("<p class=\"rt-fs-lg\">detail</p>"));
+                .andExpect(jsonPath("$.data.detailHtml").value("<p><span style=\"font-size:18px\">detail</span></p><p><img src=\"http://cdn/detail.jpg\" data-object-key=\"product/1001/202603/detail.jpg\" style=\"width:50%\"/></p>"));
     }
 }

@@ -164,85 +164,87 @@ async function handleCreateOrder(): Promise<void> {
     </button>
 
     <ResultState :loading="query.isLoading.value" :error="errorMessage" :empty="!query.isLoading.value && !product" empty-text="商品不存在或已下架">
-      <article v-if="product" class="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-        <div class="rounded-2xl border border-stone-200 bg-white/95 p-5">
-          <div class="aspect-[4/3] overflow-hidden rounded-xl bg-stone-100">
-            <img v-if="product.coverImageUrl" :src="product.coverImageUrl" :alt="product.title" class="h-full w-full object-cover" />
-            <div v-else class="flex h-full items-center justify-center text-sm text-stone-500">暂无封面</div>
+      <div v-if="product" class="space-y-4">
+        <article class="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
+          <div class="rounded-2xl border border-stone-200 bg-white/95 p-5">
+            <div class="aspect-[4/3] overflow-hidden rounded-xl bg-stone-100">
+              <img v-if="product.coverImageUrl" :src="product.coverImageUrl" :alt="product.title" class="h-full w-full object-cover" />
+              <div v-else class="flex h-full items-center justify-center text-sm text-stone-500">暂无封面</div>
+            </div>
+
+            <h1 class="mt-4 font-display text-3xl text-stone-900">{{ product.title }}</h1>
+            <div class="mt-2 space-y-2">
+              <h2 class="text-sm font-semibold text-stone-900">商品简介</h2>
+              <p class="whitespace-pre-line text-sm text-stone-700">{{ product.description || '暂无简介' }}</p>
+            </div>
+
+            <div class="mt-4 flex flex-wrap gap-2 text-xs text-stone-700">
+              <span class="rounded-full bg-stone-100 px-2 py-1">{{ formatCategory(product.categoryCode) }}</span>
+              <span class="rounded-full bg-stone-100 px-2 py-1">{{ formatCondition(product.conditionLevel) }}</span>
+              <span class="rounded-full bg-stone-100 px-2 py-1">{{ formatTradeMode(product.tradeMode) }}</span>
+              <span class="rounded-full bg-stone-100 px-2 py-1">{{ product.campusCode }}</span>
+            </div>
           </div>
 
-          <h1 class="mt-4 font-display text-3xl text-stone-900">{{ product.title }}</h1>
-          <div class="mt-2 space-y-2">
-            <h2 class="text-sm font-semibold text-stone-900">商品简介</h2>
-            <p class="whitespace-pre-line text-sm text-stone-700">{{ product.description || '暂无简介' }}</p>
-          </div>
+          <div class="space-y-4 rounded-2xl border border-stone-200 bg-white/95 p-5">
+            <div>
+              <h2 class="text-base font-semibold text-stone-900">SKU 列表</h2>
+              <p class="mt-1 text-xs text-stone-500">状态：{{ product.status }}，卖家ID：{{ product.ownerUserId }}</p>
+              <p class="mt-1 text-xs text-stone-500">价格区间：{{ formatPriceRange(product.minPriceCent, product.maxPriceCent) }}，库存：{{ product.totalStock ?? 0 }}</p>
+            </div>
 
-          <div class="mt-4 space-y-2">
-            <h2 class="text-sm font-semibold text-stone-900">商品详情</h2>
-            <div v-if="product.detailHtml" class="rich-content text-sm text-stone-700" v-html="product.detailHtml" />
-            <p v-else class="text-sm text-stone-500">暂无详情</p>
-          </div>
+            <div class="max-h-72 space-y-2 overflow-auto pr-1">
+              <article
+                v-for="sku in product.skus"
+                :key="sku.skuId"
+                class="grid grid-cols-[1fr_auto] items-center gap-3 rounded-xl border border-stone-200 px-3 py-2 text-sm transition hover:border-stone-300"
+              >
+                <div>
+                  <p class="font-medium text-stone-800">{{ sku.skuName }}</p>
+                  <p class="text-xs text-stone-500">{{ sku.specJson || '默认规格' }}</p>
+                  <p class="mt-1 text-xs text-stone-500">库存 {{ sku.stock }}</p>
+                </div>
+                <div class="flex items-center gap-3">
+                  <p class="font-semibold text-stone-900">{{ formatMoney(sku.priceCent) }}</p>
+                  <label class="flex items-center gap-1 text-xs text-stone-600">
+                    数量
+                    <input
+                      v-model.number="skuQuantities[sku.skuId]"
+                      type="number"
+                      min="0"
+                      :max="sku.stock"
+                      class="w-20 rounded-lg border border-stone-300 px-2 py-1 text-right"
+                      @blur="normalizeQuantity(sku.skuId)"
+                    />
+                  </label>
+                </div>
+              </article>
+            </div>
 
-          <div class="mt-4 flex flex-wrap gap-2 text-xs text-stone-700">
-            <span class="rounded-full bg-stone-100 px-2 py-1">{{ formatCategory(product.categoryCode) }}</span>
-            <span class="rounded-full bg-stone-100 px-2 py-1">{{ formatCondition(product.conditionLevel) }}</span>
-            <span class="rounded-full bg-stone-100 px-2 py-1">{{ formatTradeMode(product.tradeMode) }}</span>
-            <span class="rounded-full bg-stone-100 px-2 py-1">{{ product.campusCode }}</span>
-          </div>
-        </div>
+            <div class="rounded-xl bg-stone-50 p-3 text-sm text-stone-700">
+              <p>已选 SKU 数：{{ selectedItems.length }}</p>
+              <p class="mt-1">预估金额：{{ formatMoney(selectedTotalAmount) }}</p>
+            </div>
 
-        <div class="space-y-4 rounded-2xl border border-stone-200 bg-white/95 p-5">
-          <div>
-            <h2 class="text-base font-semibold text-stone-900">SKU 列表</h2>
-            <p class="mt-1 text-xs text-stone-500">状态：{{ product.status }}，卖家ID：{{ product.ownerUserId }}</p>
-            <p class="mt-1 text-xs text-stone-500">价格区间：{{ formatPriceRange(product.minPriceCent, product.maxPriceCent) }}，库存：{{ product.totalStock ?? 0 }}</p>
-          </div>
-
-          <div class="max-h-72 space-y-2 overflow-auto pr-1">
-            <article
-              v-for="sku in product.skus"
-              :key="sku.skuId"
-              class="grid grid-cols-[1fr_auto] items-center gap-3 rounded-xl border border-stone-200 px-3 py-2 text-sm transition hover:border-stone-300"
+            <button
+              type="button"
+              class="w-full rounded-xl bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-70"
+              :disabled="creatingOrder"
+              @click="handleCreateOrder"
             >
-              <div>
-                <p class="font-medium text-stone-800">{{ sku.skuName }}</p>
-                <p class="text-xs text-stone-500">{{ sku.specJson || '默认规格' }}</p>
-                <p class="mt-1 text-xs text-stone-500">库存 {{ sku.stock }}</p>
-              </div>
-              <div class="flex items-center gap-3">
-                <p class="font-semibold text-stone-900">{{ formatMoney(sku.priceCent) }}</p>
-                <label class="flex items-center gap-1 text-xs text-stone-600">
-                  数量
-                  <input
-                    v-model.number="skuQuantities[sku.skuId]"
-                    type="number"
-                    min="0"
-                    :max="sku.stock"
-                    class="w-20 rounded-lg border border-stone-300 px-2 py-1 text-right"
-                    @blur="normalizeQuantity(sku.skuId)"
-                  />
-                </label>
-              </div>
-            </article>
+              {{ creatingOrder ? '下单中...' : '创建订单' }}
+            </button>
+
+            <p v-if="createError" class="text-sm text-rose-600">{{ createError }}</p>
           </div>
+        </article>
 
-          <div class="rounded-xl bg-stone-50 p-3 text-sm text-stone-700">
-            <p>已选 SKU 数：{{ selectedItems.length }}</p>
-            <p class="mt-1">预估金额：{{ formatMoney(selectedTotalAmount) }}</p>
-          </div>
-
-          <button
-            type="button"
-            class="w-full rounded-xl bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-70"
-            :disabled="creatingOrder"
-            @click="handleCreateOrder"
-          >
-            {{ creatingOrder ? '下单中...' : '创建订单' }}
-          </button>
-
-          <p v-if="createError" class="text-sm text-rose-600">{{ createError }}</p>
-        </div>
-      </article>
+        <article class="rounded-2xl border border-stone-200 bg-white/95 p-5">
+          <h2 class="text-base font-semibold text-stone-900">商品详情</h2>
+          <div v-if="product.detailHtml" class="rich-content mt-3 text-sm text-stone-700" v-html="product.detailHtml" />
+          <p v-else class="mt-3 text-sm text-stone-500">暂无详情</p>
+        </article>
+      </div>
     </ResultState>
   </section>
 </template>
@@ -255,23 +257,61 @@ async function handleCreateOrder(): Promise<void> {
 
 .rich-content :deep(ul),
 .rich-content :deep(ol) {
-  margin-left: 1.2rem;
-  padding-left: 0.4rem;
+  margin-left: 0;
+  padding-left: 1.5rem;
+  list-style-position: outside;
 }
 
-.rich-content :deep(.rt-fs-sm) {
-  font-size: 0.875rem;
+.rich-content :deep(ul) {
+  list-style: disc;
 }
 
-.rich-content :deep(.rt-fs-md) {
-  font-size: 1rem;
+.rich-content :deep(ol) {
+  list-style: decimal;
 }
 
-.rich-content :deep(.rt-fs-lg) {
-  font-size: 1.125rem;
+.rich-content :deep(li) {
+  margin: 0.25rem 0;
 }
 
-.rich-content :deep(.rt-fs-xl) {
+.rich-content :deep(h1) {
+  margin: 0.75rem 0 0.5rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.rich-content :deep(h2) {
+  margin: 0.75rem 0 0.5rem;
   font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.rich-content :deep(h3) {
+  margin: 0.75rem 0 0.5rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.rich-content :deep(blockquote) {
+  margin: 0.75rem 0;
+  border-left: 3px solid #d6d3d1;
+  padding-left: 0.75rem;
+  color: #57534e;
+}
+
+.rich-content :deep(a) {
+  color: #2563eb;
+  text-decoration: underline;
+  word-break: break-all;
+}
+
+.rich-content :deep(s) {
+  text-decoration: line-through;
+}
+
+.rich-content :deep(hr) {
+  margin: 0.75rem 0;
+  border: 0;
+  border-top: 1px solid #d6d3d1;
 }
 </style>

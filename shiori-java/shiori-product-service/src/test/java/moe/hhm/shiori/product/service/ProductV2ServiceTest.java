@@ -99,9 +99,9 @@ class ProductV2ServiceTest {
                 "Java Book",
                 "summary",
                 """
-                <p class="rt-fs-lg evil-class">hello<script>alert('x')</script></p>
+                <p style="font-size:18px;text-align:center;color:red">hello<script>alert('x')</script></p>
                 <img src="http://evil.local/a.jpg" onerror="alert('x')" />
-                <img src="blob:http://local/123" data-object-key="product/1001/202603/ok.jpg" />
+                <img src="blob:http://local/123" data-object-key="product/1001/202603/ok.jpg" style="width:30%;height:auto;border:1px solid red" />
                 """,
                 "product/1001/202603/cover.jpg",
                 "TEXTBOOK",
@@ -117,12 +117,13 @@ class ProductV2ServiceTest {
         verify(productMapper).insertProduct(productCaptor.capture());
         String sanitized = productCaptor.getValue().getDetailHtml();
 
-        assertThat(sanitized).contains("class=\"rt-fs-lg\"");
-        assertThat(sanitized).doesNotContain("evil-class");
+        assertThat(sanitized).contains("style=\"font-size:18px;text-align:center\"");
+        assertThat(sanitized).doesNotContain("color:red");
         assertThat(sanitized).doesNotContain("script");
         assertThat(sanitized).doesNotContain("http://evil.local/a.jpg");
         assertThat(sanitized).contains("src=\"product/1001/202603/ok.jpg\"");
         assertThat(sanitized).contains("data-object-key=\"product/1001/202603/ok.jpg\"");
+        assertThat(sanitized).contains("style=\"width:30%;height:auto\"");
         verify(productMapper).insertSku(any());
     }
 
@@ -134,7 +135,8 @@ class ProductV2ServiceTest {
                 1001L,
                 "Java Book",
                 "summary",
-                "<p><img src=\"product/1001/202603/ok.jpg\" data-object-key=\"product/1001/202603/ok.jpg\" /></p>",
+                "<p style=\"text-align:center\"><span style=\"font-size:18px\">展示内容</span></p>"
+                        + "<p><img src=\"product/1001/202603/ok.jpg\" data-object-key=\"product/1001/202603/ok.jpg\" style=\"width:50%\" /></p>",
                 "product/1001/202603/cover.jpg",
                 "TEXTBOOK",
                 "GOOD",
@@ -154,8 +156,71 @@ class ProductV2ServiceTest {
 
         var detail = productV2Service.getOnSaleProductDetail(1L);
 
+        assertThat(detail.detailHtml()).contains("font-size:18px");
+        assertThat(detail.detailHtml()).contains("text-align:center");
+        assertThat(detail.detailHtml()).contains("width:50%");
         assertThat(detail.detailHtml()).contains("http://cdn.local/signed-ok.jpg");
         assertThat(detail.detailHtml()).contains("data-object-key=\"product/1001/202603/ok.jpg\"");
+    }
+
+    @Test
+    void shouldExtractObjectKeyFromSignedImageUrlForStoreAndRender() {
+        doAnswer(invocation -> {
+            ProductEntity entity = invocation.getArgument(0);
+            entity.setId(1L);
+            return 1;
+        }).when(productMapper).insertProduct(any(ProductEntity.class));
+
+        CreateProductV2Request request = new CreateProductV2Request(
+                "Java Book",
+                "summary",
+                """
+                <p><img src="http://127.0.0.1:9000/shiori-product/product/1001/202603/legacy.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=abc" /></p>
+                """,
+                "product/1001/202603/cover.jpg",
+                "TEXTBOOK",
+                "GOOD",
+                "MEETUP",
+                "main_campus",
+                List.of(new SkuInput(null, "标准版", "{}", 3900L, 8))
+        );
+
+        productV2Service.createProduct(1001L, request);
+
+        ArgumentCaptor<ProductEntity> productCaptor = ArgumentCaptor.forClass(ProductEntity.class);
+        verify(productMapper).insertProduct(productCaptor.capture());
+        String sanitized = productCaptor.getValue().getDetailHtml();
+        assertThat(sanitized).contains("product/1001/202603/legacy.jpg");
+        assertThat(sanitized).contains("data-object-key=\"product/1001/202603/legacy.jpg\"");
+
+        when(productMapper.findOnSaleProductV2ById(1L)).thenReturn(new ProductV2Record(
+                1L,
+                "P001",
+                1001L,
+                "Java Book",
+                "summary",
+                "<p><img src=\"http://127.0.0.1:9000/shiori-product/product/1001/202603/legacy.jpg?temp=1\" /></p>",
+                "product/1001/202603/cover.jpg",
+                "TEXTBOOK",
+                "GOOD",
+                "MEETUP",
+                "main_campus",
+                ProductStatus.ON_SALE.getCode(),
+                0,
+                3900L,
+                3900L,
+                8
+        ));
+        when(productMapper.listActiveSkusByProductId(1L)).thenReturn(List.of());
+        when(ossObjectService.presignGetUrl(eq("product/1001/202603/legacy.jpg")))
+                .thenReturn("http://cdn.local/signed-legacy.jpg");
+        when(ossObjectService.presignGetUrl(eq("product/1001/202603/cover.jpg")))
+                .thenReturn("http://cdn.local/signed-cover.jpg");
+
+        var detail = productV2Service.getOnSaleProductDetail(1L);
+
+        assertThat(detail.detailHtml()).contains("http://cdn.local/signed-legacy.jpg");
+        assertThat(detail.detailHtml()).contains("data-object-key=\"product/1001/202603/legacy.jpg\"");
     }
 
     @Test
