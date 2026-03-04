@@ -30,7 +30,7 @@ func NewClient(conn *websocket.Conn, writeTimeout, pingInterval time.Duration) *
 	}
 }
 
-func (c *Client) Run(onClose func()) {
+func (c *Client) Run(onMessage func(payload []byte), onClose func()) {
 	defer func() {
 		if onClose != nil {
 			onClose()
@@ -53,8 +53,12 @@ func (c *Client) Run(onClose func()) {
 		default:
 		}
 
-		if _, _, err := c.conn.ReadMessage(); err != nil {
+		_, payload, err := c.conn.ReadMessage()
+		if err != nil {
 			return
+		}
+		if onMessage != nil {
+			onMessage(payload)
 		}
 	}
 }

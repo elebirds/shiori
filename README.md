@@ -150,6 +150,32 @@
 
 ---
 
+## 🆕 v0.5-b 未下单咨询聊天（Chat Ticket + Go Chat Core）
+
+1. 买家在 listing 详情发起咨询流程：
+   1. `POST /api/product/chat/ticket?listingId=...`（Java product-service 签发短期 Chat Ticket，RS256）
+   2. 客户端 `WS /ws` 建连并发送 `join`（携带 `chatTicket`）
+   3. Go `shiori-notify` 本地验票并创建/复用会话（唯一键：`listingId + buyerId + sellerId`）
+   4. 客户端使用 `send/read` 进行实时消息与已读同步
+2. 聊天主逻辑全部在 Go（连接管理、消息落库、会话/历史 API、推送），避免每条消息回调 Java。
+3. 多实例扩展：
+   1. 消息落库后本机先 `send_ack`
+   2. 推送接收者本机连接
+   3. 可选发布 `ChatMessageSent` 到 `shiori.chat.event`，所有实例订阅后仅推本机连接
+4. 新增 API：
+   1. `GET /api/chat/conversations`
+   2. `GET /api/chat/conversations/{id}/messages`
+   3. `POST /api/chat/conversations/{id}/read`
+5. 数据表（`shiori_notify`）：
+   1. `conversation`
+   2. `message`（唯一键 `conversation_id + sender_id + client_msg_id`）
+   3. `member_state`
+6. 初始化方式：
+   1. 新环境：`deploy/sql/mysql-init/002_create_notify_chat_tables.sql` 自动执行
+   2. 既有环境：手工执行 `deploy/sql/manual/20260304_create_notify_chat_tables.sql`
+
+---
+
 ## 🛠️ 技术栈清单 (Tech Stack)
 
 ### 核心后端 (Core Services)
@@ -456,6 +482,57 @@ export NOTIFY_MYSQL_DSN='<notify-mysql-dsn>'
 export NOTIFY_AUTH_ENABLED=true
 export NOTIFY_JWT_HMAC_SECRET='<jwt-hmac-secret>'
 export NOTIFY_JWT_ISSUER=shiori
+export NOTIFY_CHAT_ENABLED=true
+export NOTIFY_CHAT_TICKET_ISSUER=shiori-chat-ticket
+export NOTIFY_CHAT_TICKET_PUBLIC_KEY_PEM_BASE64='<public-key-pem-base64>'
+export NOTIFY_CHAT_MQ_ENABLED=true
+export NOTIFY_CHAT_MQ_EXCHANGE=shiori.chat.event
+```
+
+### 3.6) Chat Ticket（RS256）密钥生成与本地验收
+
+生成一对 RSA 密钥（OpenSSL）：
+
+```bash
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out chat_ticket_private.pem
+openssl rsa -pubout -in chat_ticket_private.pem -out chat_ticket_public.pem
+```
+
+转为“PEM 文本再 base64”用于配置：
+
+```bash
+export CHAT_TICKET_PRIVATE_KEY_PEM_BASE64="$(base64 -w0 chat_ticket_private.pem)"
+export NOTIFY_CHAT_TICKET_PUBLIC_KEY_PEM_BASE64="$(base64 -w0 chat_ticket_public.pem)"
+```
+
+签发 ticket 示例：
+
+```bash
+curl -X POST "http://localhost:8080/api/product/chat/ticket?listingId=101" \
+  -H "Authorization: Bearer <buyer-access-token>"
+```
+
+查询会话列表示例：
+
+```bash
+curl "http://localhost:8080/api/chat/conversations?limit=20" \
+  -H "Authorization: Bearer <access-token>"
+```
+
+查询消息示例：
+
+```bash
+curl "http://localhost:8080/api/chat/conversations/11/messages?limit=20" \
+  -H "Authorization: Bearer <access-token>"
+```
+
+标记已读示例：
+
+```bash
+curl -X POST "http://localhost:8080/api/chat/conversations/11/read" \
+  -H "Authorization: Bearer <access-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"lastReadMsgId":21}'
 ```
 
 鉴权快速验证（示例）：

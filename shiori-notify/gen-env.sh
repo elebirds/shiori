@@ -104,6 +104,15 @@ notify_jwt_issuer="$(coalesce "$(read_env NOTIFY_JWT_ISSUER)" "shiori")"
 notify_db_username="$(coalesce "$(read_env NOTIFY_DB_USERNAME)" "notify_service")"
 notify_db_password="$(coalesce "$(read_env NOTIFY_DB_PASSWORD)" "$(read_env ORDER_DB_PASSWORD)")"
 notify_db_name="$(coalesce "$(read_env NOTIFY_DB_NAME_LOCAL)" "shiori_notify")"
+notify_ws_path="$(coalesce "$(read_env NOTIFY_WS_PATH)" "/ws")"
+notify_chat_enabled="$(coalesce "$(read_env NOTIFY_CHAT_ENABLED)" "false")"
+notify_chat_default_limit="$(coalesce "$(read_env NOTIFY_CHAT_DEFAULT_LIMIT)" "20")"
+notify_chat_max_limit="$(coalesce "$(read_env NOTIFY_CHAT_MAX_LIMIT)" "100")"
+notify_chat_ticket_issuer="$(coalesce "$(read_env CHAT_TICKET_ISSUER)" "shiori-chat-ticket")"
+notify_chat_ticket_public_key="$(coalesce "$(read_env NOTIFY_CHAT_TICKET_PUBLIC_KEY_PEM_BASE64)" "")"
+notify_chat_mq_enabled="$(coalesce "$(read_env NOTIFY_CHAT_MQ_ENABLED)" "true")"
+notify_chat_mq_exchange="$(coalesce "$(read_env NOTIFY_CHAT_MQ_EXCHANGE)" "shiori.chat.event")"
+notify_instance_id="$(coalesce "$(read_env NOTIFY_INSTANCE_ID)" "")"
 
 if [ -z "${notify_rmq_password}" ]; then
   echo "[notify-gen-env][ERROR] 缺少 RabbitMQ 密码（NOTIFY_RMQ_PASSWORD 或 ORDER_RMQ_PASSWORD）" >&2
@@ -135,6 +144,15 @@ RABBITMQ_ROUTING_KEYS=order.created,order.paid,order.canceled,order.delivered,or
 NOTIFY_AUTH_ENABLED=true
 NOTIFY_JWT_HMAC_SECRET=${notify_jwt_hmac_secret}
 NOTIFY_JWT_ISSUER=${notify_jwt_issuer}
+NOTIFY_WS_PATH=${notify_ws_path}
+NOTIFY_CHAT_ENABLED=${notify_chat_enabled}
+NOTIFY_CHAT_DEFAULT_LIMIT=${notify_chat_default_limit}
+NOTIFY_CHAT_MAX_LIMIT=${notify_chat_max_limit}
+NOTIFY_CHAT_TICKET_ISSUER=${notify_chat_ticket_issuer}
+NOTIFY_CHAT_TICKET_PUBLIC_KEY_PEM_BASE64=${notify_chat_ticket_public_key}
+NOTIFY_CHAT_MQ_ENABLED=${notify_chat_mq_enabled}
+NOTIFY_CHAT_MQ_EXCHANGE=${notify_chat_mq_exchange}
+NOTIFY_INSTANCE_ID=${notify_instance_id}
 NOTIFY_STORE_DRIVER=${STORE_DRIVER}
 EOF
 

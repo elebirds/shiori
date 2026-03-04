@@ -11,6 +11,11 @@ Go 通知服务（Gin + WebSocket + RabbitMQ + MySQL）。
 - `POST /api/notify/events/{eventId}/read`
 - `POST /api/notify/events/read-all`
 - `GET /api/notify/summary`
+- `GET /api/chat/conversations?cursor=<id>&limit=<n>`
+- `GET /api/chat/conversations/{conversationId}/messages?before=<id>&limit=<n>`
+- `POST /api/chat/conversations/{conversationId}/read`
+- `WebSocket` 入站：`join` / `send` / `read`
+- `WebSocket` 出站：`join_ack` / `send_ack` / `chat_message` / `read_ack` / `error`
 - 支持事件类型：
   - `OrderCreated`
   - `OrderPaid`
@@ -23,6 +28,10 @@ Go 通知服务（Gin + WebSocket + RabbitMQ + MySQL）。
 - 存储驱动：
   - `memory`
   - `mysql`（表：`n_notification_event`）
+- Chat（可选，默认关闭）：
+  - Ticket：RS256 本地验票（Java 签发）
+  - 会话表：`conversation` / `message` / `member_state`
+  - 多实例推送：RabbitMQ fanout 广播（`shiori.chat.event`）
 
 ## 运行
 
@@ -54,6 +63,15 @@ go run .
 | `NOTIFY_REPLAY_DEFAULT_LIMIT` | `50` | 补偿拉取默认条数 |
 | `NOTIFY_REPLAY_MAX_LIMIT` | `200` | 补偿拉取最大条数 |
 | `NOTIFY_WS_REPLAY_DEFAULT_LIMIT` | `100` | WS 建连补偿上限 |
+| `NOTIFY_WS_PATH` | `/ws` | WebSocket 路径 |
+| `NOTIFY_CHAT_ENABLED` | `false` | 是否启用聊天能力 |
+| `NOTIFY_CHAT_DEFAULT_LIMIT` | `20` | 聊天分页默认条数 |
+| `NOTIFY_CHAT_MAX_LIMIT` | `100` | 聊天分页最大条数 |
+| `NOTIFY_CHAT_TICKET_ISSUER` | `shiori-chat-ticket` | Chat Ticket issuer |
+| `NOTIFY_CHAT_TICKET_PUBLIC_KEY_PEM_BASE64` | 空 | RS256 公钥（PEM 文本再 base64） |
+| `NOTIFY_CHAT_MQ_ENABLED` | `true` | 是否开启跨实例聊天广播 |
+| `NOTIFY_CHAT_MQ_EXCHANGE` | `shiori.chat.event` | 广播 exchange |
+| `NOTIFY_INSTANCE_ID` | `<hostname>-<pid>` | 实例标识，用于广播去重 |
 
 ## ws-smoke
 
@@ -65,4 +83,21 @@ go run ./cmd/ws-smoke \
   -expect-type OrderPaid \
   -expect-aggregate Oxxxx \
   -timeout 60s
+```
+
+## Chat WS 协议示例
+
+```json
+{"type":"join","chatTicket":"<chat-ticket>"}
+{"type":"send","conversationId":11,"clientMsgId":"m-1","content":"你好，教材还在吗？"}
+{"type":"read","conversationId":11,"lastReadMsgId":21}
+```
+
+返回示例：
+
+```json
+{"type":"join_ack","conversationId":11,"listingId":101,"buyerId":1001,"sellerId":2002}
+{"type":"send_ack","conversationId":11,"clientMsgId":"m-1","messageId":21,"deduplicated":false}
+{"type":"chat_message","conversationId":11,"messageId":21,"senderId":1001,"receiverId":2002,"content":"你好，教材还在吗？"}
+{"type":"read_ack","conversationId":11,"lastReadMsgId":21}
 ```

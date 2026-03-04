@@ -31,12 +31,17 @@ func main() {
 
 	logger.Info().
 		Str("httpAddr", cfg.HTTPAddr).
+		Str("wsPath", cfg.WSPath).
 		Strs("rabbitmqExchanges", cfg.RabbitMQExchanges).
 		Str("rabbitmqExchange", cfg.RabbitMQExchange).
 		Str("rabbitmqQueue", cfg.RabbitMQQueue).
 		Strs("rabbitmqRoutingKeys", cfg.RabbitMQRoutingKeys).
 		Str("storeDriver", cfg.StoreDriver).
 		Bool("authEnabled", cfg.AuthEnabled).
+		Bool("chatEnabled", cfg.ChatEnabled).
+		Bool("chatMQEnabled", cfg.ChatMQEnabled).
+		Str("chatMQExchange", cfg.ChatMQExchange).
+		Str("instanceID", cfg.InstanceID).
 		Msg("服务启动中")
 
 	if err = application.Run(ctx); err != nil {

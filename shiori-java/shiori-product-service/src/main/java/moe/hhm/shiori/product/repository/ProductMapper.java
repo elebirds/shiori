@@ -143,6 +143,16 @@ public interface ProductMapper {
     ProductRecord findOnSaleProductById(@Param("productId") Long productId);
 
     @Select("""
+            SELECT owner_user_id
+            FROM p_product
+            WHERE id = #{productId}
+              AND is_deleted = 0
+              AND status = 2
+            LIMIT 1
+            """)
+    Long findOnSaleOwnerUserIdByProductId(@Param("productId") Long productId);
+
+    @Select("""
             SELECT p.id,
                    p.product_no AS productNo,
                    p.owner_user_id AS ownerUserId,

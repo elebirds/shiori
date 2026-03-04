@@ -4,6 +4,7 @@
 
 1. `k6-order.js`：下单 -> 支付 -> 卖家发货 -> 买家确认收货 -> 订单详情 的 v2 履约链路压测。
 2. `k6-ws.js`：WebSocket 建连后触发支付并统计通知到达时延。
+3. `k6-chat-ws.js`：咨询聊天建连 + join + send 骨架脚本（v0.5-b）。
 
 ## 前置条件
 
@@ -19,6 +20,7 @@
 cd perf
 k6 run k6-order.js
 k6 run k6-ws.js
+k6 run k6-chat-ws.js
 ```
 
 ## 常用参数
@@ -40,6 +42,14 @@ k6 run k6-ws.js
 1. `K6_WS_VUS`：并发 VU，默认 `2`
 2. `K6_WS_ITERATIONS`：总迭代次数，默认 `10`
 3. `K6_WS_TIMEOUT_MS`：单次 WS 等待超时，默认 `10000`
+
+### `k6-chat-ws.js`
+
+1. `K6_CHAT_WS_URL`：聊天 WS 地址，默认 `ws://localhost:8090/ws`
+2. `K6_CHAT_ACCESS_TOKEN`：登录 access token（必填）
+3. `K6_CHAT_TICKET`：`/api/product/chat/ticket` 签发的 chat ticket（必填）
+4. `K6_CHAT_CONVERSATION_ID`：可选；不填则使用 `join_ack` 返回值
+5. `K6_CHAT_ITERATIONS`：每个 VU 发送次数，默认 `1`
 
 ## 默认阈值
 
