@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/hhm/shiori/shiori-notify/internal/chat"
 	notifyauth "github.com/hhm/shiori/shiori-notify/internal/auth"
+	"github.com/hhm/shiori/shiori-notify/internal/chat"
 	"github.com/hhm/shiori/shiori-notify/internal/config"
 	"github.com/hhm/shiori/shiori-notify/internal/metrics"
 	"github.com/hhm/shiori/shiori-notify/internal/store"
@@ -118,6 +118,8 @@ func (s *Server) registerRoutes() {
 
 	chatGroup := s.engine.Group("/api/chat")
 	{
+		chatGroup.GET("/summary", s.handleChatSummary)
+		chatGroup.POST("/conversations/start", s.handleStartConversation)
 		chatGroup.GET("/conversations", s.handleListConversations)
 		chatGroup.GET("/conversations/:conversationId/messages", s.handleListMessages)
 		chatGroup.POST("/conversations/:conversationId/read", s.handleReadConversation)

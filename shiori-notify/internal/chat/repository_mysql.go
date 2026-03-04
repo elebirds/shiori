@@ -232,15 +232,15 @@ WHERE (c.buyer_id = ? OR c.seller_id = ?)
 	items := make([]ConversationItem, 0, limit+1)
 	for rows.Next() {
 		var (
-			item ConversationItem
-			lmID sql.NullInt64
+			item             ConversationItem
+			lmID             sql.NullInt64
 			lmConversationID sql.NullInt64
-			lmSenderID sql.NullInt64
-			lmReceiverID sql.NullInt64
-			lmClientMsgID sql.NullString
-			lmContent sql.NullString
-			lmAt sql.NullTime
-			unreadInt int
+			lmSenderID       sql.NullInt64
+			lmReceiverID     sql.NullInt64
+			lmClientMsgID    sql.NullString
+			lmContent        sql.NullString
+			lmAt             sql.NullTime
+			unreadInt        int
 		)
 		if err := rows.Scan(
 			&item.Conversation.ID,
@@ -337,6 +337,55 @@ WHERE m.conversation_id = ?
 		items = items[:limit]
 	}
 	return items, hasMore, nil
+}
+
+func (r *MySQLRepository) CountUnreadConversations(userID int64) (int64, error) {
+	if userID <= 0 {
+		return 0, ErrInvalidArgument
+	}
+	row := r.db.QueryRow(
+		`SELECT COUNT(*)
+		   FROM conversation c
+		   LEFT JOIN member_state ms
+		     ON ms.conversation_id = c.id AND ms.user_id = ?
+		  WHERE (c.buyer_id = ? OR c.seller_id = ?)
+		    AND EXISTS (
+		        SELECT 1
+		          FROM message m
+		         WHERE m.conversation_id = c.id
+		           AND m.sender_id <> ?
+		           AND m.id > COALESCE(ms.last_read_msg_id, 0)
+		    )`,
+		userID, userID, userID, userID,
+	)
+	var count int64
+	if err := row.Scan(&count); err != nil {
+		return 0, fmt.Errorf("count unread conversations failed: %w", err)
+	}
+	return count, nil
+}
+
+func (r *MySQLRepository) CountUnreadMessages(userID int64) (int64, error) {
+	if userID <= 0 {
+		return 0, ErrInvalidArgument
+	}
+	row := r.db.QueryRow(
+		`SELECT COUNT(*)
+		   FROM message m
+		   JOIN conversation c
+		     ON c.id = m.conversation_id
+		   LEFT JOIN member_state ms
+		     ON ms.conversation_id = c.id AND ms.user_id = ?
+		  WHERE (c.buyer_id = ? OR c.seller_id = ?)
+		    AND m.sender_id <> ?
+		    AND m.id > COALESCE(ms.last_read_msg_id, 0)`,
+		userID, userID, userID, userID,
+	)
+	var count int64
+	if err := row.Scan(&count); err != nil {
+		return 0, fmt.Errorf("count unread messages failed: %w", err)
+	}
+	return count, nil
 }
 
 func (r *MySQLRepository) getConversationByTriplet(listingID, buyerID, sellerID int64) (Conversation, error) {

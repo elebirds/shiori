@@ -94,6 +94,14 @@ func (chatTestRepo) ListMessages(userID, conversationID, before int64, limit int
 	}, false, nil
 }
 
+func (chatTestRepo) CountUnreadConversations(userID int64) (int64, error) {
+	return 1, nil
+}
+
+func (chatTestRepo) CountUnreadMessages(userID int64) (int64, error) {
+	return 3, nil
+}
+
 type staticVerifier struct{}
 
 func (staticVerifier) Verify(string) (chat.ChatTicketClaims, error) {
@@ -108,11 +116,11 @@ func (staticVerifier) Verify(string) (chat.ChatTicketClaims, error) {
 
 func TestChatHTTPHandlers(t *testing.T) {
 	cfg := config.Config{
-		AuthEnabled:   false,
-		WSPath:        "/ws",
-		ChatEnabled:   true,
-		ChatMaxLimit:  100,
-		ReplayMaxLimit: 50,
+		AuthEnabled:        false,
+		WSPath:             "/ws",
+		ChatEnabled:        true,
+		ChatMaxLimit:       100,
+		ReplayMaxLimit:     50,
 		ReplayDefaultLimit: 20,
 	}
 	logger := zerolog.New(io.Discard)
@@ -140,5 +148,20 @@ func TestChatHTTPHandlers(t *testing.T) {
 	srv.engine.ServeHTTP(readRec, readReq)
 	if readRec.Code != http.StatusOK {
 		t.Fatalf("read expected 200, got %d", readRec.Code)
+	}
+
+	startRec := httptest.NewRecorder()
+	startReq := httptest.NewRequest(http.MethodPost, "/api/chat/conversations/start?userId=1001", strings.NewReader(`{"chatTicket":"ticket"}`))
+	startReq.Header.Set("Content-Type", "application/json")
+	srv.engine.ServeHTTP(startRec, startReq)
+	if startRec.Code != http.StatusOK {
+		t.Fatalf("start conversation expected 200, got %d", startRec.Code)
+	}
+
+	summaryRec := httptest.NewRecorder()
+	summaryReq := httptest.NewRequest(http.MethodGet, "/api/chat/summary?userId=1001", nil)
+	srv.engine.ServeHTTP(summaryRec, summaryReq)
+	if summaryRec.Code != http.StatusOK {
+		t.Fatalf("summary expected 200, got %d", summaryRec.Code)
 	}
 }

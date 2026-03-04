@@ -5,6 +5,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
+import java.util.List;
 
 @Mapper
 public interface UserProfileMapper {
@@ -40,6 +41,26 @@ public interface UserProfileMapper {
             LIMIT 1
             """)
     UserProfileRecord findByUserNo(@Param("userNo") String userNo);
+
+    @Select("""
+            <script>
+            SELECT id AS userId,
+                   user_no AS userNo,
+                   username,
+                   nickname,
+                   gender,
+                   birth_date AS birthDate,
+                   bio,
+                   avatar_url AS avatarUrl
+            FROM u_user
+            WHERE is_deleted = 0
+              AND id IN
+              <foreach collection="userIds" item="userId" open="(" separator="," close=")">
+                #{userId}
+              </foreach>
+            </script>
+            """)
+    List<UserProfileRecord> findByUserIds(@Param("userIds") List<Long> userIds);
 
     @Update("""
             UPDATE u_user

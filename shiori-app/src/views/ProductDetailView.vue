@@ -8,12 +8,15 @@ import { createOrderV2 } from '@/api/orderV2'
 import { getProductDetailV2, type ProductCategoryCode, type ProductConditionLevel, type ProductTradeMode } from '@/api/productV2'
 import { ApiBizError } from '@/types/result'
 import { useAuthStore } from '@/stores/auth'
+import { useChatStore } from '@/stores/chat'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const chatStore = useChatStore()
 
 const creatingOrder = ref(false)
+const creatingChat = ref(false)
 const createError = ref('')
 const skuQuantities = ref<Record<number, number>>({})
 
@@ -151,6 +154,31 @@ async function handleCreateOrder(): Promise<void> {
     creatingOrder.value = false
   }
 }
+
+async function handleConsultSeller(): Promise<void> {
+  if (!authStore.isAuthenticated) {
+    await router.push({ path: '/login', query: { redirect: route.fullPath } })
+    return
+  }
+  if (!product.value) {
+    return
+  }
+  creatingChat.value = true
+  createError.value = ''
+  try {
+    const conversationId = await chatStore.bootstrapFromListing(product.value.productId)
+    await router.push({
+      path: '/chat',
+      query: {
+        conversationId: String(conversationId),
+      },
+    })
+  } catch (error) {
+    createError.value = error instanceof Error ? error.message : '发起咨询失败，请稍后重试'
+  } finally {
+    creatingChat.value = false
+  }
+}
 </script>
 
 <template>
@@ -233,6 +261,15 @@ async function handleCreateOrder(): Promise<void> {
               @click="handleCreateOrder"
             >
               {{ creatingOrder ? '下单中...' : '创建订单' }}
+            </button>
+
+            <button
+              type="button"
+              class="w-full rounded-xl border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-70"
+              :disabled="creatingChat"
+              @click="handleConsultSeller"
+            >
+              {{ creatingChat ? '咨询中...' : '咨询卖家' }}
             </button>
 
             <p v-if="createError" class="text-sm text-rose-600">{{ createError }}</p>

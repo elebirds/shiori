@@ -11,6 +11,11 @@ type Service struct {
 	maxPageLimit int
 }
 
+const (
+	maxClientMsgIDLength = 64
+	maxContentLength     = 2000
+)
+
 func NewService(repo Repository, ticketVerify TicketVerifier, maxPageLimit int) *Service {
 	if maxPageLimit <= 0 {
 		maxPageLimit = 100
@@ -46,6 +51,10 @@ func (s *Service) Join(userID int64, ticket string) (Conversation, ChatTicketCla
 	return conversation, claims, nil
 }
 
+func (s *Service) Start(userID int64, ticket string) (Conversation, ChatTicketClaims, error) {
+	return s.Join(userID, ticket)
+}
+
 func (s *Service) Send(userID, conversationID int64, clientMsgID, content string) (SendResult, error) {
 	if userID <= 0 || conversationID <= 0 {
 		return SendResult{}, ErrInvalidArgument
@@ -53,6 +62,9 @@ func (s *Service) Send(userID, conversationID int64, clientMsgID, content string
 	clientMsgID = strings.TrimSpace(clientMsgID)
 	content = strings.TrimSpace(content)
 	if clientMsgID == "" || content == "" {
+		return SendResult{}, ErrInvalidArgument
+	}
+	if len(clientMsgID) > maxClientMsgIDLength || len(content) > maxContentLength {
 		return SendResult{}, ErrInvalidArgument
 	}
 	conversation, err := s.repo.GetConversationForUser(conversationID, userID)
@@ -76,6 +88,24 @@ func (s *Service) Send(userID, conversationID int64, clientMsgID, content string
 		Conversation: conversation,
 		Message:      message,
 		Deduplicated: deduplicated,
+	}, nil
+}
+
+func (s *Service) Summary(userID int64) (Summary, error) {
+	if userID <= 0 {
+		return Summary{}, ErrInvalidArgument
+	}
+	unreadConversations, err := s.repo.CountUnreadConversations(userID)
+	if err != nil {
+		return Summary{}, err
+	}
+	unreadMessages, err := s.repo.CountUnreadMessages(userID)
+	if err != nil {
+		return Summary{}, err
+	}
+	return Summary{
+		UnreadConversationCount: unreadConversations,
+		UnreadMessageCount:      unreadMessages,
 	}, nil
 }
 

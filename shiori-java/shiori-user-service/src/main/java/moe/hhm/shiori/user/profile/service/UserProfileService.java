@@ -17,7 +17,13 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.time.Period;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class UserProfileService {
@@ -25,6 +31,7 @@ public class UserProfileService {
     private static final Set<Integer> ALLOWED_GENDERS = Set.of(0, 1, 2, 9);
     private static final int MIN_AGE = 13;
     private static final int MAX_AGE = 120;
+    private static final int MAX_BATCH_USER_IDS = 100;
 
     private final UserProfileMapper userProfileMapper;
     private final UserAvatarStorageService userAvatarStorageService;
@@ -44,6 +51,35 @@ public class UserProfileService {
 
     public PublicUserProfileResponse getProfileByUserNo(String userNo) {
         return toPublicResponse(requireProfileByUserNo(userNo));
+    }
+
+    public List<PublicUserProfileResponse> getProfilesByUserIds(List<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            throw new BizException(UserErrorCode.PROFILE_INVALID, HttpStatus.BAD_REQUEST);
+        }
+        LinkedHashSet<Long> normalizedSet = new LinkedHashSet<>();
+        for (Long userId : userIds) {
+            if (userId == null || userId <= 0) {
+                throw new BizException(UserErrorCode.PROFILE_INVALID, HttpStatus.BAD_REQUEST);
+            }
+            normalizedSet.add(userId);
+        }
+        if (normalizedSet.size() > MAX_BATCH_USER_IDS) {
+            throw new BizException(UserErrorCode.PROFILE_INVALID, HttpStatus.BAD_REQUEST);
+        }
+
+        List<Long> normalizedUserIds = new ArrayList<>(normalizedSet);
+        List<UserProfileRecord> records = userProfileMapper.findByUserIds(normalizedUserIds);
+        Map<Long, UserProfileRecord> byUserId = records.stream()
+                .collect(Collectors.toMap(UserProfileRecord::userId, Function.identity(), (left, right) -> left));
+        List<PublicUserProfileResponse> responses = new ArrayList<>();
+        for (Long userId : normalizedUserIds) {
+            UserProfileRecord record = byUserId.get(userId);
+            if (record != null) {
+                responses.add(toPublicResponse(record));
+            }
+        }
+        return responses;
     }
 
     public UserProfileResponse updateMyProfile(Long userId, UpdateProfileRequest request) {

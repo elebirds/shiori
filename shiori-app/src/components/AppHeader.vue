@@ -4,11 +4,13 @@ import { useRouter } from 'vue-router'
 
 import { getAccessToken } from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
+import { useChatStore } from '@/stores/chat'
 import { useNotifyStore } from '@/stores/notify'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const notifyStore = useNotifyStore()
+const chatStore = useChatStore()
 
 const busy = ref(false)
 const dropdownOpen = ref(false)
@@ -25,6 +27,7 @@ const secureNav = [
   { path: '/my-products', label: '我的商品' },
   { path: '/orders', label: '订单' },
   { path: '/seller/orders', label: '卖家工作台' },
+  { path: '/chat', label: '聊天' },
 ]
 
 const navItems = computed(() => {
@@ -153,10 +156,16 @@ onBeforeUnmount(() => {
           v-for="item in navItems"
           :key="item.path"
           :to="item.path"
-          class="rounded-lg px-3 py-2 text-sm text-stone-700 transition hover:bg-amber-100/80 hover:text-stone-900"
+          class="relative rounded-lg px-3 py-2 text-sm text-stone-700 transition hover:bg-amber-100/80 hover:text-stone-900"
           active-class="bg-amber-200/70 text-stone-900"
         >
           {{ item.label }}
+          <span
+            v-if="item.path === '/chat' && chatStore.chatUnreadMessageCount > 0"
+            class="absolute -right-1 -top-1 rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white"
+          >
+            {{ chatStore.chatUnreadMessageCount > 99 ? '99+' : chatStore.chatUnreadMessageCount }}
+          </span>
         </RouterLink>
       </nav>
 
@@ -232,6 +241,19 @@ onBeforeUnmount(() => {
                 class="rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white"
               >
                 {{ notifyStore.unreadCount > 99 ? '99+' : notifyStore.unreadCount }}
+              </span>
+            </RouterLink>
+            <RouterLink
+              to="/chat"
+              class="flex items-center justify-between px-3 py-2 text-sm text-stone-700 transition hover:bg-stone-100"
+              @click="closeDropdown"
+            >
+              <span>聊天</span>
+              <span
+                v-if="chatStore.chatUnreadMessageCount > 0"
+                class="rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white"
+              >
+                {{ chatStore.chatUnreadMessageCount > 99 ? '99+' : chatStore.chatUnreadMessageCount }}
               </span>
             </RouterLink>
             <RouterLink

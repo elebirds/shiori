@@ -15,6 +15,10 @@ type readConversationRequest struct {
 	LastReadMsgID int64 `json:"lastReadMsgId"`
 }
 
+type startConversationRequest struct {
+	ChatTicket string `json:"chatTicket"`
+}
+
 func (s *Server) handleListConversations(c *gin.Context) {
 	if s.chat == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
@@ -196,6 +200,74 @@ func (s *Server) handleReadConversation(c *gin.Context) {
 		"data": gin.H{
 			"conversationId": conversationID,
 			"lastReadMsgId":  lastReadMsgID,
+		},
+	})
+}
+
+func (s *Server) handleStartConversation(c *gin.Context) {
+	if s.chat == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"code":    50301,
+			"message": "chat service unavailable",
+		})
+		return
+	}
+	userID, ok := s.resolveChatUserID(c)
+	if !ok {
+		return
+	}
+
+	var request startConversationRequest
+	if bindErr := c.ShouldBindJSON(&request); bindErr != nil || strings.TrimSpace(request.ChatTicket) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    40014,
+			"message": "invalid request body",
+		})
+		return
+	}
+
+	conversation, claims, err := s.chat.Start(userID, request.ChatTicket)
+	if err != nil {
+		s.writeChatError(c, err, "start conversation failed")
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data": gin.H{
+			"conversationId": conversation.ID,
+			"listingId":      conversation.ListingID,
+			"buyerId":        claims.BuyerID,
+			"sellerId":       claims.SellerID,
+			"jti":            claims.JTI,
+			"expireAt":       claims.ExpiresAt.UTC().Format(time.RFC3339Nano),
+		},
+	})
+}
+
+func (s *Server) handleChatSummary(c *gin.Context) {
+	if s.chat == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"code":    50301,
+			"message": "chat service unavailable",
+		})
+		return
+	}
+	userID, ok := s.resolveChatUserID(c)
+	if !ok {
+		return
+	}
+	summary, err := s.chat.Summary(userID)
+	if err != nil {
+		s.writeChatError(c, err, "query chat summary failed")
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data": gin.H{
+			"unreadConversationCount": summary.UnreadConversationCount,
+			"unreadMessageCount":      summary.UnreadMessageCount,
 		},
 	})
 }

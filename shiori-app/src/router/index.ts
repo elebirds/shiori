@@ -113,6 +113,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/chat',
+      name: 'chat',
+      component: () => import('@/views/ChatCenterView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/:pathMatch(.*)*',
       redirect: '/products',
     },

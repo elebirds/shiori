@@ -2,6 +2,7 @@ package chat
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -23,6 +24,8 @@ type fakeRepo struct {
 	message      Message
 	dedup        bool
 	lastRead     int64
+	unreadConv   int64
+	unreadMsg    int64
 	forbid       bool
 	missing      bool
 }
@@ -83,6 +86,14 @@ func (f *fakeRepo) ListConversations(userID, cursor int64, limit int) ([]Convers
 
 func (f *fakeRepo) ListMessages(userID, conversationID, before int64, limit int) ([]Message, bool, error) {
 	return []Message{}, false, nil
+}
+
+func (f *fakeRepo) CountUnreadConversations(userID int64) (int64, error) {
+	return f.unreadConv, nil
+}
+
+func (f *fakeRepo) CountUnreadMessages(userID int64) (int64, error) {
+	return f.unreadMsg, nil
 }
 
 func TestServiceJoinIdempotentConversation(t *testing.T) {
@@ -147,5 +158,58 @@ func TestServiceReadMonotonic(t *testing.T) {
 	}
 	if lastRead != 30 {
 		t.Fatalf("unexpected lastReadMsgID: %d", lastRead)
+	}
+}
+
+func TestServiceStartReusesJoin(t *testing.T) {
+	repo := &fakeRepo{}
+	svc := NewService(repo, &fakeTicketVerifier{
+		claims: ChatTicketClaims{
+			BuyerID:   1001,
+			SellerID:  2002,
+			ListingID: 101,
+			JTI:       "jti-1",
+			ExpiresAt: time.Now().Add(time.Minute),
+		},
+	}, 100)
+	conversation, claims, err := svc.Start(1001, "ticket")
+	if err != nil {
+		t.Fatalf("start failed: %v", err)
+	}
+	if conversation.ID == 0 || claims.JTI == "" {
+		t.Fatalf("unexpected start response: %+v %+v", conversation, claims)
+	}
+}
+
+func TestServiceSummary(t *testing.T) {
+	repo := &fakeRepo{
+		unreadConv: 2,
+		unreadMsg:  7,
+	}
+	svc := NewService(repo, &fakeTicketVerifier{}, 100)
+	summary, err := svc.Summary(1001)
+	if err != nil {
+		t.Fatalf("summary failed: %v", err)
+	}
+	if summary.UnreadConversationCount != 2 || summary.UnreadMessageCount != 7 {
+		t.Fatalf("unexpected summary: %+v", summary)
+	}
+}
+
+func TestServiceSendRejectsOversizePayload(t *testing.T) {
+	repo := &fakeRepo{
+		conversation: Conversation{ID: 1, ListingID: 101, BuyerID: 1001, SellerID: 2002},
+	}
+	svc := NewService(repo, &fakeTicketVerifier{}, 100)
+	tooLongClientMsgID := strings.Repeat("a", 65)
+	if _, err := svc.Send(1001, 1, tooLongClientMsgID, "hi"); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("expected invalid argument for too long client msg id, got %v", err)
+	}
+	tooLongContent := make([]byte, 2001)
+	for i := range tooLongContent {
+		tooLongContent[i] = 'a'
+	}
+	if _, err := svc.Send(1001, 1, "client-1", string(tooLongContent)); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("expected invalid argument for too long content, got %v", err)
 	}
 }

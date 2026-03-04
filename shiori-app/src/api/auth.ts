@@ -114,6 +114,15 @@ export function getUserProfileByUserNo(userNo: string): Promise<PublicUserProfil
   return httpGet<PublicUserProfile>(`/api/user/profiles/${encodeURIComponent(userNo)}`)
 }
 
+export function getUserProfilesByUserIds(userIds: number[]): Promise<PublicUserProfile[]> {
+  const normalized = Array.from(new Set(userIds.filter((item) => Number.isFinite(item) && item > 0)))
+  return httpGet<PublicUserProfile[]>('/api/user/profiles/by-user-ids', {
+    params: {
+      userIds: normalized.join(','),
+    },
+  })
+}
+
 export function updateMyProfile(payload: UpdateProfileRequest): Promise<UserProfile> {
   return httpPut<UserProfile>('/api/user/me', payload)
 }

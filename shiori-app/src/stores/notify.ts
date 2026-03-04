@@ -29,6 +29,9 @@ export interface NotifyMessage {
   readAt?: string
 }
 
+export type WSFramePayload = Record<string, unknown>
+export type WSFrameListener = (frame: WSFramePayload) => void
+
 const WS_BASE_URL = import.meta.env.VITE_NOTIFY_WS_BASE_URL || 'ws://localhost:8090/ws'
 const MAX_RECONNECT_DELAY_MS = 15000
 const DEFAULT_SYNC_LIMIT = 100
@@ -44,6 +47,7 @@ export const useNotifyStore = defineStore('notify', () => {
   let reconnectAttempt = 0
   let currentAccessToken = ''
   let manualClosed = false
+  const frameListeners = new Set<WSFrameListener>()
 
   function connect(accessToken?: string): void {
     const token = (accessToken || getAccessToken() || '').trim()
@@ -72,10 +76,12 @@ export const useNotifyStore = defineStore('notify', () => {
 
     socket.onmessage = (evt) => {
       try {
-        const envelope = JSON.parse(evt.data) as NotifyEnvelope
-        if (!envelope.eventId || !envelope.type) {
+        const payload = JSON.parse(evt.data) as Record<string, unknown>
+        if (!isNotifyEnvelope(payload)) {
+          notifyFrameListeners(payload)
           return
         }
+        const envelope = payload as NotifyEnvelope
         if (hasMessage(envelope.eventId)) {
           return
         }
@@ -185,6 +191,36 @@ export const useNotifyStore = defineStore('notify', () => {
     unreadCount.value = 0
   }
 
+  function registerFrameListener(listener: WSFrameListener): () => void {
+    frameListeners.add(listener)
+    return () => {
+      frameListeners.delete(listener)
+    }
+  }
+
+  function sendFrame(payload: WSFramePayload): boolean {
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      return false
+    }
+    try {
+      socket.send(JSON.stringify(payload))
+      return true
+    } catch (error) {
+      lastError.value = error instanceof Error ? error.message : '发送 WebSocket 消息失败'
+      return false
+    }
+  }
+
+  function notifyFrameListeners(payload: WSFramePayload): void {
+    for (const listener of frameListeners) {
+      try {
+        listener(payload)
+      } catch {
+        // ignore listener failures to avoid blocking other subscribers
+      }
+    }
+  }
+
   function scheduleReconnect(): void {
     if (!currentAccessToken) {
       return
@@ -264,8 +300,14 @@ export const useNotifyStore = defineStore('notify', () => {
     markAllRead,
     markRead,
     clearMessages,
+    registerFrameListener,
+    sendFrame,
   }
 })
+
+function isNotifyEnvelope(payload: Record<string, unknown>): payload is NotifyEnvelope {
+  return typeof payload.eventId === 'string' && typeof payload.type === 'string'
+}
 
 function resolveWSBaseURL(rawBaseURL: string): string {
   const trimmed = rawBaseURL.trim()

@@ -141,6 +141,42 @@ class UserProfileControllerMvcTest {
     }
 
     @Test
+    void shouldGetPublicProfilesByUserIds() throws Exception {
+        when(userProfileService.getProfilesByUserIds(java.util.List.of(1L, 2L))).thenReturn(
+                java.util.List.of(
+                        new PublicUserProfileResponse(
+                                1L,
+                                "U202603030001",
+                                "alice",
+                                "Alice",
+                                "/api/user/media/avatar/avatar_1_202603_abc.jpg",
+                                2,
+                                26,
+                                "hello"
+                        ),
+                        new PublicUserProfileResponse(
+                                2L,
+                                "U202603030002",
+                                "bob",
+                                "Bob",
+                                null,
+                                1,
+                                25,
+                                "hi"
+                        )
+                )
+        );
+
+        mockMvc.perform(get("/api/user/profiles/by-user-ids").queryParam("userIds", "1,2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data[0].userId").value(1))
+                .andExpect(jsonPath("$.data[1].userId").value(2));
+
+        verify(userProfileService).getProfilesByUserIds(java.util.List.of(1L, 2L));
+    }
+
+    @Test
     void shouldReturn404WhenPublicProfileMissing() throws Exception {
         when(userProfileService.getProfileByUserNo("U404"))
                 .thenThrow(new BizException(UserErrorCode.USER_NOT_FOUND, HttpStatus.NOT_FOUND));

@@ -6,6 +6,7 @@ import App from '@/App.vue'
 import { setAuthFailureHandler } from '@/api/http'
 import router from '@/router'
 import { useAuthStore } from '@/stores/auth'
+import { useChatStore } from '@/stores/chat'
 import { useNotifyStore } from '@/stores/notify'
 import '@/style.css'
 
@@ -26,11 +27,13 @@ app.use(VueQueryPlugin, { queryClient })
 
 const authStore = useAuthStore(pinia)
 const notifyStore = useNotifyStore(pinia)
+const chatStore = useChatStore(pinia)
 
 setAuthFailureHandler(() => {
   authStore.clearAuth()
   notifyStore.disconnect()
   notifyStore.clearMessages()
+  chatStore.reset()
 
   const currentRoute = router.currentRoute.value
   if (currentRoute.path !== '/login') {
@@ -48,9 +51,11 @@ watch(
   (accessToken) => {
     if (accessToken) {
       notifyStore.connect(accessToken)
+      void chatStore.bootstrap()
     } else {
       notifyStore.disconnect()
       notifyStore.clearMessages()
+      chatStore.reset()
     }
   },
   { immediate: true },

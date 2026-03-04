@@ -18,11 +18,13 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Duration;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/user")
@@ -43,6 +45,11 @@ public class UserProfileController {
     @GetMapping("/profiles/{userNo}")
     public PublicUserProfileResponse getPublicProfile(@PathVariable String userNo) {
         return userProfileService.getProfileByUserNo(userNo);
+    }
+
+    @GetMapping("/profiles/by-user-ids")
+    public List<PublicUserProfileResponse> getPublicProfilesByUserIds(@RequestParam List<Long> userIds) {
+        return userProfileService.getProfilesByUserIds(userIds);
     }
 
     @PutMapping("/me")

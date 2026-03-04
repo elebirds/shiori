@@ -41,6 +41,11 @@ type SendResult struct {
 	Deduplicated bool
 }
 
+type Summary struct {
+	UnreadConversationCount int64
+	UnreadMessageCount      int64
+}
+
 type BroadcastEvent struct {
 	ConversationID int64     `json:"conversationId"`
 	MessageID      int64     `json:"messageId"`
@@ -64,6 +69,8 @@ type Repository interface {
 	UpdateLastRead(conversationID, userID, lastReadMsgID int64) (int64, error)
 	ListConversations(userID, cursor int64, limit int) ([]ConversationItem, bool, error)
 	ListMessages(userID, conversationID, before int64, limit int) ([]Message, bool, error)
+	CountUnreadConversations(userID int64) (int64, error)
+	CountUnreadMessages(userID int64) (int64, error)
 }
 
 type TicketVerifier interface {
