@@ -181,6 +181,7 @@ export default function (data) {
     return;
   }
   const orderNo = createOrder.parsed.data.orderNo;
+  const payIdemKey = `${perfPrefix}-ws-pay-idem-${__VU}-${__ITER}-${Date.now()}`;
   const payPayload = {
     paymentNo: `${perfPrefix}-ws-pay-${__VU}-${__ITER}-${Date.now()}`,
   };
@@ -190,12 +191,18 @@ export default function (data) {
   let payAt = 0;
 
   const wsResult = ws.connect(
-    `${notifyWsBaseUrl}?userId=${encodeURIComponent(data.buyerUserId)}`,
+    `${notifyWsBaseUrl}?accessToken=${encodeURIComponent(data.buyerToken)}&userId=${encodeURIComponent(data.buyerUserId)}`,
     null,
     (socket) => {
       socket.on('open', () => {
         payAt = Date.now();
-        const payOrder = apiRequest('POST', `/api/order/orders/${orderNo}/pay`, data.buyerToken, payPayload);
+        const payOrder = apiRequest(
+          'POST',
+          `/api/order/orders/${orderNo}/pay`,
+          data.buyerToken,
+          payPayload,
+          { 'Idempotency-Key': payIdemKey }
+        );
         paySucceeded = payOrder.ok;
         if (!paySucceeded) {
           wsBizFailedTotal.add(1);
