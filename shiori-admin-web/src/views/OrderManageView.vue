@@ -9,6 +9,7 @@ import {
   getAdminOrderV2,
   listAdminOrdersV2,
   listAdminOrderStatusAuditsV2,
+  type OrderRefundStatus,
   type OrderStatus,
   type OrderSummary,
 } from '@/api/adminOrderV2'
@@ -103,6 +104,13 @@ const totalPage = computed(() => {
   return Math.max(Math.ceil(total / size.value), 1)
 })
 
+const REFUND_STATUS_TEXT: Record<OrderRefundStatus, string> = {
+  REQUESTED: '退款待审核',
+  REJECTED: '退款已拒绝',
+  PENDING_FUNDS: '退款待补款',
+  SUCCEEDED: '已退款',
+}
+
 function onSearch(): void {
   page.value = 1
   actionMessage.value = ''
@@ -121,6 +129,29 @@ function formatTime(raw?: string): string {
     return raw
   }
   return parsed.toLocaleString('zh-CN')
+}
+
+function refundStatusText(status?: OrderRefundStatus): string {
+  if (!status) {
+    return '-'
+  }
+  return REFUND_STATUS_TEXT[status] || status
+}
+
+function refundStatusClass(status?: OrderRefundStatus): string {
+  if (status === 'REQUESTED') {
+    return 'bg-amber-100 text-amber-700'
+  }
+  if (status === 'SUCCEEDED') {
+    return 'bg-emerald-100 text-emerald-700'
+  }
+  if (status === 'PENDING_FUNDS') {
+    return 'bg-rose-100 text-rose-700'
+  }
+  if (status === 'REJECTED') {
+    return 'bg-slate-200 text-slate-700'
+  }
+  return 'bg-slate-100 text-slate-700'
 }
 </script>
 
@@ -169,7 +200,18 @@ function formatTime(raw?: string): string {
                   {{ order.orderNo }}
                 </button>
               </td>
-              <td class="px-4 py-3">{{ order.status }}</td>
+              <td class="px-4 py-3">
+                <div class="flex flex-wrap gap-1">
+                  <span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">{{ order.status }}</span>
+                  <span
+                    v-if="order.refundStatus"
+                    class="rounded-full px-2 py-1 text-xs font-medium"
+                    :class="refundStatusClass(order.refundStatus)"
+                  >
+                    {{ refundStatusText(order.refundStatus) }}
+                  </span>
+                </div>
+              </td>
               <td class="px-4 py-3">{{ formatMoney(order.totalAmountCent) }}</td>
               <td class="px-4 py-3">
                 <div class="flex flex-wrap gap-1">
@@ -219,6 +261,9 @@ function formatTime(raw?: string): string {
           <p>金额：{{ formatMoney(detailQuery.data.value.totalAmountCent) }}</p>
           <p>创建时间：{{ formatTime(detailQuery.data.value.createdAt) }}</p>
           <p>支付时间：{{ formatTime(detailQuery.data.value.paidAt) }}</p>
+          <p>退款状态：{{ refundStatusText(detailQuery.data.value.refundStatus) }}</p>
+          <p>退款单号：{{ detailQuery.data.value.refundNo || '-' }}</p>
+          <p>退款金额：{{ formatMoney(detailQuery.data.value.refundAmountCent || 0) }}</p>
           <p>条目数：{{ detailQuery.data.value.items.length }}</p>
         </div>
         <p v-else class="text-sm text-slate-400">点击左侧订单查看详情</p>
@@ -243,4 +288,3 @@ function formatTime(raw?: string): string {
     </div>
   </section>
 </template>
-
