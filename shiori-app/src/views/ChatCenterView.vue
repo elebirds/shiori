@@ -193,6 +193,17 @@ async function submitMessage(): Promise<void> {
   }
 }
 
+function handleDraftEnter(event: KeyboardEvent): void {
+  if (event.isComposing || event.keyCode === 229) {
+    return
+  }
+  if (event.ctrlKey) {
+    return
+  }
+  event.preventDefault()
+  void submitMessage()
+}
+
 async function loadOlderByScrollTop(): Promise<void> {
   const conversationId = activeConversationId.value
   const viewport = messageViewportRef.value
@@ -414,6 +425,7 @@ function jumpToLatest(): void {
               class="min-h-[80px] flex-1 resize-y rounded-xl border border-stone-300 px-3 py-2 text-sm outline-none transition focus:border-stone-500"
               placeholder="输入咨询内容（纯文本）"
               :disabled="!activeConversation"
+              @keydown.enter="handleDraftEnter"
             />
             <button
               type="button"
