@@ -21,10 +21,15 @@ CREATE TABLE IF NOT EXISTS u_user_authz_version (
     CONSTRAINT fk_u_user_authz_version_user_id FOREIGN KEY (user_id) REFERENCES u_user(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+UPDATE u_user_authz_version v
+JOIN u_user u ON u.id = v.user_id
+SET v.version = GREATEST(v.version, GREATEST(u.version, 1)),
+    v.updated_at = CURRENT_TIMESTAMP(3)
+WHERE u.is_deleted = 0;
+
 INSERT INTO u_user_authz_version (user_id, version, updated_at)
-SELECT id, GREATEST(version, 1), CURRENT_TIMESTAMP(3)
-FROM u_user
-WHERE is_deleted = 0
-ON DUPLICATE KEY UPDATE
-    version = GREATEST(u_user_authz_version.version, VALUES(version)),
-    updated_at = CURRENT_TIMESTAMP(3);
+SELECT u.id, GREATEST(u.version, 1), CURRENT_TIMESTAMP(3)
+FROM u_user u
+LEFT JOIN u_user_authz_version v ON v.user_id = u.id
+WHERE u.is_deleted = 0
+  AND v.user_id IS NULL;

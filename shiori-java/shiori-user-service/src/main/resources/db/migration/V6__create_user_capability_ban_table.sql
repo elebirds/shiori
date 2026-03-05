@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS u_user_capability_ban (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     user_id BIGINT NOT NULL,
     capability_code VARCHAR(64) NOT NULL,
-    is_banned TINYINT(1) NOT NULL DEFAULT 1,
+    is_banned TINYINT NOT NULL DEFAULT 1,
     reason VARCHAR(255) NULL,
     operator_user_id BIGINT NOT NULL,
     start_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),

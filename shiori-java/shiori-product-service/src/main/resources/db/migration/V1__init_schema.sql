@@ -5,5 +5,5 @@ CREATE TABLE IF NOT EXISTS p_schema_guard (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 INSERT INTO p_schema_guard (note)
-VALUES ('product-service schema initialized')
-ON DUPLICATE KEY UPDATE note = VALUES(note);
+VALUES ('product-service schema initialized') AS new
+ON DUPLICATE KEY UPDATE note = new.note;

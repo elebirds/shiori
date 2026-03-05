@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS p_stock_txn (
     sku_id BIGINT NOT NULL,
     op_type VARCHAR(16) NOT NULL COMMENT 'DEDUCT/RELEASE',
     quantity INT NOT NULL,
-    success TINYINT(1) NOT NULL DEFAULT 0,
+    success TINYINT NOT NULL DEFAULT 0,
     created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     UNIQUE KEY uk_p_stock_txn_biz_op (biz_no, op_type),
     KEY idx_p_stock_txn_sku_id (sku_id),

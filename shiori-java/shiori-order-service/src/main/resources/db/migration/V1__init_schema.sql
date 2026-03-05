@@ -5,5 +5,5 @@ CREATE TABLE IF NOT EXISTS o_schema_guard (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 INSERT INTO o_schema_guard (note)
-VALUES ('order-service schema initialized')
-ON DUPLICATE KEY UPDATE note = VALUES(note);
+VALUES ('order-service schema initialized') AS new
+ON DUPLICATE KEY UPDATE note = new.note;

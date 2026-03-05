@@ -14,15 +14,16 @@ VALUES
     ('product.off_shelf', '下架商品', 'product', '允许下架商品', 1, 0),
     ('product.stock.adjust', '库存变更', 'product', '允许库存变更操作', 1, 0),
     ('admin.user.permission_override.manage', '用户权限覆盖管理', 'admin', '允许管理用户权限覆盖', 1, 0)
+AS new
 ON DUPLICATE KEY UPDATE
-    perm_name = VALUES(perm_name),
-    domain = VALUES(domain),
-    description = VALUES(description),
-    status = VALUES(status),
-    is_deleted = VALUES(is_deleted),
+    perm_name = new.perm_name,
+    domain = new.domain,
+    description = new.description,
+    status = new.status,
+    is_deleted = new.is_deleted,
     updated_at = CURRENT_TIMESTAMP(3);
 
-INSERT INTO u_role_permission (role_id, permission_id)
+INSERT IGNORE INTO u_role_permission (role_id, permission_id)
 SELECT r.id, p.id
 FROM u_role r
 JOIN u_permission p ON p.perm_code IN (
@@ -39,12 +40,10 @@ JOIN u_permission p ON p.perm_code IN (
     'product.publish',
     'product.off_shelf'
 )
-WHERE r.role_code = 'ROLE_USER'
-ON DUPLICATE KEY UPDATE role_id = VALUES(role_id);
+WHERE r.role_code = 'ROLE_USER';
 
-INSERT INTO u_role_permission (role_id, permission_id)
+INSERT IGNORE INTO u_role_permission (role_id, permission_id)
 SELECT r.id, p.id
 FROM u_role r
 JOIN u_permission p ON 1 = 1
-WHERE r.role_code = 'ROLE_ADMIN'
-ON DUPLICATE KEY UPDATE role_id = VALUES(role_id);
+WHERE r.role_code = 'ROLE_ADMIN';
