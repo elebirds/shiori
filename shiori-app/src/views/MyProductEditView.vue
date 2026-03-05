@@ -145,6 +145,11 @@ const offShelfMutation = useMutation({
 
 const errorMessage = computed(() => (detailQuery.error.value instanceof Error ? detailQuery.error.value.message : ''))
 const status = computed(() => detailQuery.data.value?.status || '')
+const PRODUCT_STATUS_TEXT: Record<string, string> = {
+  DRAFT: '草稿',
+  ON_SALE: '在售',
+  OFF_SHELF: '已下架',
+}
 
 function centToYuanText(cent: number): string {
   return (Math.max(0, Number(cent) || 0) / 100).toFixed(2)
@@ -184,7 +189,7 @@ function validate(): string | null {
     return '商品标题不能为空'
   }
   if (!form.campusCode.trim()) {
-    return '校区编码不能为空'
+    return '交易校区不能为空'
   }
   if (skus.value.length === 0) {
     return '请至少保留一个 SKU'
@@ -256,8 +261,8 @@ async function handleSubmit(): Promise<void> {
   }
 
   try {
-    const result = await updateMutation.mutateAsync()
-    resultMessage.value = `更新成功（${result.status}）`
+    await updateMutation.mutateAsync()
+    resultMessage.value = '保存成功'
     await detailQuery.refetch()
   } catch (error) {
     if (error instanceof ApiBizError) {
@@ -274,8 +279,8 @@ async function handlePublish(): Promise<void> {
   resultError.value = ''
   resultMessage.value = ''
   try {
-    const result = await publishMutation.mutateAsync()
-    resultMessage.value = `上架成功（${result.status}）`
+    await publishMutation.mutateAsync()
+    resultMessage.value = '已上架'
   } catch (error) {
     if (error instanceof ApiBizError) {
       resultError.value = error.message
@@ -287,8 +292,8 @@ async function handleOffShelf(): Promise<void> {
   resultError.value = ''
   resultMessage.value = ''
   try {
-    const result = await offShelfMutation.mutateAsync()
-    resultMessage.value = `下架成功（${result.status}）`
+    await offShelfMutation.mutateAsync()
+    resultMessage.value = '已下架'
   } catch (error) {
     if (error instanceof ApiBizError) {
       resultError.value = error.message
@@ -327,7 +332,7 @@ onUnmounted(() => {
                   : 'bg-amber-100 text-amber-700'
             "
           >
-            {{ status || 'UNKNOWN' }}
+            {{ PRODUCT_STATUS_TEXT[status] || '未知状态' }}
           </span>
         </div>
 
@@ -372,7 +377,7 @@ onUnmounted(() => {
           </label>
 
           <label class="text-sm text-stone-700">
-            校区编码
+            交易校区
             <input
               v-model.trim="form.campusCode"
               type="text"
@@ -396,7 +401,7 @@ onUnmounted(() => {
 
           <div class="space-y-2 sm:col-span-2">
             <label class="block text-sm text-stone-700">
-              更换封面（OSS 预签名直传）
+              更换封面
               <input
                 type="file"
                 accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
@@ -405,20 +410,11 @@ onUnmounted(() => {
                 @change="handleCoverChange"
               />
             </label>
-            <p class="text-xs text-stone-500">支持 jpg/jpeg/png/webp，上传后自动回填 objectKey。</p>
+            <p class="text-xs text-stone-500">支持 jpg/jpeg/png/webp，上传成功后会自动更新封面。</p>
             <p v-if="selectedCoverName" class="text-xs text-stone-600">已选文件：{{ selectedCoverName }}</p>
             <p v-if="uploadingCover" class="text-xs text-amber-700">正在上传封面...</p>
             <p v-if="uploadMessage" class="text-xs text-emerald-700">{{ uploadMessage }}</p>
           </div>
-
-          <label class="text-sm text-stone-700 sm:col-span-2">
-            封面 object key
-            <input
-              v-model.trim="form.coverObjectKey"
-              type="text"
-              class="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2 outline-none transition focus:border-amber-500"
-            />
-          </label>
 
           <div v-if="coverPreviewUrl || detailQuery.data.value?.coverImageUrl" class="sm:col-span-2">
             <p class="mb-1 text-xs text-stone-600">封面预览</p>

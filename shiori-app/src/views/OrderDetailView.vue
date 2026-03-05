@@ -3,8 +3,16 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import OrderStageTimeline from '@/components/OrderStageTimeline.vue'
 import ResultState from '@/components/ResultState.vue'
-import { cancelOrderV2, confirmReceiptV2, getOrderDetailV2, getOrderTimelineV2, type OrderStatus } from '@/api/orderV2'
+import {
+  cancelOrderV2,
+  confirmReceiptV2,
+  getOrderDetailV2,
+  getOrderTimelineV2,
+  type OrderStatus,
+  type OrderTimelineItemResponse,
+} from '@/api/orderV2'
 import { ApiBizError } from '@/types/result'
 import { useChatStore } from '@/stores/chat'
 
@@ -57,6 +65,14 @@ const detail = computed(() => query.data.value)
 const timelineItems = computed(() => timelineQuery.data.value?.items || [])
 const errorMessage = computed(() => (query.error.value instanceof Error ? query.error.value.message : ''))
 
+const ORDER_STATUS_TEXT: Record<OrderStatus, string> = {
+  UNPAID: '待支付',
+  PAID: '已支付',
+  DELIVERING: '待收货',
+  FINISHED: '已完成',
+  CANCELED: '已取消',
+}
+
 function formatMoney(priceCent: number): string {
   return `¥ ${(priceCent / 100).toFixed(2)}`
 }
@@ -87,6 +103,14 @@ function statusClass(status: OrderStatus): string {
     return 'bg-emerald-100 text-emerald-700'
   }
   return 'bg-stone-200 text-stone-700'
+}
+
+function statusText(status: OrderStatus): string {
+  return ORDER_STATUS_TEXT[status] || status
+}
+
+function transitionText(item: OrderTimelineItemResponse): string {
+  return `${statusText(item.fromStatus)} -> ${statusText(item.toStatus)}`
 }
 
 function handlePay(): void {
@@ -141,15 +165,14 @@ async function handleConfirm(): Promise<void> {
             <p v-if="detail.status === 'UNPAID'" class="mt-1 text-xs text-amber-700">状态自动刷新中（每 3 秒）</p>
           </div>
           <span class="w-fit rounded-full px-3 py-1 text-xs font-semibold" :class="statusClass(detail.status)">
-            {{ detail.status }}
+            {{ statusText(detail.status) }}
           </span>
         </header>
 
         <div class="grid gap-3 rounded-xl bg-stone-50 p-4 text-sm text-stone-700 sm:grid-cols-2">
-          <p>买家用户ID：{{ detail.buyerUserId }}</p>
-          <p>卖家用户ID：{{ detail.sellerUserId }}</p>
           <p>订单金额：{{ formatMoney(detail.totalAmountCent) }}</p>
           <p>支付时间：{{ formatTime(detail.paidAt) }}</p>
+          <p>支付方式：余额支付</p>
           <p class="sm:col-span-2">超时关单时间：{{ formatTime(detail.timeoutAt) }}</p>
         </div>
 
@@ -179,12 +202,19 @@ async function handleConfirm(): Promise<void> {
           </div>
         </section>
 
+        <OrderStageTimeline
+          :status="detail.status"
+          :created-at="detail.createdAt"
+          :paid-at="detail.paidAt"
+          :timeline-items="timelineItems"
+        />
+
         <section class="space-y-2">
-          <h2 class="text-base font-semibold text-stone-900">履约时间线</h2>
+          <h2 class="text-base font-semibold text-stone-900">操作记录</h2>
           <div class="max-h-64 space-y-2 overflow-auto rounded-xl border border-stone-200 bg-stone-50 p-3">
             <article v-for="(item, index) in timelineItems" :key="`${item.createdAt}-${index}`" class="rounded-lg bg-white p-3 text-sm">
               <div class="flex items-center justify-between">
-                <p class="font-medium text-stone-800">{{ item.fromStatus }} -> {{ item.toStatus }}</p>
+                <p class="font-medium text-stone-800">{{ transitionText(item) }}</p>
                 <span class="text-xs text-stone-500">{{ item.source }}</span>
               </div>
               <p class="mt-1 text-xs text-stone-600">操作人：{{ item.operatorUserId ?? '-' }}</p>

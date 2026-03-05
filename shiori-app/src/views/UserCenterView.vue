@@ -217,15 +217,15 @@ function formatTradeMode(code: ProductTradeMode): string {
         <section class="grid grid-cols-3 gap-3">
           <article class="rounded-2xl border border-stone-200 bg-white/95 p-4">
             <h2 class="text-sm font-semibold text-stone-900">信用档案</h2>
-            <p class="mt-2 text-xs text-stone-600">优秀卖家信用 / 优秀买家信用（占位）</p>
+            <p class="mt-2 text-xs text-stone-600">交易信用能力正在完善中，后续会展示买卖双方评价与信用分。</p>
           </article>
           <article class="rounded-2xl border border-stone-200 bg-white/95 p-4">
             <h2 class="text-sm font-semibold text-stone-900">我的帖子</h2>
-            <p class="mt-2 text-xs text-stone-600">分享你的宝贝（占位）</p>
+            <p class="mt-2 text-xs text-stone-600">帖子功能即将上线，敬请期待你的好物分享。</p>
           </article>
           <article class="rounded-2xl border border-stone-200 bg-white/95 p-4">
             <h2 class="text-sm font-semibold text-stone-900">夸夸墙</h2>
-            <p class="mt-2 text-xs text-stone-600">你的夸夸在路上（占位）</p>
+            <p class="mt-2 text-xs text-stone-600">收到的好评会在这里展示，帮助更多人认识你。</p>
           </article>
         </section>
 

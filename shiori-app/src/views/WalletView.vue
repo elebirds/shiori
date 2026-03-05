@@ -61,9 +61,9 @@ function handleRedeem(): void {
       class="overflow-hidden rounded-3xl border border-[var(--shiori-pay-blue-500)]/25 px-5 py-6 text-white shadow-[var(--shiori-pay-shadow)] shiori-pay-rise"
       style="background: linear-gradient(128deg, var(--shiori-pay-blue-900) 0%, var(--shiori-pay-blue-700) 58%, var(--shiori-pay-blue-500) 100%);"
     >
-      <p class="text-xs uppercase tracking-[0.26em] text-blue-100/90">Wallet Center</p>
+      <p class="text-xs uppercase tracking-[0.26em] text-blue-100/90">钱包中心</p>
       <h1 class="mt-2 font-display text-3xl tracking-wide">余额钱包</h1>
-      <p class="mt-2 text-sm text-blue-50/90">用于 v2 订单托管支付。支持 CDK 快捷充值，后续将接入流水明细。</p>
+      <p class="mt-2 text-sm text-blue-50/90">用于订单余额支付。支持 CDK 快捷充值，资金变化也会持续补充更完整记录。</p>
     </header>
 
     <div v-if="walletQuery.isLoading.value" class="rounded-2xl border border-blue-100 bg-[var(--shiori-pay-surface)] p-6 text-sm text-[var(--shiori-pay-mute)]">
@@ -121,7 +121,7 @@ function handleRedeem(): void {
         <article class="rounded-2xl border border-dashed border-blue-200 bg-[var(--shiori-pay-surface)] p-5">
           <h2 class="text-lg font-semibold text-[var(--shiori-pay-ink)]">资金流水</h2>
           <p class="mt-2 text-sm text-[var(--shiori-pay-mute)]">
-            当前版本仅提供余额与 CDK 充值能力。流水查询 API 将在后续版本接入，本区作为能力占位。
+            交易流水正在完善中，后续会提供按时间筛选、收入支出分类和明细追踪。
           </p>
           <button
             type="button"

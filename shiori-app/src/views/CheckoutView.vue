@@ -4,7 +4,7 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getWalletBalance, redeemCdk } from '@/api/payment'
-import { getOrderDetailV2, payOrderV2 } from '@/api/orderV2'
+import { getOrderDetailV2, payOrderV2, type OrderStatus } from '@/api/orderV2'
 import { useChatStore } from '@/stores/chat'
 import { resolvePaymentErrorMessage } from '@/utils/paymentError'
 
@@ -50,7 +50,7 @@ const redeemMutation = useMutation({
   mutationFn: () => redeemCdk({ code: cdkCode.value.trim() }),
   onSuccess: async (response) => {
     redeemError.value = ''
-    redeemMessage.value = `CDK 兑换成功，入账 ${formatMoney(response.redeemAmountCent)}`
+    redeemMessage.value = `兑换成功，已入账 ${formatMoney(response.redeemAmountCent)}`
     cdkCode.value = ''
     await walletQuery.refetch()
   },
@@ -74,6 +74,19 @@ const amountCent = computed(() => detail.value?.totalAmountCent || 0)
 const balanceGapCent = computed(() => Math.max(0, amountCent.value - wallet.value.availableBalanceCent))
 const balanceEnough = computed(() => balanceGapCent.value <= 0)
 const canPay = computed(() => detail.value?.status === 'UNPAID' && balanceEnough.value)
+
+const ORDER_STATUS_TEXT: Record<OrderStatus, string> = {
+  UNPAID: '待支付',
+  PAID: '已支付',
+  DELIVERING: '待收货',
+  FINISHED: '已完成',
+  CANCELED: '已取消',
+}
+
+function statusText(status: OrderStatus): string {
+  return ORDER_STATUS_TEXT[status] || status
+}
+
 const payError = computed(() => {
   if (payMutation.error.value) {
     return resolvePaymentErrorMessage(payMutation.error.value)
@@ -141,7 +154,7 @@ function handleRedeem(): void {
       class="overflow-hidden rounded-3xl border border-[var(--shiori-pay-blue-500)]/25 px-5 py-6 text-white shadow-[var(--shiori-pay-shadow)] shiori-pay-rise"
       style="background: linear-gradient(124deg, var(--shiori-pay-blue-900) 0%, var(--shiori-pay-blue-700) 56%, var(--shiori-pay-blue-500) 100%);"
     >
-      <p class="text-xs uppercase tracking-[0.26em] text-blue-100/90">Secure Checkout</p>
+      <p class="text-xs uppercase tracking-[0.26em] text-blue-100/90">订单收银台</p>
       <h1 class="mt-2 font-display text-3xl tracking-wide">订单余额支付</h1>
       <p class="mt-2 text-sm text-blue-50/90">仅支持余额托管支付，交易完结后资金自动结算到卖家账户。</p>
     </div>
@@ -165,14 +178,14 @@ function handleRedeem(): void {
               <p class="text-xs uppercase tracking-[0.18em] text-[var(--shiori-pay-mute)]">订单号</p>
               <p class="mt-1 text-sm font-medium text-[var(--shiori-pay-ink)]">{{ detail.orderNo }}</p>
             </div>
-            <span class="rounded-full bg-[var(--shiori-pay-soft)] px-3 py-1 text-xs font-semibold text-[var(--shiori-pay-blue-800)]">{{ detail.status }}</span>
+            <span class="rounded-full bg-[var(--shiori-pay-soft)] px-3 py-1 text-xs font-semibold text-[var(--shiori-pay-blue-800)]">{{ statusText(detail.status) }}</span>
           </div>
 
           <div class="mt-4 grid gap-3 rounded-xl bg-[var(--shiori-pay-surface)] p-4 text-sm text-[var(--shiori-pay-ink)] sm:grid-cols-2">
             <p>创建时间：{{ formatTime(detail.createdAt) }}</p>
             <p>支付时间：{{ formatTime(detail.paidAt) }}</p>
-            <p>买家用户ID：{{ detail.buyerUserId }}</p>
-            <p>卖家用户ID：{{ detail.sellerUserId }}</p>
+            <p>支付方式：余额支付</p>
+            <p>订单金额：{{ formatMoney(detail.totalAmountCent) }}</p>
           </div>
 
           <div class="mt-4 overflow-hidden rounded-xl border border-blue-100">
@@ -246,7 +259,7 @@ function handleRedeem(): void {
           </article>
 
           <article class="rounded-2xl border border-dashed border-blue-200 bg-[var(--shiori-pay-surface)] p-5 text-sm text-[var(--shiori-pay-mute)]">
-            系统采用“签名 + 权限码 + 内部令牌”多重校验。订单支付后资金进入托管，完成收货后再结算给卖家。
+            支付后资金会先进入平台托管，确认收货后自动结算给卖家，过程更安全、更可追踪。
           </article>
         </aside>
       </div>
@@ -255,13 +268,13 @@ function handleRedeem(): void {
         v-if="detail.status !== 'UNPAID'"
         class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700"
       >
-        当前订单状态为 {{ detail.status }}，无需继续支付。
+        当前订单状态为 {{ statusText(detail.status) }}，无需继续支付。
       </article>
 
       <div class="sticky bottom-4 z-10 rounded-2xl border border-blue-100 bg-white/95 p-4 shadow-[var(--shiori-pay-shadow)] backdrop-blur">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p class="text-xs uppercase tracking-[0.18em] text-[var(--shiori-pay-mute)]">Payment Total</p>
+            <p class="text-xs uppercase tracking-[0.18em] text-[var(--shiori-pay-mute)]">应付总额</p>
             <p class="mt-1 text-2xl font-semibold text-[var(--shiori-pay-blue-900)]">{{ formatMoney(amountCent) }}</p>
           </div>
           <button

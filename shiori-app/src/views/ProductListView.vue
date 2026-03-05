@@ -8,6 +8,7 @@ import {
   listProductsV2,
   type ProductCategoryCode,
   type ProductConditionLevel,
+  type ProductStatus,
   type ProductSortBy,
   type ProductSortDir,
   type ProductTradeMode,
@@ -141,6 +142,15 @@ function formatTradeMode(code: ProductTradeMode): string {
   const match = tradeModeOptions.find((item) => item.value === code)
   return match?.label || code
 }
+
+function formatStatus(code: ProductStatus): string {
+  const map: Record<ProductStatus, string> = {
+    DRAFT: '草稿',
+    ON_SALE: '在售',
+    OFF_SHELF: '已下架',
+  }
+  return map[code] || code
+}
 </script>
 
 <template>
@@ -165,7 +175,7 @@ function formatTradeMode(code: ProductTradeMode): string {
           v-model="campusCodeInput"
           type="text"
           class="rounded-xl border border-stone-300 px-3 py-2 text-sm outline-none transition focus:border-amber-500"
-          placeholder="校区编码（如 main_campus）"
+          placeholder="交易校区（如主校区）"
           @keyup.enter="applyFilter"
         />
         <select
@@ -255,7 +265,7 @@ function formatTradeMode(code: ProductTradeMode): string {
           </div>
 
           <div class="mt-2 flex items-center justify-between text-xs text-stone-500">
-            <span>{{ item.status }}</span>
+            <span>{{ formatStatus(item.status) }}</span>
             <span>编号 {{ item.productNo }}</span>
           </div>
         </article>
@@ -285,4 +295,3 @@ function formatTradeMode(code: ProductTradeMode): string {
     </ResultState>
   </section>
 </template>
-

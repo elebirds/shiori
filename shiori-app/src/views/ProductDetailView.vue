@@ -5,7 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import ResultState from '@/components/ResultState.vue'
 import { createOrderV2 } from '@/api/orderV2'
-import { getProductDetailV2, type ProductCategoryCode, type ProductConditionLevel, type ProductTradeMode } from '@/api/productV2'
+import { getProductDetailV2, type ProductCategoryCode, type ProductConditionLevel, type ProductStatus, type ProductTradeMode } from '@/api/productV2'
 import { ApiBizError } from '@/types/result'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
@@ -111,6 +111,15 @@ function formatTradeMode(code: ProductTradeMode): string {
     MEETUP: '面交',
     DELIVERY: '邮寄',
     BOTH: '均可',
+  }
+  return map[code] || code
+}
+
+function formatStatus(code: ProductStatus): string {
+  const map: Record<ProductStatus, string> = {
+    DRAFT: '草稿',
+    ON_SALE: '在售',
+    OFF_SHELF: '已下架',
   }
   return map[code] || code
 }
@@ -237,7 +246,7 @@ async function handleConsultSeller(): Promise<void> {
           <div class="space-y-4 rounded-2xl border border-stone-200 bg-white/95 p-5">
             <div>
               <h2 class="text-base font-semibold text-stone-900">SKU 列表</h2>
-              <p class="mt-1 text-xs text-stone-500">状态：{{ product.status }}，卖家ID：{{ product.ownerUserId }}</p>
+              <p class="mt-1 text-xs text-stone-500">商品状态：{{ formatStatus(product.status) }}</p>
               <p class="mt-1 text-xs text-stone-500">价格区间：{{ formatPriceRange(product.minPriceCent, product.maxPriceCent) }}，库存：{{ product.totalStock ?? 0 }}</p>
             </div>
 
@@ -280,7 +289,7 @@ async function handleConsultSeller(): Promise<void> {
               :disabled="creatingOrder"
               @click="handleCreateOrder"
             >
-              {{ creatingOrder ? '下单中...' : '创建订单' }}
+              {{ creatingOrder ? '下单中...' : '立即下单' }}
             </button>
 
             <button

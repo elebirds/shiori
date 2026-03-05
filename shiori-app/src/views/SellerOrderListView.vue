@@ -54,6 +54,14 @@ const total = computed(() => query.data.value?.total || 0)
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pager.size)))
 const errorMessage = computed(() => (query.error.value instanceof Error ? query.error.value.message : ''))
 
+const ORDER_STATUS_TEXT: Record<OrderStatus, string> = {
+  UNPAID: '待支付',
+  PAID: '已支付',
+  DELIVERING: '待收货',
+  FINISHED: '已完成',
+  CANCELED: '已取消',
+}
+
 const actionError = computed(() => {
   const first = deliverMutation.error.value || finishMutation.error.value
   return first instanceof Error ? first.message : ''
@@ -72,6 +80,10 @@ function formatTime(raw?: string): string {
     return raw
   }
   return parsed.toLocaleString('zh-CN')
+}
+
+function statusText(orderStatus: OrderStatus): string {
+  return ORDER_STATUS_TEXT[orderStatus] || orderStatus
 }
 
 function applyFilter(): void {
@@ -128,11 +140,11 @@ async function handleFinish(targetOrderNo: string): Promise<void> {
           class="rounded-xl border border-stone-300 px-3 py-2 text-sm outline-none transition focus:border-amber-500"
         >
           <option value="">全部状态</option>
-          <option value="PAID">PAID</option>
-          <option value="DELIVERING">DELIVERING</option>
-          <option value="FINISHED">FINISHED</option>
-          <option value="CANCELED">CANCELED</option>
-          <option value="UNPAID">UNPAID</option>
+          <option value="UNPAID">待支付</option>
+          <option value="PAID">已支付</option>
+          <option value="DELIVERING">待收货</option>
+          <option value="FINISHED">已完成</option>
+          <option value="CANCELED">已取消</option>
         </select>
         <input
           v-model="createdFrom"
@@ -161,7 +173,6 @@ async function handleFinish(targetOrderNo: string): Promise<void> {
             <div>
               <p class="text-sm text-stone-500">订单号 {{ item.orderNo }}</p>
               <p class="mt-1 text-base font-semibold text-stone-900">{{ formatMoney(item.totalAmountCent) }}</p>
-              <p class="mt-1 text-xs text-stone-500">买家 {{ item.buyerUserId }}</p>
               <p class="mt-1 text-xs text-stone-500">创建 {{ formatTime(item.createdAt) }} / 支付 {{ formatTime(item.paidAt) }}</p>
             </div>
 
@@ -173,7 +184,7 @@ async function handleFinish(targetOrderNo: string): Promise<void> {
               >
                 查看详情
               </button>
-              <span class="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-700">{{ item.status }}</span>
+              <span class="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-700">{{ statusText(item.status) }}</span>
               <button
                 v-if="item.status === 'PAID'"
                 type="button"
@@ -223,4 +234,3 @@ async function handleFinish(targetOrderNo: string): Promise<void> {
     <p v-if="actionError" class="text-sm text-rose-600">{{ actionError }}</p>
   </section>
 </template>
-

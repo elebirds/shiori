@@ -100,10 +100,7 @@ const createMutation = useMutation({
 
     if (publishDirectly.value) {
       await publishProductV2(created.productId)
-      return {
-        ...created,
-        status: 'ON_SALE',
-      }
+      return created
     }
     return created
   },
@@ -143,7 +140,7 @@ function validate(): string | null {
     return '商品标题不能为空'
   }
   if (!form.campusCode.trim()) {
-    return '校区编码不能为空'
+    return '交易校区不能为空'
   }
   if (skus.value.length === 0) {
     return '请至少添加一个 SKU'
@@ -216,7 +213,7 @@ async function submit(): Promise<void> {
 
   try {
     const created = await createMutation.mutateAsync()
-    resultMessage.value = `创建成功：${created.productNo}（${created.status}）`
+    resultMessage.value = `发布成功：${created.productNo}`
     void router.push(`/products/${created.productId}`)
   } catch (error) {
     if (error instanceof ApiBizError) {
@@ -240,7 +237,7 @@ onUnmounted(() => {
   <section class="space-y-4">
     <header class="rounded-2xl border border-stone-200 bg-white/90 p-4">
       <h1 class="font-display text-2xl text-stone-900">发布商品</h1>
-      <p class="mt-1 text-sm text-stone-600">v2 商品需填写分类、成色、交易方式与校区信息。</p>
+      <p class="mt-1 text-sm text-stone-600">完善商品信息后即可发布，买家会看到分类、成色和交易方式等内容。</p>
     </header>
 
     <form class="space-y-4 rounded-2xl border border-stone-200 bg-white/95 p-5" @submit.prevent="submit">
@@ -286,12 +283,12 @@ onUnmounted(() => {
         </label>
 
         <label class="text-sm text-stone-700">
-          校区编码
+          交易校区
           <input
             v-model.trim="form.campusCode"
             type="text"
             class="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2 outline-none transition focus:border-amber-500"
-            placeholder="如：main_campus"
+            placeholder="如：主校区"
           />
         </label>
 
@@ -312,7 +309,7 @@ onUnmounted(() => {
 
         <div class="space-y-2 sm:col-span-2">
           <label class="block text-sm text-stone-700">
-            封面图片（OSS 预签名直传）
+            封面图片
             <input
               type="file"
               accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"

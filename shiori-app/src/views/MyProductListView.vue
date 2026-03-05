@@ -80,10 +80,52 @@ const operateError = computed(() => {
   return first instanceof Error ? first.message : ''
 })
 
+const PRODUCT_STATUS_TEXT: Record<ProductStatus, string> = {
+  DRAFT: '草稿',
+  ON_SALE: '在售',
+  OFF_SHELF: '已下架',
+}
+
+const CATEGORY_TEXT: Record<ProductCategoryCode, string> = {
+  TEXTBOOK: '教材',
+  EXAM_MATERIAL: '考试资料',
+  NOTE: '笔记',
+  OTHER: '其他',
+}
+
+const CONDITION_TEXT: Record<ProductConditionLevel, string> = {
+  NEW: '全新',
+  LIKE_NEW: '近新',
+  GOOD: '良好',
+  FAIR: '一般',
+}
+
+const TRADE_MODE_TEXT: Record<ProductTradeMode, string> = {
+  MEETUP: '面交',
+  DELIVERY: '邮寄',
+  BOTH: '均可',
+}
+
 function applyFilter(): void {
   pager.page = 1
   keyword.value = keywordInput.value.trim()
   campusCode.value = campusCodeInput.value.trim()
+}
+
+function statusText(statusValue: ProductStatus): string {
+  return PRODUCT_STATUS_TEXT[statusValue] || statusValue
+}
+
+function categoryText(value: ProductCategoryCode): string {
+  return CATEGORY_TEXT[value] || value
+}
+
+function conditionText(value: ProductConditionLevel): string {
+  return CONDITION_TEXT[value] || value
+}
+
+function tradeModeText(value: ProductTradeMode): string {
+  return TRADE_MODE_TEXT[value] || value
 }
 
 function toEdit(productId: number): void {
@@ -121,7 +163,7 @@ async function handleOffShelf(productId: number): Promise<void> {
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 class="font-display text-2xl text-stone-900">我的商品</h1>
-          <p class="mt-1 text-sm text-stone-600">支持 v2 字段筛选、编辑和上下架。</p>
+          <p class="mt-1 text-sm text-stone-600">可按分类、成色和交易方式筛选，并快速编辑上下架。</p>
         </div>
         <button
           type="button"
@@ -146,7 +188,7 @@ async function handleOffShelf(productId: number): Promise<void> {
           v-model="campusCodeInput"
           type="text"
           class="rounded-xl border border-stone-300 px-3 py-2 text-sm outline-none transition focus:border-amber-500"
-          placeholder="校区编码"
+          placeholder="交易校区"
           @keyup.enter="applyFilter"
         />
         <select
@@ -206,7 +248,7 @@ async function handleOffShelf(productId: number): Promise<void> {
               <p class="mt-1 line-clamp-2 text-sm text-stone-600">{{ item.description || '暂无描述' }}</p>
               <p class="mt-1 text-xs text-stone-500">{{ item.productNo }}</p>
               <p class="mt-1 text-xs text-stone-500">
-                {{ item.categoryCode }} / {{ item.conditionLevel }} / {{ item.tradeMode }} / {{ item.campusCode }}
+                {{ categoryText(item.categoryCode) }} / {{ conditionText(item.conditionLevel) }} / {{ tradeModeText(item.tradeMode) }} / {{ item.campusCode }}
               </p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
@@ -220,7 +262,7 @@ async function handleOffShelf(productId: number): Promise<void> {
                       : 'bg-amber-100 text-amber-700'
                 "
               >
-                {{ item.status }}
+                {{ statusText(item.status) }}
               </span>
               <button
                 type="button"
@@ -278,4 +320,3 @@ async function handleOffShelf(productId: number): Promise<void> {
     <p v-if="operateError" class="text-sm text-rose-600">{{ operateError }}</p>
   </section>
 </template>
-

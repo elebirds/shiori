@@ -47,6 +47,14 @@ const total = computed(() => query.data.value?.total || 0)
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pager.size)))
 const errorMessage = computed(() => (query.error.value instanceof Error ? query.error.value.message : ''))
 
+const ORDER_STATUS_TEXT: Record<OrderStatus, string> = {
+  UNPAID: '待支付',
+  PAID: '已支付',
+  DELIVERING: '待收货',
+  FINISHED: '已完成',
+  CANCELED: '已取消',
+}
+
 function formatMoney(priceCent: number): string {
   return `¥ ${(priceCent / 100).toFixed(2)}`
 }
@@ -77,6 +85,10 @@ function statusClass(status: OrderStatus): string {
     return 'bg-emerald-100 text-emerald-700'
   }
   return 'bg-stone-200 text-stone-700'
+}
+
+function statusText(status: OrderStatus): string {
+  return ORDER_STATUS_TEXT[status] || status
 }
 
 function handlePay(orderNo: string, conversationId?: number): void {
@@ -114,7 +126,7 @@ async function handleConfirm(orderNo: string, conversationId?: number): Promise<
   <section class="space-y-4">
     <header class="rounded-2xl border border-stone-200 bg-white/90 p-4">
       <h1 class="font-display text-2xl text-stone-900">我的订单</h1>
-      <p class="mt-1 text-sm text-stone-600">支持支付、取消与确认收货（DELIVERING -> FINISHED）</p>
+      <p class="mt-1 text-sm text-stone-600">可在这里完成支付、取消订单和确认收货。</p>
     </header>
 
     <ResultState :loading="query.isLoading.value" :error="errorMessage" :empty="!query.isLoading.value && items.length === 0" empty-text="你还没有订单">
@@ -136,7 +148,7 @@ async function handleConfirm(orderNo: string, conversationId?: number): Promise<
                 查看详情
               </RouterLink>
               <span class="rounded-full px-3 py-1 text-xs font-semibold" :class="statusClass(item.status)">
-                {{ item.status }}
+                {{ statusText(item.status) }}
               </span>
 
               <button
