@@ -16,6 +16,8 @@ import moe.hhm.shiori.common.exception.BizException;
 import moe.hhm.shiori.order.client.ProductDetailSnapshot;
 import moe.hhm.shiori.order.client.ProductServiceClient;
 import moe.hhm.shiori.order.client.ProductSkuSnapshot;
+import moe.hhm.shiori.order.client.NotifyChatClient;
+import moe.hhm.shiori.order.client.ChatConversationSnapshot;
 import moe.hhm.shiori.order.config.OrderMqProperties;
 import moe.hhm.shiori.order.config.OrderProperties;
 import moe.hhm.shiori.order.domain.OrderStatus;
@@ -24,6 +26,7 @@ import moe.hhm.shiori.order.dto.CreateOrderItem;
 import moe.hhm.shiori.order.dto.CreateOrderRequest;
 import moe.hhm.shiori.order.dto.CreateOrderResponse;
 import moe.hhm.shiori.order.dto.OrderOperateResponse;
+import moe.hhm.shiori.order.dto.v2.ChatToOrderClickRequest;
 import moe.hhm.shiori.order.event.EventEnvelope;
 import moe.hhm.shiori.order.event.OrderCanceledPayload;
 import moe.hhm.shiori.order.event.OrderCreatedPayload;
@@ -62,12 +65,14 @@ public class OrderCommandService {
     private static final String SOURCE_SELLER = "SELLER";
     private static final String SOURCE_ADMIN = "ADMIN";
     private static final String SOURCE_SYSTEM = "SYSTEM";
+    private static final String SOURCE_CHAT = "CHAT";
     private static final String OP_CREATE = "CREATE";
     private static final String OP_PAY = "PAY";
     private static final String OP_CANCEL = "CANCEL";
 
     private final OrderMapper orderMapper;
     private final ProductServiceClient productServiceClient;
+    private final NotifyChatClient notifyChatClient;
     private final OrderProperties orderProperties;
     private final OrderMqProperties orderMqProperties;
     private final ObjectMapper objectMapper;
@@ -75,12 +80,14 @@ public class OrderCommandService {
 
     public OrderCommandService(OrderMapper orderMapper,
                                ProductServiceClient productServiceClient,
+                               NotifyChatClient notifyChatClient,
                                OrderProperties orderProperties,
                                OrderMqProperties orderMqProperties,
                                ObjectMapper objectMapper,
                                OrderMetrics orderMetrics) {
         this.orderMapper = orderMapper;
         this.productServiceClient = productServiceClient;
+        this.notifyChatClient = notifyChatClient;
         this.orderProperties = orderProperties;
         this.orderMqProperties = orderMqProperties;
         this.objectMapper = objectMapper;
@@ -101,7 +108,11 @@ public class OrderCommandService {
         }
         orderMetrics.incIdempotency(OP_CREATE, "miss");
 
+        String normalizedSource = normalizeSource(request == null ? null : request.source());
+        Long chatConversationId = normalizeConversationId(request == null ? null : request.conversationId(), normalizedSource);
+
         List<PreparedOrderLine> lines = prepareOrderLines(buyerUserId, roles, request);
+        validateChatSourceContext(buyerUserId, roles, normalizedSource, chatConversationId, lines);
         long totalAmountCent = lines.stream().mapToLong(PreparedOrderLine::subtotalCent).sum();
         int itemCount = lines.stream().mapToInt(PreparedOrderLine::quantity).sum();
         String orderNo = generateOrderNo();
@@ -132,15 +143,43 @@ public class OrderCommandService {
         }
 
         try {
-            persistOrder(orderNo, buyerUserId, lines.getFirst().sellerUserId(), totalAmountCent, itemCount, timeoutAt, lines);
+            Long chatListingId = SOURCE_CHAT.equals(normalizedSource) ? lines.getFirst().productId() : null;
+            persistOrder(
+                    orderNo,
+                    buyerUserId,
+                    lines.getFirst().sellerUserId(),
+                    totalAmountCent,
+                    itemCount,
+                    timeoutAt,
+                    normalizedSource,
+                    chatConversationId,
+                    chatListingId,
+                    lines
+            );
             appendOrderCreatedOutbox(orderNo, buyerUserId, lines.getFirst().sellerUserId(), totalAmountCent, itemCount);
             appendOrderTimeoutOutbox(orderNo, buyerUserId);
             orderMetrics.incStateTransition("NEW", OrderStatus.UNPAID.name(), SOURCE_BUYER);
+            if (SOURCE_CHAT.equals(normalizedSource) && chatConversationId != null) {
+                orderMetrics.incChatToOrderSubmit(normalizedSource);
+                orderMetrics.incChatTradeStatusCardSent("ORDER_CREATED");
+            }
             return new CreateOrderResponse(orderNo, OrderStatus.UNPAID.name(), totalAmountCent, itemCount, false);
         } catch (RuntimeException ex) {
             compensateReleased(orderNo, buyerUserId, roles, deducted);
             throw ex;
         }
+    }
+
+    public void recordChatToOrderClick(Long userId, ChatToOrderClickRequest request) {
+        if (userId == null || userId <= 0 || request == null) {
+            throw new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST);
+        }
+        String normalizedSource = normalizeSource(request.source());
+        normalizeConversationId(request.conversationId(), normalizedSource);
+        if (request.listingId() == null || request.listingId() <= 0) {
+            throw new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST);
+        }
+        orderMetrics.incChatToOrderClick(normalizedSource);
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -210,6 +249,7 @@ public class OrderCommandService {
         orderMetrics.incStateTransition(OrderStatus.UNPAID.name(), OrderStatus.PAID.name(), SOURCE_BUYER);
         insertStatusAudit(orderNo, buyerUserId, SOURCE_BUYER, OrderStatus.UNPAID, OrderStatus.PAID,
                 "买家支付成功, paymentNo=" + paymentNo);
+        recordTradeStatusCardSentForChatOrder(order, "ORDER_PAID");
         saveOperateIdempotency(buyerUserId, OP_PAY, normalizedIdempotencyKey, orderNo);
         return new OrderOperateResponse(orderNo, OrderStatus.PAID.name(), false);
     }
@@ -338,6 +378,7 @@ public class OrderCommandService {
 
         orderMetrics.incStateTransition(OrderStatus.PAID.name(), OrderStatus.DELIVERING.name(), SOURCE_SELLER);
         insertStatusAudit(orderNo, sellerUserId, SOURCE_SELLER, OrderStatus.PAID, OrderStatus.DELIVERING, normalizedReason);
+        recordTradeStatusCardSentForChatOrder(order, "ORDER_DELIVERED");
         appendOrderDeliveredOutbox(orderNo, order.buyerUserId(), order.sellerUserId(), SOURCE_SELLER, sellerUserId);
         return new OrderOperateResponse(orderNo, OrderStatus.DELIVERING.name(), false);
     }
@@ -406,6 +447,7 @@ public class OrderCommandService {
 
         orderMetrics.incStateTransition(OrderStatus.PAID.name(), OrderStatus.DELIVERING.name(), SOURCE_ADMIN);
         insertStatusAudit(orderNo, operatorUserId, SOURCE_ADMIN, OrderStatus.PAID, OrderStatus.DELIVERING, normalizedReason);
+        recordTradeStatusCardSentForChatOrder(before, "ORDER_DELIVERED");
         appendOrderDeliveredOutbox(orderNo, before.buyerUserId(), before.sellerUserId(), SOURCE_ADMIN, operatorUserId);
         OrderRecord after = requireOrder(orderNo);
         insertAdminAudit(operatorUserId, orderNo, "ORDER_ADMIN_DELIVER", before, after, normalizedReason);
@@ -478,6 +520,7 @@ public class OrderCommandService {
 
         orderMetrics.incStateTransition(OrderStatus.DELIVERING.name(), OrderStatus.FINISHED.name(), SOURCE_BUYER);
         insertStatusAudit(orderNo, buyerUserId, SOURCE_BUYER, OrderStatus.DELIVERING, OrderStatus.FINISHED, normalizedReason);
+        recordTradeStatusCardSentForChatOrder(order, "ORDER_FINISHED");
         appendOrderFinishedOutbox(orderNo, order.buyerUserId(), order.sellerUserId(), SOURCE_BUYER, buyerUserId);
         return new OrderOperateResponse(orderNo, OrderStatus.FINISHED.name(), false);
     }
@@ -515,6 +558,9 @@ public class OrderCommandService {
                               long totalAmountCent,
                               int itemCount,
                               LocalDateTime timeoutAt,
+                              String source,
+                              Long conversationId,
+                              Long listingId,
                               List<PreparedOrderLine> lines) {
         OrderEntity orderEntity = new OrderEntity();
         orderEntity.setOrderNo(orderNo);
@@ -524,6 +570,9 @@ public class OrderCommandService {
         orderEntity.setTotalAmountCent(totalAmountCent);
         orderEntity.setItemCount(itemCount);
         orderEntity.setTimeoutAt(timeoutAt);
+        orderEntity.setBizSource(source);
+        orderEntity.setChatConversationId(conversationId);
+        orderEntity.setChatListingId(listingId);
         orderMapper.insertOrder(orderEntity);
 
         if (orderEntity.getId() == null) {
@@ -753,6 +802,63 @@ public class OrderCommandService {
         entity.setStatus(OutboxStatus.PENDING.name());
         entity.setRetryCount(0);
         orderMapper.insertOutboxEvent(entity);
+    }
+
+    private String normalizeSource(String source) {
+        if (!StringUtils.hasText(source)) {
+            return null;
+        }
+        String normalized = source.trim().toUpperCase();
+        if (!SOURCE_CHAT.equals(normalized)) {
+            throw new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST);
+        }
+        return normalized;
+    }
+
+    private Long normalizeConversationId(Long conversationId, String source) {
+        if (conversationId == null) {
+            if (SOURCE_CHAT.equals(source)) {
+                throw new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST);
+            }
+            return null;
+        }
+        if (conversationId <= 0 || !SOURCE_CHAT.equals(source)) {
+            throw new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST);
+        }
+        return conversationId;
+    }
+
+    private void recordTradeStatusCardSentForChatOrder(OrderRecord order, String status) {
+        if (order == null || !SOURCE_CHAT.equals(order.bizSource())) {
+            return;
+        }
+        if (order.chatConversationId() == null || order.chatConversationId() <= 0) {
+            return;
+        }
+        orderMetrics.incChatTradeStatusCardSent(status);
+    }
+
+    private void validateChatSourceContext(Long buyerUserId,
+                                           List<String> roles,
+                                           String source,
+                                           Long conversationId,
+                                           List<PreparedOrderLine> lines) {
+        if (!SOURCE_CHAT.equals(source)) {
+            return;
+        }
+        if (conversationId == null || conversationId <= 0 || lines == null || lines.isEmpty()) {
+            throw new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST);
+        }
+        PreparedOrderLine first = lines.getFirst();
+        Long expectedListingId = first.productId();
+        Long expectedSellerId = first.sellerUserId();
+        ChatConversationSnapshot conversation = notifyChatClient.getConversationForUser(conversationId, buyerUserId, roles);
+        if (conversation == null
+                || !buyerUserId.equals(conversation.buyerId())
+                || !expectedListingId.equals(conversation.listingId())
+                || !expectedSellerId.equals(conversation.sellerId())) {
+            throw new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST);
+        }
     }
 
     private String resolveCancelReason(String reason) {

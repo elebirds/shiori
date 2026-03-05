@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { useChatPopupStore } from '@/stores/chatPopup'
+import { formatMessagePreview } from '@/utils/chatCards'
 
 const router = useRouter()
 const chatPopupStore = useChatPopupStore()
@@ -10,14 +11,14 @@ const chatPopupStore = useChatPopupStore()
 const items = computed(() => chatPopupStore.items)
 
 function formatPreview(raw: string): string {
-  const trimmed = raw.trim()
-  if (!trimmed) {
+  const normalized = formatMessagePreview(raw || '').trim()
+  if (!normalized) {
     return '[空消息]'
   }
-  if (trimmed.length <= 40) {
-    return trimmed
+  if (normalized.length <= 40) {
+    return normalized
   }
-  return `${trimmed.slice(0, 40)}...`
+  return `${normalized.slice(0, 40)}...`
 }
 
 function formatTime(raw: string): string {

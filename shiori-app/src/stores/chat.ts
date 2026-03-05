@@ -15,6 +15,7 @@ import {
 import { getProductDetailV2 } from '@/api/productV2'
 import { useAuthStore } from '@/stores/auth'
 import { useNotifyStore, type WSFramePayload } from '@/stores/notify'
+import { buildProductCardContent, buildTradeStatusCardContent, type TradeStatusCardType } from '@/utils/chatCards'
 
 export interface ChatMessageVM {
   messageId: number
@@ -195,13 +196,20 @@ export const useChatStore = defineStore('chat', () => {
 
   async function sendMessage(content: string): Promise<void> {
     const conversationId = activeConversationId.value
+    if (!conversationId) {
+      return
+    }
+    await sendMessageToConversation(conversationId, content)
+  }
+
+  async function sendMessageToConversation(conversationId: number, content: string): Promise<boolean> {
     const currentUserId = authStore.user?.userId
     if (!conversationId || !currentUserId) {
-      return
+      return false
     }
     const trimmed = content.trim()
     if (!trimmed) {
-      return
+      return false
     }
     const clientMsgId = `web-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     const optimistic: ChatMessageVM = {
@@ -230,7 +238,22 @@ export const useChatStore = defineStore('chat', () => {
     if (!sent) {
       markMessageFailed(conversationId, clientMsgId)
       lastError.value = '聊天连接未就绪，请稍后重试'
+      return false
     }
+    return true
+  }
+
+  async function sendTradeStatusCard(conversationId: number, status: TradeStatusCardType, orderNo?: string): Promise<boolean> {
+    return sendMessageToConversation(conversationId, buildTradeStatusCardContent(status, orderNo))
+  }
+
+  async function sendProductCard(conversationId: number, payload: {
+    listingId: number
+    title: string
+    priceCent: number
+    coverImageUrl?: string
+  }): Promise<boolean> {
+    return sendMessageToConversation(conversationId, buildProductCardContent(payload))
   }
 
   async function markConversationRead(conversationId: number, lastReadMsgId: number): Promise<void> {
@@ -571,6 +594,9 @@ export const useChatStore = defineStore('chat', () => {
     hasOlderMessages,
     registerIncomingMessageListener,
     sendMessage,
+    sendMessageToConversation,
+    sendTradeStatusCard,
+    sendProductCard,
     refreshSummary,
     initialize,
     reset,

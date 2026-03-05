@@ -176,6 +176,29 @@
 
 ---
 
+## 🆕 v0.6（M1）咨询到下单转化闭环
+
+1. 聊天页新增“去下单”入口：
+   1. 会话页头部可直接跳转目标商品页并带 `conversationId`
+   2. 跳转时上报点击指标：`POST /api/v2/order/orders/chat-to-order-click`
+2. 下单链路新增会话来源标记：
+   1. 下单请求支持 `source` 与 `conversationId`
+   2. 当前支持 `source=CHAT`
+   3. 订单详情/列表/卖家订单列表均返回 `source/conversationId/listingId`
+3. 交易状态卡片（`trade_status_card`）：
+   1. 下单后自动发送：`ORDER_CREATED`
+   2. 支付后自动发送：`ORDER_PAID`
+   3. 发货后自动发送：`ORDER_DELIVERED`
+   4. 收货后自动发送：`ORDER_FINISHED`
+4. 新增指标：
+   1. `chat_to_order_click_total{source}`
+   2. `chat_to_order_submit_total{source}`
+   3. `chat_trade_status_card_sent_total{status}`
+5. 数据库迁移：
+   1. `shiori-order-service`：`V7__add_chat_source_to_order.sql`
+
+---
+
 ## 🛠️ 技术栈清单 (Tech Stack)
 
 ### 核心后端 (Core Services)

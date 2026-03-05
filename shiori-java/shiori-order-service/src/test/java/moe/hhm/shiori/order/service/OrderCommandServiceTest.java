@@ -6,6 +6,7 @@ import moe.hhm.shiori.common.exception.BizException;
 import moe.hhm.shiori.order.client.ProductDetailSnapshot;
 import moe.hhm.shiori.order.client.ProductServiceClient;
 import moe.hhm.shiori.order.client.ProductSkuSnapshot;
+import moe.hhm.shiori.order.client.NotifyChatClient;
 import moe.hhm.shiori.order.config.OrderMqProperties;
 import moe.hhm.shiori.order.config.OrderProperties;
 import moe.hhm.shiori.order.dto.CreateOrderItem;
@@ -40,6 +41,8 @@ class OrderCommandServiceTest {
     private OrderMapper orderMapper;
     @Mock
     private ProductServiceClient productServiceClient;
+    @Mock
+    private NotifyChatClient notifyChatClient;
 
     private OrderCommandService orderCommandService;
 
@@ -50,6 +53,7 @@ class OrderCommandServiceTest {
         orderCommandService = new OrderCommandService(
                 orderMapper,
                 productServiceClient,
+                notifyChatClient,
                 orderProperties,
                 orderMqProperties,
                 new ObjectMapper(),
@@ -62,7 +66,7 @@ class OrderCommandServiceTest {
         CreateOrderRequest request = new CreateOrderRequest(List.of(
                 new CreateOrderItem(1L, 11L, 1),
                 new CreateOrderItem(2L, 22L, 1)
-        ));
+        ), null, null);
         when(orderMapper.findOrderNoByBuyerAndIdempotencyKey(1001L, "idem-1")).thenReturn(null);
         when(productServiceClient.getProductDetail(1L, 1001L, List.of("ROLE_USER")))
                 .thenReturn(product(1L, "P1", 2001L, 11L, "S11", 1200L));
@@ -84,7 +88,7 @@ class OrderCommandServiceTest {
     void shouldRejectSelfPurchase() {
         CreateOrderRequest request = new CreateOrderRequest(List.of(
                 new CreateOrderItem(1L, 11L, 1)
-        ));
+        ), null, null);
         when(orderMapper.findOrderNoByBuyerAndIdempotencyKey(1001L, "idem-self")).thenReturn(null);
         when(productServiceClient.getProductDetail(1L, 1001L, List.of("ROLE_USER")))
                 .thenReturn(product(1L, "P1", 1001L, 11L, "S11", 1200L));
@@ -107,14 +111,14 @@ class OrderCommandServiceTest {
         when(orderMapper.findOrderByOrderNo("O202603030001"))
                 .thenReturn(new OrderRecord(
                         1L, "O202603030001", 1001L, 2001L, 1, 999L, 1,
-                        null, null, null, null, 0, null, null
+                        null, null, null, null, null, null, null, 0, null, null
                 ));
 
         CreateOrderResponse response = orderCommandService.createOrder(
                 1001L,
                 List.of("ROLE_USER"),
                 "idem-2",
-                new CreateOrderRequest(List.of(new CreateOrderItem(1L, 11L, 1)))
+                new CreateOrderRequest(List.of(new CreateOrderItem(1L, 11L, 1)), null, null)
         );
 
         assertThat(response.idempotent()).isTrue();
@@ -127,7 +131,7 @@ class OrderCommandServiceTest {
         when(orderMapper.findOrderByOrderNo("O202603030009"))
                 .thenReturn(new OrderRecord(
                         9L, "O202603030009", 1001L, 2001L, 2, 1999L, 2,
-                        "PAY-001", null, null, null, 0, null, null
+                        "PAY-001", null, null, null, null, null, null, 0, null, null
                 ));
 
         OrderOperateResponse response = orderCommandService.payOrder(1001L, "O202603030009", "PAY-001", "idem-pay-1");
@@ -141,7 +145,7 @@ class OrderCommandServiceTest {
         when(orderMapper.findOrderByOrderNo("O202603040001"))
                 .thenReturn(new OrderRecord(
                         10L, "O202603040001", 1001L, 2001L, 2, 1999L, 1,
-                        "PAY-1", null, null, null, 0, null, null
+                        "PAY-1", null, null, null, null, null, null, 0, null, null
                 ));
         when(orderMapper.markOrderDeliveringBySeller("O202603040001", 2001L, 2, 4)).thenReturn(1);
 
@@ -157,7 +161,7 @@ class OrderCommandServiceTest {
         when(orderMapper.findOrderByOrderNo("O202603040002"))
                 .thenReturn(new OrderRecord(
                         11L, "O202603040002", 1001L, 2001L, 2, 2999L, 1,
-                        "PAY-2", null, null, null, 0, null, null
+                        "PAY-2", null, null, null, null, null, null, 0, null, null
                 ));
 
         assertThatThrownBy(() -> orderCommandService.finishOrderAsSeller(2001L, "O202603040002", "done"))
@@ -172,9 +176,9 @@ class OrderCommandServiceTest {
         when(orderMapper.findOrderByOrderNo("O202603040003"))
                 .thenReturn(
                         new OrderRecord(12L, "O202603040003", 1001L, 2001L, 4, 3999L, 1,
-                                "PAY-3", null, null, null, 0, null, null),
+                                "PAY-3", null, null, null, null, null, null, 0, null, null),
                         new OrderRecord(12L, "O202603040003", 1001L, 2001L, 5, 3999L, 1,
-                                "PAY-3", null, null, null, 0, null, null)
+                                "PAY-3", null, null, null, null, null, null, 0, null, null)
                 );
         when(orderMapper.markOrderFinishedAsAdmin("O202603040003", 4, 5)).thenReturn(1);
 
@@ -192,7 +196,7 @@ class OrderCommandServiceTest {
         when(orderMapper.findOrderByOrderNo("O202603040004"))
                 .thenReturn(new OrderRecord(
                         13L, "O202603040004", 1001L, 2001L, 1, 1999L, 1,
-                        null, null, null, null, 0, null, null
+                        null, null, null, null, null, null, null, 0, null, null
                 ));
         when(orderMapper.findOperateIdempotency(1001L, "PAY", "idem-pay-conflict"))
                 .thenReturn(new OrderOperateIdempotencyRecord(1001L, "PAY", "idem-pay-conflict", "O-OTHER"));

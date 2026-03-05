@@ -12,6 +12,7 @@ import moe.hhm.shiori.order.dto.OrderDetailResponse;
 import moe.hhm.shiori.order.dto.OrderOperateResponse;
 import moe.hhm.shiori.order.dto.OrderPageResponse;
 import moe.hhm.shiori.order.dto.PayOrderRequest;
+import moe.hhm.shiori.order.dto.v2.ChatToOrderClickRequest;
 import moe.hhm.shiori.order.dto.v2.ConfirmReceiptRequest;
 import moe.hhm.shiori.order.dto.v2.OrderOperateResponseV2;
 import moe.hhm.shiori.order.dto.v2.OrderTimelineResponse;
@@ -30,6 +31,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @Validated
@@ -74,6 +76,14 @@ public class OrderV2Controller {
                                   Authentication authentication) {
         Long userId = CurrentUserSupport.requireUserId(authentication);
         return orderService.listMyOrders(userId, page, size);
+    }
+
+    @PostMapping("/chat-to-order-click")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void recordChatToOrderClick(@Valid @RequestBody ChatToOrderClickRequest request,
+                                       Authentication authentication) {
+        Long userId = CurrentUserSupport.requireUserId(authentication);
+        orderCommandService.recordChatToOrderClick(userId, request);
     }
 
     @PostMapping("/{orderNo}/pay")

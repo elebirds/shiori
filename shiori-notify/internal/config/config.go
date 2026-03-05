@@ -11,27 +11,28 @@ import (
 )
 
 const (
-	defaultNacosAddr         = "nacos:8848"
-	defaultNacosConfigGroup  = "SHIORI_DEV_DOCKER"
-	defaultHTTPAddr          = ":8090"
-	defaultRabbitMQExchange  = "shiori.order.event"
-	defaultRabbitMQExchanges = "shiori.order.event,shiori.user.event"
-	defaultRabbitMQQueue     = "notify.order.event"
-	defaultRabbitMQRouteKeys = "order.created,order.paid,order.canceled,order.delivered,order.finished,user.status.changed,user.role.changed,user.password.reset"
-	defaultMetricsEnabled    = true
-	defaultStoreMaxPerUser   = 1000
-	defaultReplayLimit       = 50
-	defaultReplayMaxLimit    = 200
-	defaultWSReplayLimit     = 100
-	defaultMySQLMaxOpenConns = 20
-	defaultMySQLMaxIdleConns = 10
-	defaultWSPath            = "/ws"
-	defaultChatPageLimit     = 20
-	defaultChatMaxPageLimit  = 100
-	defaultChatTicketIssuer  = "shiori-chat-ticket"
-	defaultChatMQEnabled     = true
-	defaultChatMQExchange    = "shiori.chat.event"
-	defaultJWTIssuer         = "shiori"
+	defaultNacosAddr                 = "nacos:8848"
+	defaultNacosConfigGroup          = "SHIORI_DEV_DOCKER"
+	defaultHTTPAddr                  = ":8090"
+	defaultRabbitMQExchange          = "shiori.order.event"
+	defaultRabbitMQExchanges         = "shiori.order.event,shiori.user.event"
+	defaultRabbitMQQueue             = "notify.order.event"
+	defaultRabbitMQRouteKeys         = "order.created,order.paid,order.canceled,order.delivered,order.finished,user.status.changed,user.role.changed,user.password.reset"
+	defaultMetricsEnabled            = true
+	defaultStoreMaxPerUser           = 1000
+	defaultReplayLimit               = 50
+	defaultReplayMaxLimit            = 200
+	defaultWSReplayLimit             = 100
+	defaultMySQLMaxOpenConns         = 20
+	defaultMySQLMaxIdleConns         = 10
+	defaultWSPath                    = "/ws"
+	defaultChatPageLimit             = 20
+	defaultChatMaxPageLimit          = 100
+	defaultChatTicketIssuer          = "shiori-chat-ticket"
+	defaultChatMQEnabled             = true
+	defaultChatMQExchange            = "shiori.chat.event"
+	defaultJWTIssuer                 = "shiori"
+	defaultGatewaySignMaxSkewSeconds = 300
 )
 
 var (
@@ -49,38 +50,40 @@ type NacosConnConfig struct {
 }
 
 type Config struct {
-	HTTPAddr             string
-	RabbitMQAddr         string
-	RabbitMQExchange     string
-	RabbitMQQueue        string
-	RabbitMQRoutingKey   string
-	RabbitMQExchanges    []string
-	RabbitMQRoutingKeys  []string
-	LogLevel             zerolog.Level
-	WSWriteTimeout       time.Duration
-	WSPingInterval       time.Duration
-	MetricsEnabled       bool
-	StoreDriver          string
-	StoreMaxPerUser      int
-	ReplayDefaultLimit   int
-	ReplayMaxLimit       int
-	WSReplayLimit        int
-	AuthEnabled          bool
-	JWTHmacSecret        string
-	JWTIssuer            string
-	MySQLDSN             string
-	MySQLMaxOpenConns    int
-	MySQLMaxIdleConns    int
-	MySQLConnMaxLifetime time.Duration
-	WSPath               string
-	ChatEnabled          bool
-	ChatDefaultLimit     int
-	ChatMaxLimit         int
-	ChatTicketIssuer     string
-	ChatTicketPublicKey  string
-	ChatMQEnabled        bool
-	ChatMQExchange       string
-	InstanceID           string
+	HTTPAddr                  string
+	RabbitMQAddr              string
+	RabbitMQExchange          string
+	RabbitMQQueue             string
+	RabbitMQRoutingKey        string
+	RabbitMQExchanges         []string
+	RabbitMQRoutingKeys       []string
+	LogLevel                  zerolog.Level
+	WSWriteTimeout            time.Duration
+	WSPingInterval            time.Duration
+	MetricsEnabled            bool
+	StoreDriver               string
+	StoreMaxPerUser           int
+	ReplayDefaultLimit        int
+	ReplayMaxLimit            int
+	WSReplayLimit             int
+	AuthEnabled               bool
+	JWTHmacSecret             string
+	JWTIssuer                 string
+	MySQLDSN                  string
+	MySQLMaxOpenConns         int
+	MySQLMaxIdleConns         int
+	MySQLConnMaxLifetime      time.Duration
+	WSPath                    string
+	ChatEnabled               bool
+	ChatDefaultLimit          int
+	ChatMaxLimit              int
+	ChatTicketIssuer          string
+	ChatTicketPublicKey       string
+	ChatMQEnabled             bool
+	ChatMQExchange            string
+	InstanceID                string
+	GatewaySignSecret         string
+	GatewaySignMaxSkewSeconds int64
 }
 
 type NotifyNacosConfig struct {
@@ -166,12 +169,18 @@ type notifyInstanceSection struct {
 }
 
 type securitySection struct {
-	JWT securityJWTSection `yaml:"jwt"`
+	JWT         securityJWTSection         `yaml:"jwt"`
+	GatewaySign securityGatewaySignSection `yaml:"gateway-sign"`
 }
 
 type securityJWTSection struct {
 	Issuer     string `yaml:"issuer"`
 	HMACSecret string `yaml:"hmac-secret"`
+}
+
+type securityGatewaySignSection struct {
+	InternalSecret string `yaml:"internal-secret"`
+	MaxSkewSeconds int64  `yaml:"max-skew-seconds"`
 }
 
 func LoadNacosConnFromEnv() (NacosConnConfig, error) {
@@ -207,38 +216,40 @@ func (c NotifyNacosConfig) ToRuntimeConfig() (Config, error) {
 		routingKeys = parseCSV(defaultRabbitMQRouteKeys)
 	}
 	cfg := Config{
-		HTTPAddr:             stringOrDefault(c.Notify.HTTP.Addr, defaultHTTPAddr),
-		RabbitMQAddr:         strings.TrimSpace(c.Notify.RabbitMQ.Addr),
-		RabbitMQExchange:     stringOrDefault(c.Notify.RabbitMQ.Exchange, firstOrDefault(exchanges, defaultRabbitMQExchange)),
-		RabbitMQQueue:        stringOrDefault(c.Notify.RabbitMQ.Queue, defaultRabbitMQQueue),
-		RabbitMQRoutingKey:   stringOrDefault(c.Notify.RabbitMQ.RoutingKey, firstOrDefault(routingKeys, "")),
-		RabbitMQExchanges:    exchanges,
-		RabbitMQRoutingKeys:  routingKeys,
-		LogLevel:             parseLogLevel(stringOrDefault(c.Notify.Log.Level, "info")),
-		WSWriteTimeout:       parseDurationOrDefaultValue(c.Notify.WS.WriteTimeout, defaultWSWriteTimeout),
-		WSPingInterval:       parseDurationOrDefaultValue(c.Notify.WS.PingInterval, defaultWSPingInterval),
-		MetricsEnabled:       boolOrDefault(c.Notify.Metrics.Enabled, defaultMetricsEnabled),
-		StoreDriver:          strings.ToLower(strings.TrimSpace(c.Notify.Store.Driver)),
-		StoreMaxPerUser:      intOrDefault(c.Notify.Store.MaxPerUser, defaultStoreMaxPerUser),
-		ReplayDefaultLimit:   intOrDefault(c.Notify.Replay.DefaultLimit, defaultReplayLimit),
-		ReplayMaxLimit:       intOrDefault(c.Notify.Replay.MaxLimit, defaultReplayMaxLimit),
-		WSReplayLimit:        intOrDefault(c.Notify.Replay.WSLimit, defaultWSReplayLimit),
-		AuthEnabled:          boolOrDefault(c.Notify.Auth.Enabled, true),
-		JWTHmacSecret:        strings.TrimSpace(c.Security.JWT.HMACSecret),
-		JWTIssuer:            stringOrDefault(c.Security.JWT.Issuer, defaultJWTIssuer),
-		MySQLDSN:             strings.TrimSpace(c.Notify.MySQL.DSN),
-		MySQLMaxOpenConns:    intOrDefault(c.Notify.MySQL.MaxOpenConns, defaultMySQLMaxOpenConns),
-		MySQLMaxIdleConns:    intOrDefault(c.Notify.MySQL.MaxIdleConns, defaultMySQLMaxIdleConns),
-		MySQLConnMaxLifetime: parseDurationOrDefaultValue(c.Notify.MySQL.ConnMaxLifetime, defaultMySQLConnMaxLifetime),
-		WSPath:               stringOrDefault(c.Notify.WS.Path, defaultWSPath),
-		ChatEnabled:          boolOrDefault(c.Notify.Chat.Enabled, false),
-		ChatDefaultLimit:     intOrDefault(c.Notify.Chat.DefaultLimit, defaultChatPageLimit),
-		ChatMaxLimit:         intOrDefault(c.Notify.Chat.MaxLimit, defaultChatMaxPageLimit),
-		ChatTicketIssuer:     stringOrDefault(c.Notify.Chat.TicketIssuer, defaultChatTicketIssuer),
-		ChatTicketPublicKey:  strings.TrimSpace(c.Notify.Chat.TicketPublicKey),
-		ChatMQEnabled:        boolOrDefault(c.Notify.Chat.MQEnabled, defaultChatMQEnabled),
-		ChatMQExchange:       stringOrDefault(c.Notify.Chat.MQExchange, defaultChatMQExchange),
-		InstanceID:           strings.TrimSpace(c.Notify.Instance.ID),
+		HTTPAddr:                  stringOrDefault(c.Notify.HTTP.Addr, defaultHTTPAddr),
+		RabbitMQAddr:              strings.TrimSpace(c.Notify.RabbitMQ.Addr),
+		RabbitMQExchange:          stringOrDefault(c.Notify.RabbitMQ.Exchange, firstOrDefault(exchanges, defaultRabbitMQExchange)),
+		RabbitMQQueue:             stringOrDefault(c.Notify.RabbitMQ.Queue, defaultRabbitMQQueue),
+		RabbitMQRoutingKey:        stringOrDefault(c.Notify.RabbitMQ.RoutingKey, firstOrDefault(routingKeys, "")),
+		RabbitMQExchanges:         exchanges,
+		RabbitMQRoutingKeys:       routingKeys,
+		LogLevel:                  parseLogLevel(stringOrDefault(c.Notify.Log.Level, "info")),
+		WSWriteTimeout:            parseDurationOrDefaultValue(c.Notify.WS.WriteTimeout, defaultWSWriteTimeout),
+		WSPingInterval:            parseDurationOrDefaultValue(c.Notify.WS.PingInterval, defaultWSPingInterval),
+		MetricsEnabled:            boolOrDefault(c.Notify.Metrics.Enabled, defaultMetricsEnabled),
+		StoreDriver:               strings.ToLower(strings.TrimSpace(c.Notify.Store.Driver)),
+		StoreMaxPerUser:           intOrDefault(c.Notify.Store.MaxPerUser, defaultStoreMaxPerUser),
+		ReplayDefaultLimit:        intOrDefault(c.Notify.Replay.DefaultLimit, defaultReplayLimit),
+		ReplayMaxLimit:            intOrDefault(c.Notify.Replay.MaxLimit, defaultReplayMaxLimit),
+		WSReplayLimit:             intOrDefault(c.Notify.Replay.WSLimit, defaultWSReplayLimit),
+		AuthEnabled:               boolOrDefault(c.Notify.Auth.Enabled, true),
+		JWTHmacSecret:             strings.TrimSpace(c.Security.JWT.HMACSecret),
+		JWTIssuer:                 stringOrDefault(c.Security.JWT.Issuer, defaultJWTIssuer),
+		MySQLDSN:                  strings.TrimSpace(c.Notify.MySQL.DSN),
+		MySQLMaxOpenConns:         intOrDefault(c.Notify.MySQL.MaxOpenConns, defaultMySQLMaxOpenConns),
+		MySQLMaxIdleConns:         intOrDefault(c.Notify.MySQL.MaxIdleConns, defaultMySQLMaxIdleConns),
+		MySQLConnMaxLifetime:      parseDurationOrDefaultValue(c.Notify.MySQL.ConnMaxLifetime, defaultMySQLConnMaxLifetime),
+		WSPath:                    stringOrDefault(c.Notify.WS.Path, defaultWSPath),
+		ChatEnabled:               boolOrDefault(c.Notify.Chat.Enabled, false),
+		ChatDefaultLimit:          intOrDefault(c.Notify.Chat.DefaultLimit, defaultChatPageLimit),
+		ChatMaxLimit:              intOrDefault(c.Notify.Chat.MaxLimit, defaultChatMaxPageLimit),
+		ChatTicketIssuer:          stringOrDefault(c.Notify.Chat.TicketIssuer, defaultChatTicketIssuer),
+		ChatTicketPublicKey:       strings.TrimSpace(c.Notify.Chat.TicketPublicKey),
+		ChatMQEnabled:             boolOrDefault(c.Notify.Chat.MQEnabled, defaultChatMQEnabled),
+		ChatMQExchange:            stringOrDefault(c.Notify.Chat.MQExchange, defaultChatMQExchange),
+		InstanceID:                strings.TrimSpace(c.Notify.Instance.ID),
+		GatewaySignSecret:         strings.TrimSpace(c.Security.GatewaySign.InternalSecret),
+		GatewaySignMaxSkewSeconds: int64OrDefault(c.Security.GatewaySign.MaxSkewSeconds, defaultGatewaySignMaxSkewSeconds),
 	}
 	if cfg.InstanceID == "" {
 		cfg.InstanceID = defaultInstanceID()
@@ -322,6 +333,13 @@ func boolOrDefault(value *bool, fallback bool) bool {
 }
 
 func intOrDefault(value, fallback int) int {
+	if value <= 0 {
+		return fallback
+	}
+	return value
+}
+
+func int64OrDefault(value, fallback int64) int64 {
 	if value <= 0 {
 		return fallback
 	}

@@ -55,6 +55,13 @@ func (s *Service) Start(userID int64, ticket string) (Conversation, ChatTicketCl
 	return s.Join(userID, ticket)
 }
 
+func (s *Service) GetConversationForUser(userID, conversationID int64) (Conversation, error) {
+	if userID <= 0 || conversationID <= 0 {
+		return Conversation{}, ErrInvalidArgument
+	}
+	return s.repo.GetConversationForUser(conversationID, userID)
+}
+
 func (s *Service) Send(userID, conversationID int64, clientMsgID, content string) (SendResult, error) {
 	if userID <= 0 || conversationID <= 0 {
 		return SendResult{}, ErrInvalidArgument

@@ -10,6 +10,8 @@ export interface CreateOrderItem {
 
 export interface CreateOrderRequest {
   items: CreateOrderItem[]
+  source?: string
+  conversationId?: number
 }
 
 export interface CreateOrderResponse {
@@ -44,6 +46,9 @@ export interface OrderDetailResponse {
   sellerUserId: number
   status: OrderStatus
   totalAmountCent: number
+  source?: string
+  conversationId?: number
+  listingId?: number
   createdAt: string
   paidAt?: string
   timeoutAt?: string
@@ -55,6 +60,9 @@ export interface OrderSummaryResponse {
   status: OrderStatus
   totalAmountCent: number
   itemCount: number
+  source?: string
+  conversationId?: number
+  listingId?: number
   createdAt: string
   paidAt?: string
 }
@@ -96,12 +104,21 @@ export interface SellerOrderQuery {
   createdTo?: string
 }
 
+export interface ChatToOrderClickRequest {
+  source: 'CHAT'
+  conversationId: number
+  listingId: number
+}
+
 export interface SellerOrderSummaryResponse {
   orderNo: string
   buyerUserId: number
   status: OrderStatus
   totalAmountCent: number
   itemCount: number
+  source?: string
+  conversationId?: number
+  listingId?: number
   createdAt: string
   paidAt?: string
   updatedAt?: string
@@ -145,6 +162,10 @@ export function createOrderV2(payload: CreateOrderRequest, idempotencyKey: strin
 
 export function listMyOrdersV2(query: OrderQuery): Promise<OrderPageResponse> {
   return httpGet<OrderPageResponse>('/api/v2/order/orders', { params: query })
+}
+
+export function recordChatToOrderClickV2(payload: ChatToOrderClickRequest): Promise<void> {
+  return httpPost<void>('/api/v2/order/orders/chat-to-order-click', payload)
 }
 
 export function getOrderDetailV2(orderNo: string): Promise<OrderDetailResponse> {
@@ -192,4 +213,3 @@ export function deliverSellerOrderV2(orderNo: string, payload?: OrderTransitionR
 export function finishSellerOrderV2(orderNo: string, payload?: OrderTransitionRequest): Promise<OrderOperateResponse> {
   return httpPost<OrderOperateResponse>(`/api/v2/order/seller/orders/${orderNo}/finish`, payload)
 }
-

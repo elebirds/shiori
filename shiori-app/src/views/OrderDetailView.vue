@@ -6,12 +6,18 @@ import { useRoute, useRouter } from 'vue-router'
 import ResultState from '@/components/ResultState.vue'
 import { cancelOrderV2, confirmReceiptV2, getOrderDetailV2, getOrderTimelineV2, payOrderV2, type OrderStatus } from '@/api/orderV2'
 import { ApiBizError } from '@/types/result'
+import { useChatStore } from '@/stores/chat'
 
 const route = useRoute()
 const router = useRouter()
 const queryClient = useQueryClient()
+const chatStore = useChatStore()
 
 const orderNo = computed(() => String(route.params.orderNo || ''))
+const routeConversationId = computed(() => {
+  const raw = Number(route.query.conversationId || 0)
+  return Number.isFinite(raw) && raw > 0 ? raw : 0
+})
 
 const query = useQuery({
   queryKey: computed(() => ['order-detail-v2', orderNo.value]),
@@ -95,6 +101,10 @@ function statusClass(status: OrderStatus): string {
 async function handlePay(): Promise<void> {
   try {
     await payMutation.mutateAsync()
+    const conversationId = detail.value?.conversationId || routeConversationId.value
+    if (conversationId && conversationId > 0) {
+      await chatStore.sendTradeStatusCard(conversationId, 'ORDER_PAID', orderNo.value)
+    }
   } catch (error) {
     if (error instanceof ApiBizError) {
       return
@@ -115,6 +125,10 @@ async function handleCancel(): Promise<void> {
 async function handleConfirm(): Promise<void> {
   try {
     await confirmMutation.mutateAsync()
+    const conversationId = detail.value?.conversationId || routeConversationId.value
+    if (conversationId && conversationId > 0) {
+      await chatStore.sendTradeStatusCard(conversationId, 'ORDER_FINISHED', orderNo.value)
+    }
   } catch (error) {
     if (error instanceof ApiBizError) {
       return

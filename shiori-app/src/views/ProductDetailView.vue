@@ -21,6 +21,10 @@ const createError = ref('')
 const skuQuantities = ref<Record<number, number>>({})
 
 const productId = computed(() => Number(route.params.id))
+const chatConversationId = computed(() => {
+  const raw = Number(route.query.conversationId || 0)
+  return Number.isFinite(raw) && raw > 0 ? raw : 0
+})
 
 const query = useQuery({
   queryKey: computed(() => ['product-detail-v2', productId.value]),
@@ -140,10 +144,20 @@ async function handleCreateOrder(): Promise<void> {
           skuId: item.sku.skuId,
           quantity: item.quantity,
         })),
+        source: chatConversationId.value > 0 ? 'CHAT' : undefined,
+        conversationId: chatConversationId.value > 0 ? chatConversationId.value : undefined,
       },
       idempotencyKey,
     )
-    await router.push(`/orders/${response.orderNo}`)
+
+    if (chatConversationId.value > 0) {
+      await chatStore.sendTradeStatusCard(chatConversationId.value, 'ORDER_CREATED', response.orderNo)
+    }
+
+    await router.push({
+      path: `/orders/${response.orderNo}`,
+      query: chatConversationId.value > 0 ? { conversationId: String(chatConversationId.value) } : undefined,
+    })
   } catch (error) {
     if (error instanceof ApiBizError) {
       createError.value = error.message
@@ -167,6 +181,13 @@ async function handleConsultSeller(): Promise<void> {
   createError.value = ''
   try {
     const conversationId = await chatStore.bootstrapFromListing(product.value.productId)
+    const priceCent = Number(product.value.minPriceCent ?? product.value.maxPriceCent ?? 0)
+    await chatStore.sendProductCard(conversationId, {
+      listingId: product.value.productId,
+      title: product.value.title,
+      priceCent,
+      coverImageUrl: product.value.coverImageUrl,
+    })
     await router.push({
       path: '/chat',
       query: {
@@ -180,7 +201,6 @@ async function handleConsultSeller(): Promise<void> {
   }
 }
 </script>
-
 <template>
   <section class="space-y-4">
     <button

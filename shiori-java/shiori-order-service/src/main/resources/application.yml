@@ -23,6 +23,8 @@ order:
   timeout-minutes: ${ORDER_TIMEOUT_MINUTES:15}
   product-client:
     service-base-url: ${ORDER_PRODUCT_SERVICE_BASE_URL:http://shiori-product-service}
+  notify-client:
+    service-base-url: ${ORDER_NOTIFY_SERVICE_BASE_URL:http://shiori-notify}
   outbox:
     enabled: ${ORDER_OUTBOX_ENABLED:true}
     relay-fixed-delay-ms: ${ORDER_OUTBOX_RELAY_FIXED_DELAY_MS:3000}

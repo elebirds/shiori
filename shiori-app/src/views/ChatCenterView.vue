@@ -4,6 +4,8 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore, type ChatIncomingMessageEvent, type ChatMessageVM } from '@/stores/chat'
+import { recordChatToOrderClickV2 } from '@/api/orderV2'
+import { formatMessagePreview, parseProductCardContent, parseTradeStatusCardContent } from '@/utils/chatCards'
 
 const route = useRoute()
 const router = useRouter()
@@ -154,6 +156,71 @@ function formatDividerTime(raw: string): string {
   return `${parsed.getFullYear()}年${parsed.getMonth() + 1}月${parsed.getDate()}日 ${clock}`
 }
 
+function resolveMessagePreview(content: string): string {
+  return formatMessagePreview(content || '')
+}
+
+function isTradeStatusCard(message?: ChatMessageVM): boolean {
+  if (!message) {
+    return false
+  }
+  return Boolean(parseTradeStatusCardContent(message.content))
+}
+
+function isProductCard(message?: ChatMessageVM): boolean {
+  if (!message) {
+    return false
+  }
+  return Boolean(parseProductCardContent(message.content))
+}
+
+function productCardTitle(message?: ChatMessageVM): string {
+  if (!message) {
+    return ''
+  }
+  return parseProductCardContent(message.content)?.title || ''
+}
+
+function productCardPrice(message?: ChatMessageVM): string {
+  if (!message) {
+    return ''
+  }
+  const priceCent = parseProductCardContent(message.content)?.priceCent || 0
+  return `¥ ${(priceCent / 100).toFixed(2)}`
+}
+
+function productCardCover(message?: ChatMessageVM): string {
+  if (!message) {
+    return ''
+  }
+  return parseProductCardContent(message.content)?.coverImageUrl || ''
+}
+
+async function openProductCard(message?: ChatMessageVM): Promise<void> {
+  const listingId = parseProductCardContent(message?.content || '')?.listingId || 0
+  if (!listingId) {
+    return
+  }
+  await router.push({
+    path: `/products/${listingId}`,
+    query: activeConversation.value?.conversationId ? { conversationId: String(activeConversation.value.conversationId) } : undefined,
+  })
+}
+
+function tradeStatusCardText(message?: ChatMessageVM): string {
+  if (!message) {
+    return ''
+  }
+  return parseTradeStatusCardContent(message.content)?.text || ''
+}
+
+function tradeStatusCardOrderNo(message?: ChatMessageVM): string {
+  if (!message) {
+    return ''
+  }
+  return parseTradeStatusCardContent(message.content)?.orderNo || ''
+}
+
 function isMine(senderId: number): boolean {
   return senderId === authStore.user?.userId
 }
@@ -176,6 +243,23 @@ async function selectConversation(conversationId: number): Promise<void> {
     path: '/chat',
     query: {
       conversationId: String(conversationId),
+    },
+  })
+}
+
+async function goToListingOrder(): Promise<void> {
+  if (!activeConversation.value?.listingId || !activeConversation.value?.conversationId) {
+    return
+  }
+  void recordChatToOrderClickV2({
+    source: 'CHAT',
+    conversationId: activeConversation.value.conversationId,
+    listingId: activeConversation.value.listingId,
+  }).catch(() => undefined)
+  await router.push({
+    path: `/products/${activeConversation.value.listingId}`,
+    query: {
+      conversationId: String(activeConversation.value.conversationId),
     },
   })
 }
@@ -321,11 +405,11 @@ function jumpToLatest(): void {
             <div v-else class="flex h-10 w-10 items-center justify-center rounded-full border border-stone-200 bg-stone-100 text-xs text-stone-500">头像</div>
             <div class="min-w-0 flex-1">
               <div class="flex items-center justify-between gap-2">
-                <p class="truncate text-sm font-semibold text-stone-900">{{ item.peerProfile?.nickname || `用户 ${item.peerUserId}` }}</p>
+                <p class="truncate text-sm font-semibold text-stone-900">{{ item.peerProfile?.nickname || ('用户 ' + item.peerUserId) }}</p>
                 <span v-if="item.hasUnread" class="rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">新</span>
               </div>
-              <p class="truncate text-xs text-stone-500">{{ item.listingTitle || `商品 ${item.listingId}` }}</p>
-              <p class="mt-1 truncate text-xs text-stone-600">{{ item.lastMessage?.content || '暂无消息' }}</p>
+              <p class="truncate text-xs text-stone-500">{{ item.listingTitle || ('商品 ' + item.listingId) }}</p>
+              <p class="mt-1 truncate text-xs text-stone-600">{{ item.lastMessage ? resolveMessagePreview(item.lastMessage.content) : '暂无消息' }}</p>
             </div>
           </div>
         </article>
@@ -333,11 +417,21 @@ function jumpToLatest(): void {
       </aside>
 
       <section class="flex h-[60vh] min-h-[420px] max-h-[760px] flex-col rounded-2xl border border-stone-200 bg-white/95 lg:h-[70vh]">
-        <header class="border-b border-stone-100 px-4 py-3">
-          <h2 class="text-sm font-semibold text-stone-900">
-            {{ activeConversation?.peerProfile?.nickname || (activeConversation ? `用户 ${activeConversation.peerUserId}` : '请选择会话') }}
-          </h2>
-          <p class="mt-1 text-xs text-stone-500">{{ activeConversation?.listingTitle || '' }}</p>
+        <header class="flex items-center justify-between gap-3 border-b border-stone-100 px-4 py-3">
+          <div class="min-w-0">
+            <h2 class="truncate text-sm font-semibold text-stone-900">
+              {{ activeConversation?.peerProfile?.nickname || (activeConversation ? ('用户 ' + activeConversation.peerUserId) : '请选择会话') }}
+            </h2>
+            <p class="mt-1 truncate text-xs text-stone-500">{{ activeConversation?.listingTitle || '' }}</p>
+          </div>
+          <button
+            v-if="activeConversation"
+            type="button"
+            class="rounded-lg border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
+            @click="goToListingOrder"
+          >
+            去下单
+          </button>
         </header>
 
         <div ref="messageViewportRef" class="chat-thread flex-1 overflow-y-auto px-4 py-3" @scroll.passive="handleMessageScroll">
@@ -372,7 +466,33 @@ function jumpToLatest(): void {
                     class="chat-bubble px-3 py-2 text-sm"
                     :class="isMine(entry.message?.senderId || 0) ? 'chat-bubble-mine text-white' : 'chat-bubble-peer text-stone-800'"
                   >
-                    <p class="whitespace-pre-wrap break-words">{{ entry.message?.content }}</p>
+                    <template v-if="isProductCard(entry.message)">
+                      <button
+                        type="button"
+                        class="w-[240px] overflow-hidden rounded-xl border border-stone-200 bg-white text-left transition hover:border-stone-300"
+                        @click="openProductCard(entry.message)"
+                      >
+                        <div class="h-28 w-full bg-stone-100">
+                          <img v-if="productCardCover(entry.message)" :src="productCardCover(entry.message)" :alt="productCardTitle(entry.message)" class="h-full w-full object-cover" />
+                          <div v-else class="flex h-full items-center justify-center text-xs text-stone-500">商品封面</div>
+                        </div>
+                        <div class="space-y-1 px-3 py-2">
+                          <p class="line-clamp-2 text-xs font-medium text-stone-800">{{ productCardTitle(entry.message) }}</p>
+                          <p class="text-xs font-semibold text-rose-600">{{ productCardPrice(entry.message) }}</p>
+                          <p class="text-[11px] text-stone-500">点击查看并下单</p>
+                        </div>
+                      </button>
+                    </template>
+                    <template v-else-if="isTradeStatusCard(entry.message)">
+                      <div class="space-y-1 rounded-xl border border-amber-200 bg-amber-50/90 px-3 py-2 text-stone-800">
+                        <p class="text-[11px] font-semibold tracking-wide text-amber-800">交易状态</p>
+                        <p class="whitespace-pre-wrap break-words text-sm">{{ tradeStatusCardText(entry.message) }}</p>
+                        <p v-if="tradeStatusCardOrderNo(entry.message)" class="text-[11px] text-stone-600">
+                          订单号 {{ tradeStatusCardOrderNo(entry.message) }}
+                        </p>
+                      </div>
+                    </template>
+                    <p v-else class="whitespace-pre-wrap break-words">{{ entry.message?.content }}</p>
                   </div>
                   <p
                     v-if="isMine(entry.message?.senderId || 0) && (entry.message?.status === 'pending' || entry.message?.status === 'failed')"

@@ -5,8 +5,10 @@ import { computed, reactive } from 'vue'
 import ResultState from '@/components/ResultState.vue'
 import { cancelOrderV2, confirmReceiptV2, listMyOrdersV2, payOrderV2, type OrderStatus } from '@/api/orderV2'
 import { ApiBizError } from '@/types/result'
+import { useChatStore } from '@/stores/chat'
 
 const queryClient = useQueryClient()
+const chatStore = useChatStore()
 
 const pager = reactive({
   page: 1,
@@ -82,9 +84,12 @@ function statusClass(status: OrderStatus): string {
   return 'bg-stone-200 text-stone-700'
 }
 
-async function handlePay(orderNo: string): Promise<void> {
+async function handlePay(orderNo: string, conversationId?: number): Promise<void> {
   try {
     await payMutation.mutateAsync(orderNo)
+    if (conversationId && conversationId > 0) {
+      await chatStore.sendTradeStatusCard(conversationId, 'ORDER_PAID', orderNo)
+    }
   } catch (error) {
     if (error instanceof ApiBizError) {
       return
@@ -102,9 +107,12 @@ async function handleCancel(orderNo: string): Promise<void> {
   }
 }
 
-async function handleConfirm(orderNo: string): Promise<void> {
+async function handleConfirm(orderNo: string, conversationId?: number): Promise<void> {
   try {
     await confirmMutation.mutateAsync(orderNo)
+    if (conversationId && conversationId > 0) {
+      await chatStore.sendTradeStatusCard(conversationId, 'ORDER_FINISHED', orderNo)
+    }
   } catch (error) {
     if (error instanceof ApiBizError) {
       return
@@ -147,7 +155,7 @@ async function handleConfirm(orderNo: string): Promise<void> {
                 type="button"
                 class="rounded-lg bg-stone-900 px-3 py-1.5 text-xs text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-70"
                 :disabled="payMutation.isPending.value"
-                @click="handlePay(item.orderNo)"
+                @click="handlePay(item.orderNo, item.conversationId)"
               >
                 立即支付
               </button>
@@ -167,7 +175,7 @@ async function handleConfirm(orderNo: string): Promise<void> {
                 type="button"
                 class="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-70"
                 :disabled="confirmMutation.isPending.value"
-                @click="handleConfirm(item.orderNo)"
+                @click="handleConfirm(item.orderNo, item.conversationId)"
               >
                 确认收货
               </button>

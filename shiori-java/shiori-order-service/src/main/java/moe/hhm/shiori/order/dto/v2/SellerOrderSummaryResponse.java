@@ -8,6 +8,9 @@ public record SellerOrderSummaryResponse(
         String status,
         Long totalAmountCent,
         Integer itemCount,
+        String source,
+        Long conversationId,
+        Long listingId,
         LocalDateTime createdAt,
         LocalDateTime paidAt,
         LocalDateTime updatedAt

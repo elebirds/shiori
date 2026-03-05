@@ -59,6 +59,9 @@ public class OrderService {
                 order.sellerUserId(),
                 OrderStatus.fromCode(order.status()).name(),
                 order.totalAmountCent(),
+                order.bizSource(),
+                order.chatConversationId(),
+                order.chatListingId(),
                 order.createdAt(),
                 order.paidAt(),
                 order.timeoutAt(),
@@ -79,6 +82,9 @@ public class OrderService {
                         OrderStatus.fromCode(record.status()).name(),
                         record.totalAmountCent(),
                         record.itemCount(),
+                        record.bizSource(),
+                        record.chatConversationId(),
+                        record.chatListingId(),
                         record.createdAt(),
                         record.paidAt()))
                 .toList();
@@ -116,6 +122,9 @@ public class OrderService {
                         OrderStatus.fromCode(record.status()).name(),
                         record.totalAmountCent(),
                         record.itemCount(),
+                        record.bizSource(),
+                        record.chatConversationId(),
+                        record.chatListingId(),
                         record.createdAt(),
                         record.paidAt()))
                 .toList();
@@ -174,6 +183,9 @@ public class OrderService {
                         OrderStatus.fromCode(record.status()).name(),
                         record.totalAmountCent(),
                         record.itemCount(),
+                        record.bizSource(),
+                        record.chatConversationId(),
+                        record.chatListingId(),
                         record.createdAt(),
                         record.paidAt(),
                         record.updatedAt()))
@@ -208,6 +220,9 @@ public class OrderService {
                 order.sellerUserId(),
                 OrderStatus.fromCode(order.status()).name(),
                 order.totalAmountCent(),
+                order.bizSource(),
+                order.chatConversationId(),
+                order.chatListingId(),
                 order.createdAt(),
                 order.paidAt(),
                 order.timeoutAt(),

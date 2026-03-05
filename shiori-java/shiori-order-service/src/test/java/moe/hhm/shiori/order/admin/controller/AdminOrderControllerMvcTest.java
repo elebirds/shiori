@@ -62,7 +62,7 @@ class AdminOrderControllerMvcTest {
                 1L,
                 1,
                 10,
-                List.of(new OrderSummaryResponse("O001", "UNPAID", 1000L, 1, java.time.LocalDateTime.now(), null))
+                List.of(new OrderSummaryResponse("O001", "UNPAID", 1000L, 1, null, null, null, java.time.LocalDateTime.now(), null))
         ));
 
         mockMvc.perform(get("/api/admin/orders")
@@ -85,6 +85,9 @@ class AdminOrderControllerMvcTest {
                 2L,
                 "UNPAID",
                 1000L,
+                null,
+                null,
+                null,
                 java.time.LocalDateTime.now(),
                 null,
                 null,

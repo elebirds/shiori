@@ -6,9 +6,11 @@ import { useRouter } from 'vue-router'
 import ResultState from '@/components/ResultState.vue'
 import { deliverSellerOrderV2, finishSellerOrderV2, listSellerOrdersV2, type OrderStatus } from '@/api/orderV2'
 import { ApiBizError } from '@/types/result'
+import { useChatStore } from '@/stores/chat'
 
 const router = useRouter()
 const queryClient = useQueryClient()
+const chatStore = useChatStore()
 
 const pager = reactive({
   page: 1,
@@ -81,9 +83,12 @@ function goDetail(targetOrderNo: string): void {
   void router.push(`/seller/orders/${targetOrderNo}`)
 }
 
-async function handleDeliver(targetOrderNo: string): Promise<void> {
+async function handleDeliver(targetOrderNo: string, conversationId?: number): Promise<void> {
   try {
     await deliverMutation.mutateAsync(targetOrderNo)
+    if (conversationId && conversationId > 0) {
+      await chatStore.sendTradeStatusCard(conversationId, 'ORDER_DELIVERED', targetOrderNo)
+    }
   } catch (error) {
     if (error instanceof ApiBizError) {
       return
@@ -174,7 +179,7 @@ async function handleFinish(targetOrderNo: string): Promise<void> {
                 type="button"
                 class="rounded-lg bg-indigo-700 px-3 py-1.5 text-xs text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-70"
                 :disabled="deliverMutation.isPending.value"
-                @click="handleDeliver(item.orderNo)"
+                @click="handleDeliver(item.orderNo, item.conversationId)"
               >
                 标记发货
               </button>

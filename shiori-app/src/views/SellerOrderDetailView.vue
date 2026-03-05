@@ -6,10 +6,12 @@ import { useRoute, useRouter } from 'vue-router'
 import ResultState from '@/components/ResultState.vue'
 import { deliverSellerOrderV2, finishSellerOrderV2, getOrderTimelineV2, getSellerOrderDetailV2 } from '@/api/orderV2'
 import { ApiBizError } from '@/types/result'
+import { useChatStore } from '@/stores/chat'
 
 const route = useRoute()
 const router = useRouter()
 const queryClient = useQueryClient()
+const chatStore = useChatStore()
 
 const orderNo = computed(() => String(route.params.orderNo || ''))
 
@@ -65,6 +67,10 @@ function formatTime(raw?: string): string {
 async function handleDeliver(): Promise<void> {
   try {
     await deliverMutation.mutateAsync()
+    const conversationId = detail.value?.conversationId
+    if (conversationId && conversationId > 0) {
+      await chatStore.sendTradeStatusCard(conversationId, 'ORDER_DELIVERED', orderNo.value)
+    }
   } catch (error) {
     if (error instanceof ApiBizError) {
       return

@@ -121,8 +121,14 @@ func (s *Server) registerRoutes() {
 		chatGroup.GET("/summary", s.handleChatSummary)
 		chatGroup.POST("/conversations/start", s.handleStartConversation)
 		chatGroup.GET("/conversations", s.handleListConversations)
+		chatGroup.GET("/conversations/:conversationId", s.handleGetConversation)
 		chatGroup.GET("/conversations/:conversationId/messages", s.handleListMessages)
 		chatGroup.POST("/conversations/:conversationId/read", s.handleReadConversation)
+	}
+
+	internalChatGroup := s.engine.Group("/internal/chat")
+	{
+		internalChatGroup.GET("/conversations/:conversationId", s.handleInternalGetConversation)
 	}
 
 	if s.cfg.MetricsEnabled {
