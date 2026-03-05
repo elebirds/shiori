@@ -32,7 +32,7 @@ export interface NotifyMessage {
 export type WSFramePayload = Record<string, unknown>
 export type WSFrameListener = (frame: WSFramePayload) => void
 
-const WS_BASE_URL = (import.meta.env.VITE_NOTIFY_WS_BASE_URL || '').trim()
+const WS_BASE_URL = (import.meta.env.VITE_NOTIFY_WS_BASE_URL || '/ws').trim()
 const MAX_RECONNECT_DELAY_MS = 15000
 const DEFAULT_SYNC_LIMIT = 100
 
@@ -54,7 +54,7 @@ export const useNotifyStore = defineStore('notify', () => {
       lastError.value = '缺少通知 WebSocket 地址配置'
       return
     }
-    const token = (accessToken || getAccessToken() || '').trim()
+    const token = resolveAccessToken(accessToken)
     if (!token) {
       return
     }
@@ -204,6 +204,10 @@ export const useNotifyStore = defineStore('notify', () => {
 
   function sendFrame(payload: WSFramePayload): boolean {
     if (!socket || socket.readyState !== WebSocket.OPEN) {
+      const token = resolveAccessToken(currentAccessToken)
+      if (!manualClosed && token) {
+        connect(token)
+      }
       return false
     }
     try {
@@ -235,7 +239,7 @@ export const useNotifyStore = defineStore('notify', () => {
 
     clearReconnectTimer()
     reconnectTimer = setTimeout(() => {
-      connect(currentAccessToken)
+      connect()
     }, delay)
   }
 
@@ -291,6 +295,10 @@ export const useNotifyStore = defineStore('notify', () => {
       url += `&lastEventId=${encodeURIComponent(lastEventID)}`
     }
     return url
+  }
+
+  function resolveAccessToken(preferredToken?: string): string {
+    return (getAccessToken() || preferredToken || '').trim()
   }
 
   return {
