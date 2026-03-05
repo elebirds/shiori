@@ -2,6 +2,7 @@ package moe.hhm.shiori.user.profile.service;
 
 import moe.hhm.shiori.common.error.UserErrorCode;
 import moe.hhm.shiori.common.exception.BizException;
+import moe.hhm.shiori.user.follow.service.UserFollowService;
 import moe.hhm.shiori.user.profile.config.UserAvatarStorageProperties;
 import moe.hhm.shiori.user.profile.dto.AvatarUploadResponse;
 import moe.hhm.shiori.user.profile.dto.PublicUserProfileResponse;
@@ -34,13 +35,16 @@ public class UserProfileService {
     private static final int MAX_BATCH_USER_IDS = 100;
 
     private final UserProfileMapper userProfileMapper;
+    private final UserFollowService userFollowService;
     private final UserAvatarStorageService userAvatarStorageService;
     private final UserAvatarStorageProperties avatarStorageProperties;
 
     public UserProfileService(UserProfileMapper userProfileMapper,
+                              UserFollowService userFollowService,
                               UserAvatarStorageService userAvatarStorageService,
                               UserAvatarStorageProperties avatarStorageProperties) {
         this.userProfileMapper = userProfileMapper;
+        this.userFollowService = userFollowService;
         this.userAvatarStorageService = userAvatarStorageService;
         this.avatarStorageProperties = avatarStorageProperties;
     }
@@ -50,7 +54,13 @@ public class UserProfileService {
     }
 
     public PublicUserProfileResponse getProfileByUserNo(String userNo) {
-        return toPublicResponse(requireProfileByUserNo(userNo));
+        return getProfileByUserNo(userNo, null);
+    }
+
+    public PublicUserProfileResponse getProfileByUserNo(String userNo, Long currentUserId) {
+        UserProfileRecord record = requireProfileByUserNo(userNo);
+        UserFollowService.FollowStats followStats = userFollowService.getFollowStats(record.userId(), currentUserId);
+        return toPublicResponse(record, followStats);
     }
 
     public List<PublicUserProfileResponse> getProfilesByUserIds(List<Long> userIds) {
@@ -155,6 +165,11 @@ public class UserProfileService {
     }
 
     private PublicUserProfileResponse toPublicResponse(UserProfileRecord record) {
+        return toPublicResponse(record, null);
+    }
+
+    private PublicUserProfileResponse toPublicResponse(UserProfileRecord record,
+                                                       UserFollowService.FollowStats followStats) {
         LocalDate birthDate = record.birthDate();
         return new PublicUserProfileResponse(
                 record.userId(),
@@ -164,7 +179,10 @@ public class UserProfileService {
                 buildAvatarUrl(record.avatarUrl()),
                 record.gender(),
                 birthDate == null ? null : calculateAge(birthDate),
-                record.bio()
+                record.bio(),
+                followStats == null ? null : followStats.followerCount(),
+                followStats == null ? null : followStats.followingCount(),
+                followStats != null && followStats.followedByCurrentUser()
         );
     }
 

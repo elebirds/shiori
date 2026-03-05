@@ -2,6 +2,7 @@ package moe.hhm.shiori.user.profile.service;
 
 import java.time.LocalDate;
 import moe.hhm.shiori.common.exception.BizException;
+import moe.hhm.shiori.user.follow.service.UserFollowService;
 import moe.hhm.shiori.user.profile.config.UserAvatarStorageProperties;
 import moe.hhm.shiori.user.profile.dto.AvatarUploadResponse;
 import moe.hhm.shiori.user.profile.dto.PublicUserProfileResponse;
@@ -31,13 +32,16 @@ class UserProfileServiceTest {
     @Mock
     private UserAvatarStorageService userAvatarStorageService;
 
+    @Mock
+    private UserFollowService userFollowService;
+
     private UserProfileService userProfileService;
 
     @BeforeEach
     void setUp() {
         UserAvatarStorageProperties avatarStorageProperties = new UserAvatarStorageProperties();
         avatarStorageProperties.setPublicPathPrefix("/api/user/media/avatar/");
-        userProfileService = new UserProfileService(userProfileMapper, userAvatarStorageService, avatarStorageProperties);
+        userProfileService = new UserProfileService(userProfileMapper, userFollowService, userAvatarStorageService, avatarStorageProperties);
     }
 
     @Test
@@ -80,6 +84,9 @@ class UserProfileServiceTest {
                         "avatar_1_202603_xxx.jpg"
                 )
         );
+        when(userFollowService.getFollowStats(1L, null)).thenReturn(
+                new UserFollowService.FollowStats(6L, 9L, false)
+        );
 
         PublicUserProfileResponse response = userProfileService.getProfileByUserNo("U202603030001");
 
@@ -88,6 +95,9 @@ class UserProfileServiceTest {
         assertThat(response.gender()).isEqualTo(2);
         assertThat(response.age()).isNotNull();
         assertThat(response.avatarUrl()).isEqualTo("/api/user/media/avatar/avatar_1_202603_xxx.jpg");
+        assertThat(response.followerCount()).isEqualTo(6L);
+        assertThat(response.followingCount()).isEqualTo(9L);
+        assertThat(response.followedByCurrentUser()).isFalse();
     }
 
     @Test

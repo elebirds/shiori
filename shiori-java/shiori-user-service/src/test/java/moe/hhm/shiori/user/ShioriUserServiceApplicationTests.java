@@ -2,6 +2,7 @@ package moe.hhm.shiori.user;
 
 import moe.hhm.shiori.user.admin.repository.AdminUserMapper;
 import moe.hhm.shiori.user.auth.repository.AuthUserMapper;
+import moe.hhm.shiori.user.follow.repository.UserFollowMapper;
 import moe.hhm.shiori.user.profile.repository.UserProfileMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -24,6 +25,9 @@ class ShioriUserServiceApplicationTests {
 
     @MockitoBean
     private AdminUserMapper adminUserMapper;
+
+    @MockitoBean
+    private UserFollowMapper userFollowMapper;
 
     @Test
     void contextLoads() {

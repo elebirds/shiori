@@ -8,6 +8,9 @@ public record PublicUserProfileResponse(
         String avatarUrl,
         Integer gender,
         Integer age,
-        String bio
+        String bio,
+        Long followerCount,
+        Long followingCount,
+        Boolean followedByCurrentUser
 ) {
 }

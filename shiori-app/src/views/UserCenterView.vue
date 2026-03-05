@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { useQuery } from '@tanstack/vue-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { getUserProfileByUserNo } from '@/api/auth'
+import { followUser, getUserProfileByUserNo, unfollowUser } from '@/api/auth'
 import {
   listUserProductsV2,
   type ProductCategoryCode,
@@ -18,6 +18,7 @@ type CenterTab = 'products' | 'reviews' | 'moments'
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const queryClient = useQueryClient()
 
 const activeTab = ref<CenterTab>('products')
 const page = ref(1)
@@ -60,6 +61,9 @@ const totalPages = computed(() => Math.max(1, Math.ceil(total.value / size)))
 const displayNickname = computed(() => profile.value?.nickname || profile.value?.username || '未知用户')
 const displayUsername = computed(() => profile.value?.username || 'unknown')
 const displayBio = computed(() => profile.value?.bio || '这个人很神秘，还没有简介')
+const followerCount = computed(() => profile.value?.followerCount ?? 0)
+const followingCount = computed(() => profile.value?.followingCount ?? 0)
+const followedByCurrentUser = computed(() => Boolean(profile.value?.followedByCurrentUser))
 const tags = computed(() => {
   const values: string[] = []
   values.push(formatGender(profile.value?.gender))
@@ -77,8 +81,49 @@ const isSelf = computed(() => {
   return routeUserNo.value === String(authStore.user?.userNo || '')
 })
 
+const followMutation = useMutation({
+  mutationFn: async () => {
+    if (!routeUserNo.value) {
+      return
+    }
+    if (followedByCurrentUser.value) {
+      await unfollowUser(routeUserNo.value)
+      return
+    }
+    await followUser(routeUserNo.value)
+  },
+  onSuccess: async () => {
+    await queryClient.invalidateQueries({ queryKey: ['public-profile', routeUserNo.value] })
+  },
+})
+
 function goEdit(): void {
   void router.push('/profile/edit')
+}
+
+async function toggleFollow(): Promise<void> {
+  if (isSelf.value || !routeUserNo.value) {
+    return
+  }
+  if (!authStore.isAuthenticated) {
+    await router.push({ path: '/login', query: { redirect: route.fullPath } })
+    return
+  }
+  await followMutation.mutateAsync()
+}
+
+function goFollowers(): void {
+  if (!routeUserNo.value) {
+    return
+  }
+  void router.push(`/u/${encodeURIComponent(routeUserNo.value)}/followers`)
+}
+
+function goFollowing(): void {
+  if (!routeUserNo.value) {
+    return
+  }
+  void router.push(`/u/${encodeURIComponent(routeUserNo.value)}/following`)
 }
 
 function goDetail(productId: number): void {
@@ -196,17 +241,40 @@ function formatTradeMode(code: ProductTradeMode): string {
             >
               编辑
             </button>
+            <button
+              v-else
+              type="button"
+              class="rounded-xl border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-70"
+              :disabled="followMutation.isPending.value"
+              @click="toggleFollow"
+            >
+              {{
+                followMutation.isPending.value
+                  ? '处理中...'
+                  : followedByCurrentUser
+                    ? '已关注'
+                    : '关注'
+              }}
+            </button>
           </div>
 
           <div class="relative mt-5 grid grid-cols-3 gap-2 text-center">
-            <div class="rounded-xl bg-white/70 px-3 py-2">
-              <p class="text-lg font-semibold text-stone-900">0</p>
+            <button
+              type="button"
+              class="rounded-xl bg-white/70 px-3 py-2 transition hover:bg-white"
+              @click="goFollowers"
+            >
+              <p class="text-lg font-semibold text-stone-900">{{ followerCount }}</p>
               <p class="text-xs text-stone-600">粉丝</p>
-            </div>
-            <div class="rounded-xl bg-white/70 px-3 py-2">
-              <p class="text-lg font-semibold text-stone-900">0</p>
+            </button>
+            <button
+              type="button"
+              class="rounded-xl bg-white/70 px-3 py-2 transition hover:bg-white"
+              @click="goFollowing"
+            >
+              <p class="text-lg font-semibold text-stone-900">{{ followingCount }}</p>
               <p class="text-xs text-stone-600">关注</p>
-            </div>
+            </button>
             <div class="rounded-xl bg-white/70 px-3 py-2">
               <p class="text-lg font-semibold text-stone-900">刚刚来过</p>
               <p class="text-xs text-stone-600">最近访问</p>

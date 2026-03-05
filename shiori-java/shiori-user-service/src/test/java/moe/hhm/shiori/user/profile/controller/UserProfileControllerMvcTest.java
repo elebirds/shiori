@@ -118,7 +118,7 @@ class UserProfileControllerMvcTest {
 
     @Test
     void shouldGetPublicProfileByUserNo() throws Exception {
-        when(userProfileService.getProfileByUserNo("U202603030001")).thenReturn(
+        when(userProfileService.getProfileByUserNo("U202603030001", null)).thenReturn(
                 new PublicUserProfileResponse(
                         1L,
                         "U202603030001",
@@ -127,7 +127,10 @@ class UserProfileControllerMvcTest {
                         "/api/user/media/avatar/avatar_1_202603_abc.jpg",
                         2,
                         26,
-                        "hello"
+                        "hello",
+                        10L,
+                        20L,
+                        false
                 )
         );
 
@@ -137,7 +140,7 @@ class UserProfileControllerMvcTest {
                 .andExpect(jsonPath("$.data.userNo").value("U202603030001"))
                 .andExpect(jsonPath("$.data.avatarUrl").value("/api/user/media/avatar/avatar_1_202603_abc.jpg"));
 
-        verify(userProfileService).getProfileByUserNo("U202603030001");
+        verify(userProfileService).getProfileByUserNo("U202603030001", null);
     }
 
     @Test
@@ -152,7 +155,10 @@ class UserProfileControllerMvcTest {
                                 "/api/user/media/avatar/avatar_1_202603_abc.jpg",
                                 2,
                                 26,
-                                "hello"
+                                "hello",
+                                null,
+                                null,
+                                false
                         ),
                         new PublicUserProfileResponse(
                                 2L,
@@ -162,7 +168,10 @@ class UserProfileControllerMvcTest {
                                 null,
                                 1,
                                 25,
-                                "hi"
+                                "hi",
+                                null,
+                                null,
+                                false
                         )
                 )
         );
@@ -178,7 +187,7 @@ class UserProfileControllerMvcTest {
 
     @Test
     void shouldReturn404WhenPublicProfileMissing() throws Exception {
-        when(userProfileService.getProfileByUserNo("U404"))
+        when(userProfileService.getProfileByUserNo("U404", null))
                 .thenThrow(new BizException(UserErrorCode.USER_NOT_FOUND, HttpStatus.NOT_FOUND));
 
         mockMvc.perform(get("/api/user/profiles/U404"))
