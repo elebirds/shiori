@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: shiori-payment-service
+  config:
+    import:
+      - optional:nacos:${spring.application.name}-base.yml?group=${NACOS_CONFIG_GROUP:SHIORI_DEV_DOCKER}&refreshEnabled=true
+      - optional:nacos:${spring.application.name}-secret.yml?group=${NACOS_CONFIG_GROUP:SHIORI_DEV_DOCKER}&refreshEnabled=true
+      - optional:nacos:shiori-security-base.yml?group=${NACOS_CONFIG_GROUP:SHIORI_DEV_DOCKER}&refreshEnabled=true
+      - optional:nacos:shiori-security-secret.yml?group=${NACOS_CONFIG_GROUP:SHIORI_DEV_DOCKER}&refreshEnabled=true
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_ADDR:nacos:8848}
+      config:
+        server-addr: ${NACOS_ADDR:nacos:8848}
+      username: ${NACOS_USERNAME}
+      password: ${NACOS_PASSWORD}
+
+server:
+  port: 8084
