@@ -4,8 +4,15 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import ResultState from '@/components/ResultState.vue'
-import { createOrderV2 } from '@/api/orderV2'
-import { getProductDetailV2, type ProductCategoryCode, type ProductConditionLevel, type ProductStatus, type ProductTradeMode } from '@/api/productV2'
+import { addCartItemV2, createOrderV2 } from '@/api/orderV2'
+import {
+  getProductDetailV2,
+  type ProductCategoryCode,
+  type ProductConditionLevel,
+  type ProductStatus,
+  type ProductTradeMode,
+  type SkuResponse,
+} from '@/api/productV2'
 import { ApiBizError } from '@/types/result'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
@@ -15,10 +22,13 @@ const router = useRouter()
 const authStore = useAuthStore()
 const chatStore = useChatStore()
 
-const creatingOrder = ref(false)
+const buying = ref(false)
+const addingCart = ref(false)
 const creatingChat = ref(false)
-const createError = ref('')
-const skuQuantities = ref<Record<number, number>>({})
+const actionError = ref('')
+const actionMessage = ref('')
+const quantity = ref(1)
+const selectedSpecs = ref<Record<string, string>>({})
 
 const productId = computed(() => Number(route.params.id))
 const chatConversationId = computed(() => {
@@ -35,33 +45,101 @@ const query = useQuery({
 const product = computed(() => query.data.value)
 const errorMessage = computed(() => (query.error.value instanceof Error ? query.error.value.message : ''))
 
+const specOptions = computed(() => {
+  const skus = product.value?.skus || []
+  const optionMap = new Map<string, Set<string>>()
+  skus.forEach((sku) => {
+    sku.specItems.forEach((item) => {
+      if (!optionMap.has(item.name)) {
+        optionMap.set(item.name, new Set<string>())
+      }
+      optionMap.get(item.name)?.add(item.value)
+    })
+  })
+  return Array.from(optionMap.entries()).map(([name, values]) => ({
+    name,
+    values: Array.from(values),
+  }))
+})
+
 watch(
   () => product.value?.skus,
   (skus) => {
-    if (!skus) {
+    actionError.value = ''
+    actionMessage.value = ''
+    quantity.value = 1
+    const nextSelected: Record<string, string> = {}
+    if (!skus || skus.length === 0) {
+      selectedSpecs.value = nextSelected
       return
     }
-    const next: Record<number, number> = {}
-    skus.forEach((sku) => {
-      next[sku.skuId] = skuQuantities.value[sku.skuId] ?? 0
+
+    specOptions.value.forEach((dimension) => {
+      const preferred = skus.find((sku) => specValueOfSku(sku, dimension.name) && sku.stock > 0)
+      const fallback = skus.find((sku) => specValueOfSku(sku, dimension.name))
+      const target = preferred || fallback
+      if (target) {
+        nextSelected[dimension.name] = specValueOfSku(target, dimension.name) || ''
+      }
     })
-    skuQuantities.value = next
+    selectedSpecs.value = nextSelected
   },
   { immediate: true },
 )
 
-const selectedItems = computed(() => {
+const selectedSku = computed(() => {
   const skus = product.value?.skus || []
-  return skus
-    .map((sku) => {
-      const rawQuantity = skuQuantities.value[sku.skuId] ?? 0
-      const quantity = Number.isFinite(rawQuantity) ? Math.floor(rawQuantity) : 0
-      return { sku, quantity }
-    })
-    .filter((item) => item.quantity > 0)
+  if (skus.length === 0) {
+    return null
+  }
+  if (specOptions.value.length === 0) {
+    return skus.find((sku) => sku.stock > 0) || skus[0]
+  }
+  return (
+    skus.find((sku) =>
+      specOptions.value.every((dimension) => {
+        const selectedValue = selectedSpecs.value[dimension.name]
+        if (!selectedValue) {
+          return false
+        }
+        return specValueOfSku(sku, dimension.name) === selectedValue
+      }),
+    ) || null
+  )
 })
 
-const selectedTotalAmount = computed(() => selectedItems.value.reduce((sum, item) => sum + item.sku.priceCent * item.quantity, 0))
+watch(
+  selectedSku,
+  (sku) => {
+    if (!sku) {
+      quantity.value = 1
+      return
+    }
+    quantity.value = Math.min(Math.max(1, quantity.value), Math.max(1, sku.stock || 1))
+  },
+  { immediate: true },
+)
+
+const canBuy = computed(() => {
+  if (!selectedSku.value) {
+    return false
+  }
+  if (selectedSku.value.stock <= 0) {
+    return false
+  }
+  return quantity.value >= 1 && quantity.value <= selectedSku.value.stock
+})
+
+const estimatedAmount = computed(() => {
+  if (!selectedSku.value) {
+    return 0
+  }
+  return selectedSku.value.priceCent * quantity.value
+})
+
+function specValueOfSku(sku: SkuResponse, specName: string): string | null {
+  return sku.specItems.find((item) => item.name === specName)?.value || null
+}
 
 function formatMoney(priceCent: number): string {
   return `¥ ${(priceCent / 100).toFixed(2)}`
@@ -75,15 +153,6 @@ function formatPriceRange(minPriceCent?: number, maxPriceCent?: number): string 
     return formatMoney(minPriceCent || 0)
   }
   return `${formatMoney(minPriceCent || 0)} ~ ${formatMoney(maxPriceCent || 0)}`
-}
-
-function normalizeQuantity(skuId: number): void {
-  const current = skuQuantities.value[skuId] ?? 0
-  const next = Number.isFinite(current) ? Math.max(0, Math.floor(current)) : 0
-  skuQuantities.value = {
-    ...skuQuantities.value,
-    [skuId]: next,
-  }
 }
 
 function formatCategory(code: ProductCategoryCode): string {
@@ -124,35 +193,78 @@ function formatStatus(code: ProductStatus): string {
   return map[code] || code
 }
 
-async function handleCreateOrder(): Promise<void> {
+function changeQuantity(delta: number): void {
+  const sku = selectedSku.value
+  if (!sku) {
+    return
+  }
+  quantity.value = Math.min(Math.max(1, quantity.value + delta), Math.max(1, sku.stock || 1))
+}
+
+function chooseSpec(specName: string, value: string): void {
+  selectedSpecs.value = {
+    ...selectedSpecs.value,
+    [specName]: value,
+  }
+  actionError.value = ''
+  actionMessage.value = ''
+}
+
+function isSpecValueDisabled(specName: string, value: string): boolean {
+  const skus = product.value?.skus || []
+  const current = {
+    ...selectedSpecs.value,
+    [specName]: value,
+  }
+  return !skus.some((sku) => {
+    if (sku.stock <= 0) {
+      return false
+    }
+    return specOptions.value.every((dimension) => {
+      const selectedValue = current[dimension.name]
+      if (!selectedValue) {
+        return true
+      }
+      return specValueOfSku(sku, dimension.name) === selectedValue
+    })
+  })
+}
+
+async function ensureAuthed(): Promise<boolean> {
   if (!authStore.isAuthenticated) {
     await router.push({ path: '/login', query: { redirect: route.fullPath } })
+    return false
+  }
+  return true
+}
+
+async function handleBuyNow(): Promise<void> {
+  if (!(await ensureAuthed())) {
+    return
+  }
+  if (!selectedSku.value) {
+    actionError.value = '请先选择完整规格'
+    return
+  }
+  if (!canBuy.value) {
+    actionError.value = '当前数量超过库存，请调整后重试'
     return
   }
 
-  if (selectedItems.value.length === 0) {
-    createError.value = '请至少选择一个 SKU 并填写数量'
-    return
-  }
-
-  const stockInvalidItem = selectedItems.value.find((item) => item.quantity > item.sku.stock)
-  if (stockInvalidItem) {
-    createError.value = `SKU「${stockInvalidItem.sku.skuName}」库存不足`
-    return
-  }
-
-  creatingOrder.value = true
-  createError.value = ''
-
+  buying.value = true
+  actionError.value = ''
+  actionMessage.value = ''
   try {
-    const idempotencyKey = `web-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const idempotencyKey = `buy-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
     const response = await createOrderV2(
       {
-        items: selectedItems.value.map((item) => ({
-          productId: productId.value,
-          skuId: item.sku.skuId,
-          quantity: item.quantity,
-        })),
+        items: [
+          {
+            productId: productId.value,
+            skuId: selectedSku.value.skuId,
+            quantity: quantity.value,
+          },
+        ],
         source: chatConversationId.value > 0 ? 'CHAT' : undefined,
         conversationId: chatConversationId.value > 0 ? chatConversationId.value : undefined,
       },
@@ -169,25 +281,58 @@ async function handleCreateOrder(): Promise<void> {
     })
   } catch (error) {
     if (error instanceof ApiBizError) {
-      createError.value = error.message
+      actionError.value = error.message
     } else {
-      createError.value = '创建订单失败，请稍后重试'
+      actionError.value = '下单失败，请稍后重试'
     }
   } finally {
-    creatingOrder.value = false
+    buying.value = false
+  }
+}
+
+async function handleAddToCart(): Promise<void> {
+  if (!(await ensureAuthed())) {
+    return
+  }
+  if (!selectedSku.value) {
+    actionError.value = '请先选择完整规格'
+    return
+  }
+  if (!canBuy.value) {
+    actionError.value = '当前数量超过库存，请调整后重试'
+    return
+  }
+
+  addingCart.value = true
+  actionError.value = ''
+  actionMessage.value = ''
+  try {
+    await addCartItemV2({
+      productId: productId.value,
+      skuId: selectedSku.value.skuId,
+      quantity: quantity.value,
+    })
+    actionMessage.value = '已加入购物车'
+  } catch (error) {
+    if (error instanceof ApiBizError) {
+      actionError.value = error.message
+    } else {
+      actionError.value = '加入购物车失败，请稍后重试'
+    }
+  } finally {
+    addingCart.value = false
   }
 }
 
 async function handleConsultSeller(): Promise<void> {
-  if (!authStore.isAuthenticated) {
-    await router.push({ path: '/login', query: { redirect: route.fullPath } })
+  if (!(await ensureAuthed())) {
     return
   }
   if (!product.value) {
     return
   }
   creatingChat.value = true
-  createError.value = ''
+  actionError.value = ''
   try {
     const conversationId = await chatStore.bootstrapFromListing(product.value.productId)
     const priceCent = Number(product.value.minPriceCent ?? product.value.maxPriceCent ?? 0)
@@ -204,12 +349,13 @@ async function handleConsultSeller(): Promise<void> {
       },
     })
   } catch (error) {
-    createError.value = error instanceof Error ? error.message : '发起咨询失败，请稍后重试'
+    actionError.value = error instanceof Error ? error.message : '发起咨询失败，请稍后重试'
   } finally {
     creatingChat.value = false
   }
 }
 </script>
+
 <template>
   <section class="space-y-4">
     <button
@@ -245,51 +391,86 @@ async function handleConsultSeller(): Promise<void> {
 
           <div class="space-y-4 rounded-2xl border border-stone-200 bg-white/95 p-5">
             <div>
-              <h2 class="text-base font-semibold text-stone-900">SKU 列表</h2>
-              <p class="mt-1 text-xs text-stone-500">商品状态：{{ formatStatus(product.status) }}</p>
-              <p class="mt-1 text-xs text-stone-500">价格区间：{{ formatPriceRange(product.minPriceCent, product.maxPriceCent) }}，库存：{{ product.totalStock ?? 0 }}</p>
+              <p class="text-xs text-stone-500">商品状态：{{ formatStatus(product.status) }}</p>
+              <p class="mt-1 text-2xl font-semibold text-stone-900">{{ formatPriceRange(product.minPriceCent, product.maxPriceCent) }}</p>
+              <p class="mt-1 text-xs text-stone-500">总库存：{{ product.totalStock ?? 0 }}</p>
             </div>
 
-            <div class="max-h-72 space-y-2 overflow-auto pr-1">
-              <article
-                v-for="sku in product.skus"
-                :key="sku.skuId"
-                class="grid grid-cols-[1fr_auto] items-center gap-3 rounded-xl border border-stone-200 px-3 py-2 text-sm transition hover:border-stone-300"
-              >
-                <div>
-                  <p class="font-medium text-stone-800">{{ sku.skuName }}</p>
-                  <p class="text-xs text-stone-500">{{ sku.specJson || '默认规格' }}</p>
-                  <p class="mt-1 text-xs text-stone-500">库存 {{ sku.stock }}</p>
-                </div>
-                <div class="flex items-center gap-3">
-                  <p class="font-semibold text-stone-900">{{ formatMoney(sku.priceCent) }}</p>
-                  <label class="flex items-center gap-1 text-xs text-stone-600">
-                    数量
-                    <input
-                      v-model.number="skuQuantities[sku.skuId]"
-                      type="number"
-                      min="0"
-                      :max="sku.stock"
-                      class="w-20 rounded-lg border border-stone-300 px-2 py-1 text-right"
-                      @blur="normalizeQuantity(sku.skuId)"
-                    />
-                  </label>
-                </div>
-              </article>
+            <div v-for="dimension in specOptions" :key="dimension.name" class="space-y-2">
+              <p class="text-sm font-medium text-stone-800">{{ dimension.name }}</p>
+              <div class="flex flex-wrap gap-2">
+                <button
+                  v-for="value in dimension.values"
+                  :key="`${dimension.name}-${value}`"
+                  type="button"
+                  class="rounded-lg border px-3 py-1.5 text-sm transition"
+                  :class="[
+                    selectedSpecs[dimension.name] === value
+                      ? 'border-stone-900 bg-stone-900 text-white'
+                      : 'border-stone-300 bg-white text-stone-700 hover:border-stone-500',
+                    isSpecValueDisabled(dimension.name, value) ? 'cursor-not-allowed opacity-40' : '',
+                  ]"
+                  :disabled="isSpecValueDisabled(dimension.name, value)"
+                  @click="chooseSpec(dimension.name, value)"
+                >
+                  {{ value }}
+                </button>
+              </div>
             </div>
 
             <div class="rounded-xl bg-stone-50 p-3 text-sm text-stone-700">
-              <p>已选 SKU 数：{{ selectedItems.length }}</p>
-              <p class="mt-1">预估金额：{{ formatMoney(selectedTotalAmount) }}</p>
+              <p>已选规格：{{ selectedSku?.displayName || '请选择规格' }}</p>
+              <p class="mt-1">库存：{{ selectedSku?.stock ?? '-' }}</p>
+            </div>
+
+            <div class="flex items-center gap-3">
+              <span class="text-sm text-stone-700">数量</span>
+              <button
+                type="button"
+                class="h-8 w-8 rounded-lg border border-stone-300 text-sm text-stone-700"
+                :disabled="!selectedSku || quantity <= 1"
+                @click="changeQuantity(-1)"
+              >
+                -
+              </button>
+              <input
+                v-model.number="quantity"
+                type="number"
+                min="1"
+                :max="selectedSku?.stock || 1"
+                class="w-20 rounded-lg border border-stone-300 px-2 py-1 text-center text-sm"
+              />
+              <button
+                type="button"
+                class="h-8 w-8 rounded-lg border border-stone-300 text-sm text-stone-700"
+                :disabled="!selectedSku || quantity >= (selectedSku?.stock || 1)"
+                @click="changeQuantity(1)"
+              >
+                +
+              </button>
+            </div>
+
+            <div class="rounded-xl border border-stone-200 p-3 text-sm text-stone-700">
+              <p>预计金额</p>
+              <p class="mt-1 text-xl font-semibold text-stone-900">{{ formatMoney(estimatedAmount) }}</p>
             </div>
 
             <button
               type="button"
               class="w-full rounded-xl bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-70"
-              :disabled="creatingOrder"
-              @click="handleCreateOrder"
+              :disabled="!canBuy || buying"
+              @click="handleBuyNow"
             >
-              {{ creatingOrder ? '下单中...' : '立即下单' }}
+              {{ buying ? '下单中...' : '立即购买' }}
+            </button>
+
+            <button
+              type="button"
+              class="w-full rounded-xl border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-70"
+              :disabled="!canBuy || addingCart"
+              @click="handleAddToCart"
+            >
+              {{ addingCart ? '加入中...' : '加入购物车' }}
             </button>
 
             <button
@@ -301,7 +482,16 @@ async function handleConsultSeller(): Promise<void> {
               {{ creatingChat ? '咨询中...' : '咨询卖家' }}
             </button>
 
-            <p v-if="createError" class="text-sm text-rose-600">{{ createError }}</p>
+            <button
+              type="button"
+              class="w-full rounded-xl border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
+              @click="router.push('/cart')"
+            >
+              查看购物车
+            </button>
+
+            <p v-if="actionError" class="text-sm text-rose-600">{{ actionError }}</p>
+            <p v-if="actionMessage" class="text-sm text-emerald-700">{{ actionMessage }}</p>
           </div>
         </article>
 

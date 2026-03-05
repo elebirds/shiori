@@ -1,10 +1,20 @@
 import { httpGet, httpPost, httpPut } from '@/api/http'
 
+export interface SpecItemInput {
+  name: string
+  value: string
+}
+
+export interface SpecItemResponse {
+  name: string
+  value: string
+}
+
 export interface SkuResponse {
   skuId: number
   skuNo: string
-  skuName: string
-  specJson?: string
+  displayName: string
+  specItems: SpecItemResponse[]
   priceCent: number
   stock: number
 }
@@ -78,8 +88,7 @@ export interface MyProductV2Query extends ProductV2Query {
 
 export interface SkuInput {
   id?: number
-  skuName: string
-  specJson?: string
+  specItems: SpecItemInput[]
   priceCent: number
   stock: number
 }

@@ -1,4 +1,4 @@
-import { httpGet, httpPost } from '@/api/http'
+import { httpDelete, httpGet, httpPost, httpPut } from '@/api/http'
 
 export type OrderStatus = 'UNPAID' | 'PAID' | 'CANCELED' | 'DELIVERING' | 'FINISHED'
 
@@ -143,6 +143,51 @@ export interface OrderTimelineResponse {
   items: OrderTimelineItemResponse[]
 }
 
+export interface CartSpecItemResponse {
+  name: string
+  value: string
+}
+
+export interface CartItemResponse {
+  itemId: number
+  productId: number
+  productNo?: string
+  productTitle?: string
+  coverImageUrl?: string
+  skuId: number
+  skuNo?: string
+  displayName: string
+  specItems: CartSpecItemResponse[]
+  priceCent?: number
+  stock?: number
+  quantity: number
+  subtotalCent: number
+}
+
+export interface CartResponse {
+  cartId?: number
+  sellerUserId?: number
+  totalItemCount: number
+  totalAmountCent: number
+  items: CartItemResponse[]
+}
+
+export interface CartAddItemRequest {
+  productId: number
+  skuId: number
+  quantity: number
+}
+
+export interface CartUpdateItemRequest {
+  quantity: number
+}
+
+export interface CartCheckoutRequest {
+  itemIds?: number[]
+  source?: string
+  conversationId?: number
+}
+
 function buildOperateIdempotencyKey(prefix: string, orderNo: string): string {
   const randomPart = Math.random().toString(36).slice(2, 10)
   return `${prefix}-${orderNo}-${Date.now()}-${randomPart}`
@@ -208,4 +253,26 @@ export function deliverSellerOrderV2(orderNo: string, payload?: OrderTransitionR
 
 export function finishSellerOrderV2(orderNo: string, payload?: OrderTransitionRequest): Promise<OrderOperateResponse> {
   return httpPost<OrderOperateResponse>(`/api/v2/order/seller/orders/${orderNo}/finish`, payload)
+}
+
+export function getCartV2(): Promise<CartResponse> {
+  return httpGet<CartResponse>('/api/v2/order/cart')
+}
+
+export function addCartItemV2(payload: CartAddItemRequest): Promise<CartResponse> {
+  return httpPost<CartResponse>('/api/v2/order/cart/items', payload)
+}
+
+export function updateCartItemV2(itemId: number, payload: CartUpdateItemRequest): Promise<CartResponse> {
+  return httpPut<CartResponse>(`/api/v2/order/cart/items/${itemId}`, payload)
+}
+
+export function removeCartItemV2(itemId: number): Promise<CartResponse> {
+  return httpDelete<CartResponse>(`/api/v2/order/cart/items/${itemId}`)
+}
+
+export function checkoutCartV2(payload: CartCheckoutRequest, idempotencyKey?: string): Promise<CreateOrderResponse> {
+  return httpPost<CreateOrderResponse>('/api/v2/order/cart/checkout', payload, {
+    headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+  })
 }

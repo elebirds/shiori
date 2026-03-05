@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useMutation } from '@tanstack/vue-query'
-import { onUnmounted, reactive, ref } from 'vue'
+import { onUnmounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import RichTextEditor from '@/components/RichTextEditor.vue'
@@ -11,15 +11,21 @@ import {
   type ProductCategoryCode,
   type ProductConditionLevel,
   type ProductTradeMode,
+  type SpecItemInput,
 } from '@/api/productV2'
 import { ApiBizError } from '@/types/result'
 
 const router = useRouter()
 
-interface DraftSku {
+interface SpecDimensionDraft {
   localId: string
-  skuName: string
-  specJson: string
+  name: string
+  valuesText: string
+}
+
+interface SkuMatrixRow {
+  localKey: string
+  specItems: SpecItemInput[]
   priceYuan: string
   stock: number
 }
@@ -55,15 +61,17 @@ const form = reactive({
   campusCode: '',
 })
 
-const skus = ref<DraftSku[]>([
+const dimensions = ref<SpecDimensionDraft[]>([
   {
     localId: crypto.randomUUID(),
-    skuName: '',
-    specJson: '',
-    priceYuan: '1.00',
-    stock: 1,
+    name: '版本',
+    valuesText: '标准版',
   },
 ])
+
+const rows = ref<SkuMatrixRow[]>([])
+const batchPriceYuan = ref('')
+const batchStock = ref<number | null>(null)
 
 const publishDirectly = ref(true)
 const resultMessage = ref('')
@@ -72,6 +80,14 @@ const uploadMessage = ref('')
 const uploadingCover = ref(false)
 const coverPreviewUrl = ref('')
 const selectedCoverName = ref('')
+
+watch(
+  dimensions,
+  () => {
+    syncRowsByDimensions()
+  },
+  { deep: true, immediate: true },
+)
 
 const createMutation = useMutation({
   mutationFn: async () => {
@@ -84,16 +100,15 @@ const createMutation = useMutation({
       conditionLevel: form.conditionLevel,
       tradeMode: form.tradeMode,
       campusCode: form.campusCode.trim(),
-      skus: skus.value.map((item) => {
-        const priceCent = yuanTextToCent(item.priceYuan)
+      skus: rows.value.map((row) => {
+        const priceCent = yuanTextToCent(row.priceYuan)
         if (priceCent == null) {
-          throw new Error('SKU 价格必须大于 0 元，且最多保留两位小数')
+          throw new Error('价格必须大于 0 元，且最多保留两位小数')
         }
         return {
-          skuName: item.skuName.trim(),
-          specJson: item.specJson?.trim() || undefined,
+          specItems: row.specItems,
           priceCent,
-          stock: item.stock,
+          stock: row.stock,
         }
       }),
     })
@@ -106,14 +121,105 @@ const createMutation = useMutation({
   },
 })
 
-function addSku(): void {
-  skus.value.push({
-    localId: crypto.randomUUID(),
-    skuName: '',
-    specJson: '',
-    priceYuan: '1.00',
-    stock: 1,
+function normalizeDimensionName(name: string): string {
+  return name.trim()
+}
+
+function parseDimensionValues(raw: string): string[] {
+  const tokens = raw
+    .split(/[\n,，]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+  return Array.from(new Set(tokens))
+}
+
+function keyOfSpecItems(specItems: SpecItemInput[]): string {
+  return specItems.map((item) => `${item.name}=${item.value}`).join('|')
+}
+
+function buildSpecCombinations(): SpecItemInput[][] {
+  const normalizedDimensions = dimensions.value
+    .map((dimension) => ({
+      name: normalizeDimensionName(dimension.name),
+      values: parseDimensionValues(dimension.valuesText),
+    }))
+    .filter((dimension) => dimension.name && dimension.values.length > 0)
+
+  if (normalizedDimensions.length === 0) {
+    return []
+  }
+
+  const combinations: SpecItemInput[][] = []
+
+  const walk = (depth: number, current: SpecItemInput[]) => {
+    if (depth >= normalizedDimensions.length) {
+      combinations.push(current.map((item) => ({ ...item })))
+      return
+    }
+    const dimension = normalizedDimensions[depth]
+    dimension.values.forEach((value) => {
+      walk(depth + 1, [...current, { name: dimension.name, value }])
+    })
+  }
+
+  walk(0, [])
+  return combinations
+}
+
+function syncRowsByDimensions(): void {
+  const combinations = buildSpecCombinations()
+  const existing = new Map(rows.value.map((row) => [row.localKey, row]))
+  rows.value = combinations.map((specItems) => {
+    const localKey = keyOfSpecItems(specItems)
+    const hit = existing.get(localKey)
+    if (hit) {
+      return {
+        ...hit,
+        specItems,
+      }
+    }
+    return {
+      localKey,
+      specItems,
+      priceYuan: '1.00',
+      stock: 1,
+    }
   })
+}
+
+function addDimension(): void {
+  dimensions.value.push({
+    localId: crypto.randomUUID(),
+    name: '',
+    valuesText: '',
+  })
+}
+
+function removeDimension(localId: string): void {
+  if (dimensions.value.length <= 1) {
+    return
+  }
+  dimensions.value = dimensions.value.filter((item) => item.localId !== localId)
+}
+
+function applyBatch(): void {
+  const normalizedPrice = batchPriceYuan.value.trim()
+  const hasPrice = normalizedPrice.length > 0
+  const hasStock = Number.isInteger(batchStock.value)
+
+  if (!hasPrice && !hasStock) {
+    return
+  }
+
+  rows.value = rows.value.map((row) => ({
+    ...row,
+    priceYuan: hasPrice ? normalizedPrice : row.priceYuan,
+    stock: hasStock ? Number(batchStock.value) : row.stock,
+  }))
+}
+
+function formatSpecItems(specItems: SpecItemInput[]): string {
+  return specItems.map((item) => `${item.name}：${item.value}`).join(' / ')
 }
 
 function yuanTextToCent(raw: string): number | null {
@@ -128,13 +234,6 @@ function yuanTextToCent(raw: string): number | null {
   return Math.round(amount * 100)
 }
 
-function removeSku(localId: string): void {
-  if (skus.value.length <= 1) {
-    return
-  }
-  skus.value = skus.value.filter((item) => item.localId !== localId)
-}
-
 function validate(): string | null {
   if (!form.title.trim()) {
     return '商品标题不能为空'
@@ -142,19 +241,28 @@ function validate(): string | null {
   if (!form.campusCode.trim()) {
     return '交易校区不能为空'
   }
-  if (skus.value.length === 0) {
-    return '请至少添加一个 SKU'
+
+  const normalizedDimensionNames = dimensions.value.map((item) => normalizeDimensionName(item.name)).filter(Boolean)
+  if (normalizedDimensionNames.length === 0) {
+    return '请至少设置一个规格维度'
+  }
+  if (new Set(normalizedDimensionNames).size !== normalizedDimensionNames.length) {
+    return '规格维度名称不能重复'
   }
 
-  for (const item of skus.value) {
-    if (!item.skuName.trim()) {
-      return 'SKU 名称不能为空'
+  if (rows.value.length === 0) {
+    return '请先为规格维度补齐可选值'
+  }
+
+  for (const row of rows.value) {
+    if (row.specItems.length === 0) {
+      return '存在未生成规格组合的 SKU'
     }
-    if (yuanTextToCent(item.priceYuan) == null) {
-      return 'SKU 价格必须大于 0 元，且最多保留两位小数'
+    if (yuanTextToCent(row.priceYuan) == null) {
+      return `规格「${formatSpecItems(row.specItems)}」价格不合法`
     }
-    if (!Number.isInteger(item.stock) || item.stock < 0) {
-      return 'SKU 库存必须为非负整数'
+    if (!Number.isInteger(row.stock) || row.stock < 0) {
+      return `规格「${formatSpecItems(row.specItems)}」库存必须为非负整数`
     }
   }
 
@@ -237,7 +345,7 @@ onUnmounted(() => {
   <section class="space-y-4">
     <header class="rounded-2xl border border-stone-200 bg-white/90 p-4">
       <h1 class="font-display text-2xl text-stone-900">发布商品</h1>
-      <p class="mt-1 text-sm text-stone-600">完善商品信息后即可发布，买家会看到分类、成色和交易方式等内容。</p>
+      <p class="mt-1 text-sm text-stone-600">先设置规格维度，再自动生成可售组合，价格和库存一目了然。</p>
     </header>
 
     <form class="space-y-4 rounded-2xl border border-stone-200 bg-white/95 p-5" @submit.prevent="submit">
@@ -298,12 +406,12 @@ onUnmounted(() => {
             v-model.trim="form.description"
             rows="4"
             class="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2 outline-none transition focus:border-amber-500"
-            placeholder="成色、笔记情况、交易地点等"
+            placeholder="可补充成色细节、交易地点和时间等"
           />
         </label>
 
         <div class="space-y-1 text-sm text-stone-700 sm:col-span-2">
-          <p>商品详情（富文本）</p>
+          <p>商品详情（图文）</p>
           <RichTextEditor v-model="form.detailHtml" placeholder="支持图文混排、字号、列表等内容" />
         </div>
 
@@ -318,7 +426,7 @@ onUnmounted(() => {
               @change="handleCoverChange"
             />
           </label>
-          <p class="text-xs text-stone-500">支持 jpg/jpeg/png/webp，上传成功后会自动绑定封面。</p>
+          <p class="text-xs text-stone-500">支持 jpg/jpeg/png/webp，上传成功后自动绑定封面。</p>
           <p v-if="selectedCoverName" class="text-xs text-stone-600">已选文件：{{ selectedCoverName }}</p>
           <p v-if="uploadingCover" class="text-xs text-amber-700">正在上传封面...</p>
           <p v-if="uploadMessage" class="text-xs text-emerald-700">{{ uploadMessage }}</p>
@@ -330,77 +438,118 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <section class="space-y-3">
+      <section class="space-y-3 rounded-xl border border-stone-200 bg-stone-50 p-4">
         <div class="flex items-center justify-between">
-          <h2 class="text-base font-semibold text-stone-900">SKU 列表</h2>
+          <h2 class="text-base font-semibold text-stone-900">规格维度</h2>
           <button
             type="button"
             class="rounded-lg border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
-            @click="addSku"
+            @click="addDimension"
           >
-            添加 SKU
+            新增维度
           </button>
         </div>
 
-        <article v-for="(sku, index) in skus" :key="sku.localId" class="grid gap-2 rounded-xl border border-stone-200 bg-stone-50 p-3 sm:grid-cols-2">
-          <label class="text-sm text-stone-700">
-            SKU 名称
-            <input
-              v-model.trim="sku.skuName"
-              type="text"
-              class="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 outline-none transition focus:border-amber-500"
-              :placeholder="`SKU ${index + 1}`"
-            />
-          </label>
+        <article
+          v-for="(dimension, index) in dimensions"
+          :key="dimension.localId"
+          class="grid gap-2 rounded-xl border border-stone-200 bg-white p-3 sm:grid-cols-[140px_1fr_auto]"
+        >
+          <input
+            v-model.trim="dimension.name"
+            type="text"
+            class="rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none transition focus:border-amber-500"
+            :placeholder="`维度 ${index + 1}`"
+          />
+          <input
+            v-model="dimension.valuesText"
+            type="text"
+            class="rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none transition focus:border-amber-500"
+            placeholder="可选值，多个值用逗号分隔，例如：标准版, 加练版"
+          />
+          <button
+            type="button"
+            class="rounded-lg border border-rose-300 px-3 py-2 text-xs text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+            :disabled="dimensions.length <= 1"
+            @click="removeDimension(dimension.localId)"
+          >
+            删除
+          </button>
+        </article>
+      </section>
 
-          <label class="text-sm text-stone-700">
-            规格描述
+      <section class="space-y-3 rounded-xl border border-stone-200 bg-white p-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <h2 class="text-base font-semibold text-stone-900">SKU 组合矩阵</h2>
+          <div class="flex flex-wrap items-center gap-2">
             <input
-              v-model.trim="sku.specJson"
-              type="text"
-              class="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 outline-none transition focus:border-amber-500"
-              placeholder='如：{"edition":"7th"}'
-            />
-          </label>
-
-          <label class="text-sm text-stone-700">
-            价格（元）
-            <input
-              v-model.trim="sku.priceYuan"
+              v-model.trim="batchPriceYuan"
               type="text"
               inputmode="decimal"
-              placeholder="0.00"
-              class="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 outline-none transition focus:border-amber-500"
+              placeholder="批量价格（元）"
+              class="w-36 rounded-lg border border-stone-300 px-3 py-1.5 text-sm"
             />
-          </label>
-
-          <label class="text-sm text-stone-700">
-            库存
             <input
-              v-model.number="sku.stock"
+              v-model.number="batchStock"
               type="number"
               min="0"
               step="1"
-              class="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 outline-none transition focus:border-amber-500"
+              placeholder="批量库存"
+              class="w-28 rounded-lg border border-stone-300 px-3 py-1.5 text-sm"
             />
-          </label>
-
-          <div class="sm:col-span-2">
             <button
               type="button"
-              class="rounded-lg border border-rose-300 px-3 py-1.5 text-xs text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
-              :disabled="skus.length <= 1"
-              @click="removeSku(sku.localId)"
+              class="rounded-lg border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
+              @click="applyBatch"
             >
-              删除该 SKU
+              批量应用
             </button>
           </div>
-        </article>
+        </div>
+
+        <div v-if="rows.length === 0" class="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500">
+          先填写规格维度与可选值，即可自动生成 SKU 组合。
+        </div>
+
+        <div v-else class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead>
+              <tr class="border-b border-stone-200 text-left text-stone-600">
+                <th class="px-2 py-2">规格组合</th>
+                <th class="px-2 py-2">价格（元）</th>
+                <th class="px-2 py-2">库存</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in rows" :key="row.localKey" class="border-b border-stone-100 last:border-0">
+                <td class="px-2 py-2 text-stone-800">{{ formatSpecItems(row.specItems) }}</td>
+                <td class="px-2 py-2">
+                  <input
+                    v-model.trim="row.priceYuan"
+                    type="text"
+                    inputmode="decimal"
+                    class="w-32 rounded-lg border border-stone-300 px-3 py-1.5"
+                    placeholder="0.00"
+                  />
+                </td>
+                <td class="px-2 py-2">
+                  <input
+                    v-model.number="row.stock"
+                    type="number"
+                    min="0"
+                    step="1"
+                    class="w-24 rounded-lg border border-stone-300 px-3 py-1.5"
+                  />
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <label class="flex items-center gap-2 text-sm text-stone-700">
         <input v-model="publishDirectly" type="checkbox" class="h-4 w-4 rounded border-stone-300 text-stone-900" />
-        创建后立即上架（调用 publish）
+        创建后立即上架
       </label>
 
       <div class="flex gap-2">

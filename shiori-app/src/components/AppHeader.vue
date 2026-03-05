@@ -25,6 +25,7 @@ const commonNav = [
 const secureNav = [
   { path: '/sell', label: '发布' },
   { path: '/my-products', label: '我的商品' },
+  { path: '/cart', label: '购物车' },
   { path: '/orders', label: '订单' },
   { path: '/wallet', label: '钱包' },
   { path: '/seller/orders', label: '卖家工作台' },
@@ -245,11 +246,18 @@ onBeforeUnmount(() => {
               </span>
             </RouterLink>
             <RouterLink
+              to="/cart"
+              class="block px-3 py-2 text-sm text-stone-700 transition hover:bg-stone-100"
+              @click="closeDropdown"
+            >
+              购物车
+            </RouterLink>
+            <RouterLink
               to="/wallet"
               class="block px-3 py-2 text-sm text-stone-700 transition hover:bg-stone-100"
               @click="closeDropdown"
             >
-              钱包与CDK
+              钱包
             </RouterLink>
             <RouterLink
               to="/chat"
