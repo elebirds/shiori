@@ -2,6 +2,10 @@ package moe.hhm.shiori.order.repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import moe.hhm.shiori.order.model.CartEntity;
+import moe.hhm.shiori.order.model.CartItemEntity;
+import moe.hhm.shiori.order.model.CartItemRecord;
+import moe.hhm.shiori.order.model.CartRecord;
 import moe.hhm.shiori.order.model.OrderEntity;
 import moe.hhm.shiori.order.model.OrderItemEntity;
 import moe.hhm.shiori.order.model.OrderItemRecord;
@@ -10,6 +14,7 @@ import moe.hhm.shiori.order.model.OrderRecord;
 import moe.hhm.shiori.order.model.OrderStatusAuditRecord;
 import moe.hhm.shiori.order.model.OutboxEventEntity;
 import moe.hhm.shiori.order.model.OutboxEventRecord;
+import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Options;
@@ -19,6 +24,164 @@ import org.apache.ibatis.annotations.Update;
 
 @Mapper
 public interface OrderMapper {
+
+    @Select("""
+            SELECT id,
+                   buyer_user_id AS buyerUserId,
+                   seller_user_id AS sellerUserId
+            FROM o_cart
+            WHERE buyer_user_id = #{buyerUserId}
+            LIMIT 1
+            """)
+    CartRecord findCartByBuyerId(@Param("buyerUserId") Long buyerUserId);
+
+    @Insert("""
+            INSERT INTO o_cart (
+                buyer_user_id,
+                seller_user_id,
+                created_at,
+                updated_at
+            ) VALUES (
+                #{buyerUserId},
+                #{sellerUserId},
+                CURRENT_TIMESTAMP(3),
+                CURRENT_TIMESTAMP(3)
+            )
+            """)
+    @Options(useGeneratedKeys = true, keyProperty = "id", keyColumn = "id")
+    int insertCart(CartEntity entity);
+
+    @Delete("""
+            DELETE c
+            FROM o_cart c
+            WHERE c.buyer_user_id = #{buyerUserId}
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM o_cart_item i
+                  WHERE i.cart_id = c.id
+              )
+            """)
+    int deleteCartByBuyerWhenEmpty(@Param("buyerUserId") Long buyerUserId);
+
+    @Select("""
+            SELECT id,
+                   cart_id AS cartId,
+                   buyer_user_id AS buyerUserId,
+                   seller_user_id AS sellerUserId,
+                   product_id AS productId,
+                   sku_id AS skuId,
+                   quantity
+            FROM o_cart_item
+            WHERE buyer_user_id = #{buyerUserId}
+            ORDER BY id ASC
+            """)
+    List<CartItemRecord> listCartItemsByBuyerId(@Param("buyerUserId") Long buyerUserId);
+
+    @Select("""
+            SELECT id,
+                   cart_id AS cartId,
+                   buyer_user_id AS buyerUserId,
+                   seller_user_id AS sellerUserId,
+                   product_id AS productId,
+                   sku_id AS skuId,
+                   quantity
+            FROM o_cart_item
+            WHERE buyer_user_id = #{buyerUserId}
+              AND sku_id = #{skuId}
+            LIMIT 1
+            """)
+    CartItemRecord findCartItemByBuyerAndSku(@Param("buyerUserId") Long buyerUserId,
+                                             @Param("skuId") Long skuId);
+
+    @Select("""
+            SELECT id,
+                   cart_id AS cartId,
+                   buyer_user_id AS buyerUserId,
+                   seller_user_id AS sellerUserId,
+                   product_id AS productId,
+                   sku_id AS skuId,
+                   quantity
+            FROM o_cart_item
+            WHERE id = #{itemId}
+              AND buyer_user_id = #{buyerUserId}
+            LIMIT 1
+            """)
+    CartItemRecord findCartItemByIdAndBuyer(@Param("itemId") Long itemId,
+                                            @Param("buyerUserId") Long buyerUserId);
+
+    @Insert("""
+            INSERT INTO o_cart_item (
+                cart_id,
+                buyer_user_id,
+                seller_user_id,
+                product_id,
+                sku_id,
+                quantity,
+                created_at,
+                updated_at
+            ) VALUES (
+                #{cartId},
+                #{buyerUserId},
+                #{sellerUserId},
+                #{productId},
+                #{skuId},
+                #{quantity},
+                CURRENT_TIMESTAMP(3),
+                CURRENT_TIMESTAMP(3)
+            )
+            """)
+    @Options(useGeneratedKeys = true, keyProperty = "id", keyColumn = "id")
+    int insertCartItem(CartItemEntity entity);
+
+    @Update("""
+            UPDATE o_cart_item
+            SET quantity = quantity + #{quantity},
+                updated_at = CURRENT_TIMESTAMP(3)
+            WHERE id = #{itemId}
+              AND buyer_user_id = #{buyerUserId}
+            """)
+    int increaseCartItemQuantity(@Param("itemId") Long itemId,
+                                 @Param("buyerUserId") Long buyerUserId,
+                                 @Param("quantity") Integer quantity);
+
+    @Update("""
+            UPDATE o_cart_item
+            SET quantity = #{quantity},
+                updated_at = CURRENT_TIMESTAMP(3)
+            WHERE id = #{itemId}
+              AND buyer_user_id = #{buyerUserId}
+            """)
+    int updateCartItemQuantity(@Param("itemId") Long itemId,
+                               @Param("buyerUserId") Long buyerUserId,
+                               @Param("quantity") Integer quantity);
+
+    @Delete("""
+            DELETE FROM o_cart_item
+            WHERE id = #{itemId}
+              AND buyer_user_id = #{buyerUserId}
+            """)
+    int deleteCartItemByIdAndBuyer(@Param("itemId") Long itemId,
+                                   @Param("buyerUserId") Long buyerUserId);
+
+    @Delete("""
+            <script>
+            DELETE FROM o_cart_item
+            WHERE buyer_user_id = #{buyerUserId}
+              AND id IN
+              <foreach collection="itemIds" item="itemId" open="(" separator="," close=")">
+                #{itemId}
+              </foreach>
+            </script>
+            """)
+    int deleteCartItemsByIdsAndBuyer(@Param("buyerUserId") Long buyerUserId,
+                                     @Param("itemIds") List<Long> itemIds);
+
+    @Select("""
+            SELECT COUNT(1)
+            FROM o_cart_item
+            WHERE cart_id = #{cartId}
+            """)
+    long countCartItemsByCartId(@Param("cartId") Long cartId);
 
     @Insert("""
             INSERT INTO o_order (

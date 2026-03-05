@@ -3,6 +3,7 @@ package moe.hhm.shiori.order.security;
 import moe.hhm.shiori.common.security.GatewaySignUtils;
 import moe.hhm.shiori.common.security.GatewaySignVerifyFilter;
 import moe.hhm.shiori.order.service.OrderCommandService;
+import moe.hhm.shiori.order.service.OrderCartService;
 import moe.hhm.shiori.order.service.OrderService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,6 +36,9 @@ class OrderServiceGatewaySignIntegrationTest {
 
     @MockitoBean
     private OrderService orderService;
+
+    @MockitoBean
+    private OrderCartService orderCartService;
 
     @Test
     void shouldReturn401WhenSignHeadersMissing() throws Exception {

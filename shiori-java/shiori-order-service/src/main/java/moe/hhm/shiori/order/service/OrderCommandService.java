@@ -14,6 +14,7 @@ import moe.hhm.shiori.common.error.CommonErrorCode;
 import moe.hhm.shiori.common.error.OrderErrorCode;
 import moe.hhm.shiori.common.exception.BizException;
 import moe.hhm.shiori.order.client.ProductDetailSnapshot;
+import moe.hhm.shiori.order.client.ProductSpecItemSnapshot;
 import moe.hhm.shiori.order.client.ProductServiceClient;
 import moe.hhm.shiori.order.client.ProductSkuSnapshot;
 import moe.hhm.shiori.order.client.NotifyChatClient;
@@ -749,14 +750,16 @@ public class OrderCommandService {
             } catch (ArithmeticException ex) {
                 throw new BizException(OrderErrorCode.ORDER_ITEM_INVALID, HttpStatus.BAD_REQUEST);
             }
+            String skuName = resolveSkuName(sku);
+            String specJson = resolveSpecJson(sku);
 
             lines.add(new PreparedOrderLine(
                     item.productId(),
                     product.productNo(),
                     item.skuId(),
                     sku.skuNo(),
-                    sku.skuName(),
-                    sku.specJson(),
+                    skuName,
+                    specJson,
                     sku.priceCent(),
                     item.quantity(),
                     subtotal,
@@ -780,6 +783,47 @@ public class OrderCommandService {
             }
         }
         return null;
+    }
+
+    private String resolveSkuName(ProductSkuSnapshot sku) {
+        if (StringUtils.hasText(sku.displayName())) {
+            return sku.displayName().trim();
+        }
+        if (sku.specItems() != null && !sku.specItems().isEmpty()) {
+            return sku.specItems().stream()
+                    .filter(item -> item != null && StringUtils.hasText(item.name()) && StringUtils.hasText(item.value()))
+                    .map(item -> item.name().trim() + ":" + item.value().trim())
+                    .reduce((left, right) -> left + " / " + right)
+                    .orElseGet(() -> StringUtils.hasText(sku.skuNo()) ? sku.skuNo() : "默认规格");
+        }
+        if (StringUtils.hasText(sku.skuNo())) {
+            return sku.skuNo();
+        }
+        return "默认规格";
+    }
+
+    private String resolveSpecJson(ProductSkuSnapshot sku) {
+        if (StringUtils.hasText(sku.legacySpecJson())) {
+            return sku.legacySpecJson().trim();
+        }
+        if (sku.specItems() == null || sku.specItems().isEmpty()) {
+            return "{}";
+        }
+        Map<String, String> spec = new LinkedHashMap<>();
+        for (ProductSpecItemSnapshot item : sku.specItems()) {
+            if (item == null || !StringUtils.hasText(item.name()) || !StringUtils.hasText(item.value())) {
+                continue;
+            }
+            spec.put(item.name().trim(), item.value().trim());
+        }
+        if (spec.isEmpty()) {
+            return "{}";
+        }
+        try {
+            return objectMapper.writeValueAsString(spec);
+        } catch (JacksonException ex) {
+            return "{}";
+        }
     }
 
     private void releaseOrderItems(String orderNo, Long buyerUserId, List<String> roles, List<OrderItemRecord> items) {

@@ -22,7 +22,11 @@ public enum OrderErrorCode implements ErrorCode {
     ORDER_PAYMENT_TIMEOUT(50018, "支付服务响应超时"),
     ORDER_BALANCE_NOT_ENOUGH(50019, "余额不足"),
     ORDER_PAYMENT_RESPONSE_INVALID(50020, "支付服务响应异常"),
-    ORDER_PAYMENT_SERVICE_ERROR(50021, "支付服务异常");
+    ORDER_PAYMENT_SERVICE_ERROR(50021, "支付服务异常"),
+    ORDER_CART_EMPTY(50022, "购物车为空"),
+    ORDER_CART_ITEM_NOT_FOUND(50023, "购物车商品不存在"),
+    ORDER_CART_CROSS_SELLER_NOT_ALLOWED(50024, "购物车暂不支持跨卖家"),
+    ORDER_CART_ITEM_INVALID(50025, "购物车商品信息非法");
 
     private final int code;
     private final String message;
