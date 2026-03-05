@@ -40,6 +40,12 @@ const router = createRouter({
       meta: { requiresAdmin: true },
     },
     {
+      path: '/payments/cdks',
+      name: 'payment-cdks',
+      component: () => import('@/views/AdminPaymentCdkView.vue'),
+      meta: { requiresAdmin: true },
+    },
+    {
       path: '/:pathMatch(.*)*',
       redirect: '/users',
     },
