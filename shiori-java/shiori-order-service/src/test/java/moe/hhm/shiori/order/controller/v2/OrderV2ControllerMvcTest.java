@@ -21,7 +21,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(properties = {
         "security.gateway-sign.internal-secret=test-gateway-sign-secret-32-bytes-0001",
-        "security.gateway-sign.max-skew-seconds=300"
+        "security.gateway-sign.max-skew-seconds=300",
+        "order.payment-client.internal-token=test-order-payment-internal-token-000000000001"
 })
 @AutoConfigureMockMvc
 class OrderV2ControllerMvcTest {

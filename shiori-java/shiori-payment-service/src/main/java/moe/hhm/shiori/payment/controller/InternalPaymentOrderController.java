@@ -28,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class InternalPaymentOrderController {
 
     public static final String HEADER_INTERNAL_TOKEN = "X-Shiori-Internal-Token";
+    public static final String INTERNAL_CALLER_ROLE = "ROLE_INTERNAL_ORDER_SERVICE";
 
     private final PaymentService paymentService;
     private final InternalApiProperties internalApiProperties;
@@ -44,6 +45,7 @@ public class InternalPaymentOrderController {
                                                Authentication authentication,
                                                HttpServletRequest httpServletRequest) {
         validateInternalToken(httpServletRequest);
+        validateInternalCaller(authentication);
         CurrentUserSupport.requireUserId(authentication);
         return paymentService.reserveOrderPayment(orderNo, request.buyerUserId(), request.sellerUserId(), request.amountCent());
     }
@@ -54,6 +56,7 @@ public class InternalPaymentOrderController {
                                              Authentication authentication,
                                              HttpServletRequest httpServletRequest) {
         validateInternalToken(httpServletRequest);
+        validateInternalCaller(authentication);
         CurrentUserSupport.requireUserId(authentication);
         return paymentService.settleOrderPayment(orderNo, request.operatorType(), request.operatorUserId());
     }
@@ -64,6 +67,7 @@ public class InternalPaymentOrderController {
                                                Authentication authentication,
                                                HttpServletRequest httpServletRequest) {
         validateInternalToken(httpServletRequest);
+        validateInternalCaller(authentication);
         CurrentUserSupport.requireUserId(authentication);
         String reason = request == null ? null : request.reason();
         return paymentService.releaseOrderPayment(orderNo, reason);
@@ -79,6 +83,13 @@ public class InternalPaymentOrderController {
                 || !StringUtils.hasText(expected)
                 || !GatewaySignUtils.constantTimeEquals(expected.trim(), actual.trim())) {
             throw new BizException(CommonErrorCode.FORBIDDEN, HttpStatus.FORBIDDEN, "内部调用令牌校验失败");
+        }
+    }
+
+    private void validateInternalCaller(Authentication authentication) {
+        if (CurrentUserSupport.resolveRoles(authentication).stream()
+                .noneMatch(INTERNAL_CALLER_ROLE::equals)) {
+            throw new BizException(CommonErrorCode.FORBIDDEN, HttpStatus.FORBIDDEN, "内部调用角色校验失败");
         }
     }
 }

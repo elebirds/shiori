@@ -31,6 +31,7 @@ import tools.jackson.databind.ObjectMapper;
 public class PaymentServiceClient {
 
     static final String HEADER_INTERNAL_TOKEN = "X-Shiori-Internal-Token";
+    static final String INTERNAL_CALLER_ROLE = "ROLE_INTERNAL_ORDER_SERVICE";
 
     private static final ParameterizedTypeReference<Result<ReserveBalancePaymentSnapshot>> RESERVE_TYPE =
             new ParameterizedTypeReference<>() {
@@ -147,7 +148,7 @@ public class PaymentServiceClient {
                            Long userId,
                            List<String> roles) {
         String userIdValue = userId == null ? "" : String.valueOf(userId);
-        String rolesValue = normalizeRoles(roles);
+        String rolesValue = appendInternalCallerRole(normalizeRoles(roles));
         String ts = String.valueOf(System.currentTimeMillis());
         String nonce = UUID.randomUUID().toString().replace("-", "");
         String canonical = GatewaySignUtils.buildCanonicalString(method, path, rawQuery, userIdValue, rolesValue, ts, nonce);
@@ -159,6 +160,21 @@ public class PaymentServiceClient {
         headers.set(GatewaySignVerifyFilter.HEADER_GATEWAY_SIGN, sign);
         headers.set(GatewaySignVerifyFilter.HEADER_GATEWAY_NONCE, nonce);
         headers.set(HEADER_INTERNAL_TOKEN, internalToken);
+    }
+
+    private String appendInternalCallerRole(String rolesValue) {
+        if (!StringUtils.hasText(rolesValue)) {
+            return INTERNAL_CALLER_ROLE;
+        }
+        List<String> roles = java.util.Arrays.stream(rolesValue.split(","))
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .distinct()
+                .toList();
+        if (roles.contains(INTERNAL_CALLER_ROLE)) {
+            return String.join(",", roles);
+        }
+        return rolesValue + "," + INTERNAL_CALLER_ROLE;
     }
 
     private String normalizeRoles(List<String> roles) {

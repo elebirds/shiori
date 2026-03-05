@@ -21,5 +21,5 @@ server:
 
 payment:
   internal-api:
-    token: ${ORDER_PAYMENT_INTERNAL_TOKEN:dev-order-payment-internal-token-please-change-0001}
+    token: ${ORDER_PAYMENT_INTERNAL_TOKEN:}
     require-token: ${PAYMENT_INTERNAL_API_REQUIRE_TOKEN:true}

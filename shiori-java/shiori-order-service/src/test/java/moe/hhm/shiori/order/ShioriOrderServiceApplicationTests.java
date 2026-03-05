@@ -7,7 +7,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 @SpringBootTest(properties = {
-        "security.gateway-sign.internal-secret=test-gateway-sign-secret-32-bytes-0001"
+        "security.gateway-sign.internal-secret=test-gateway-sign-secret-32-bytes-0001",
+        "order.payment-client.internal-token=test-order-payment-internal-token-000000000001"
 })
 class ShioriOrderServiceApplicationTests {
 

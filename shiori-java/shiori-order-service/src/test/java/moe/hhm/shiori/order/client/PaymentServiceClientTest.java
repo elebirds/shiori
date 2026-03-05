@@ -50,7 +50,8 @@ class PaymentServiceClientTest {
 
         assertThat(headers.getFirst(PaymentServiceClient.HEADER_INTERNAL_TOKEN)).isEqualTo(TOKEN);
         assertThat(headers.getFirst(GatewaySignVerifyFilter.HEADER_USER_ID)).isEqualTo("1001");
-        assertThat(headers.getFirst(GatewaySignVerifyFilter.HEADER_USER_ROLES)).isEqualTo("ROLE_USER");
+        assertThat(headers.getFirst(GatewaySignVerifyFilter.HEADER_USER_ROLES))
+                .isEqualTo("ROLE_USER," + PaymentServiceClient.INTERNAL_CALLER_ROLE);
         assertThat(ts).isNotBlank();
         assertThat(nonce).isNotBlank();
         assertThat(sign).isNotBlank();
@@ -60,7 +61,7 @@ class PaymentServiceClientTest {
                 "/api/payment/internal/orders/O001/reserve",
                 null,
                 "1001",
-                "ROLE_USER",
+                "ROLE_USER," + PaymentServiceClient.INTERNAL_CALLER_ROLE,
                 ts,
                 nonce
         );
