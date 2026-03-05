@@ -33,6 +33,25 @@ public class GatewayGovernanceMetrics {
         ).increment();
     }
 
+    public void incAuthzDecision(String permissionCode, String decision) {
+        meterRegistry.counter(
+                "authz_decision_total",
+                "permission", sanitize(permissionCode),
+                "decision", sanitize(decision)
+        ).increment();
+    }
+
+    public void incAuthzDegradedAllow(String reason) {
+        meterRegistry.counter(
+                "authz_degraded_allow_total",
+                "reason", sanitize(reason)
+        ).increment();
+    }
+
+    public void observeAuthzSnapshotStaleSeconds(double seconds) {
+        meterRegistry.summary("authz_snapshot_stale_seconds").record(Math.max(0D, seconds));
+    }
+
     private String sanitize(String value) {
         if (!StringUtils.hasText(value)) {
             return "unknown";

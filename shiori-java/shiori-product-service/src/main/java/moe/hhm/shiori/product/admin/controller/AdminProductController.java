@@ -2,6 +2,8 @@ package moe.hhm.shiori.product.admin.controller;
 
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.servlet.http.HttpServletRequest;
+import moe.hhm.shiori.common.security.authz.PermissionGuard;
 import moe.hhm.shiori.product.admin.dto.AdminProductOffShelfRequest;
 import moe.hhm.shiori.product.admin.service.AdminProductService;
 import moe.hhm.shiori.product.dto.ProductDetailResponse;
@@ -24,9 +26,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminProductController {
 
     private final AdminProductService adminProductService;
+    private final PermissionGuard permissionGuard;
 
-    public AdminProductController(AdminProductService adminProductService) {
+    public AdminProductController(AdminProductService adminProductService,
+                                  PermissionGuard permissionGuard) {
         this.adminProductService = adminProductService;
+        this.permissionGuard = permissionGuard;
     }
 
     @GetMapping
@@ -47,7 +52,9 @@ public class AdminProductController {
     @PostMapping("/{productId}/off-shelf")
     public ProductWriteResponse forceOffShelf(@PathVariable Long productId,
                                               @RequestBody(required = false) AdminProductOffShelfRequest request,
-                                              Authentication authentication) {
+                                              Authentication authentication,
+                                              HttpServletRequest httpServletRequest) {
+        permissionGuard.require("product.off_shelf", httpServletRequest::getHeader);
         Long operatorUserId = CurrentUserSupport.requireUserId(authentication);
         String reason = request == null ? null : request.reason();
         return adminProductService.forceOffShelf(productId, operatorUserId, reason);

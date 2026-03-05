@@ -1,3 +1,4 @@
 moe.hhm.shiori.common.autoconfigure.ResultExceptionMvcAutoConfiguration
 moe.hhm.shiori.common.autoconfigure.ResultExceptionWebFluxAutoConfiguration
 moe.hhm.shiori.common.autoconfigure.GatewayServiceSecurityAutoConfiguration
+moe.hhm.shiori.common.autoconfigure.AuthzGuardAutoConfiguration

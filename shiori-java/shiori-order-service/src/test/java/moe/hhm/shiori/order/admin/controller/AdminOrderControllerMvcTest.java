@@ -1,6 +1,7 @@
 package moe.hhm.shiori.order.admin.controller;
 
 import java.util.List;
+import moe.hhm.shiori.common.security.authz.PermissionGuard;
 import moe.hhm.shiori.common.mvc.GlobalExceptionHandler;
 import moe.hhm.shiori.common.mvc.ResultResponseBodyAdvice;
 import moe.hhm.shiori.order.dto.OrderDetailResponse;
@@ -49,7 +50,7 @@ class AdminOrderControllerMvcTest {
     void setUp() {
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
-        AdminOrderController controller = new AdminOrderController(orderService, orderCommandService);
+        AdminOrderController controller = new AdminOrderController(orderService, orderCommandService, new PermissionGuard());
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setValidator(validator)
                 .setControllerAdvice(new GlobalExceptionHandler(), new ResultResponseBodyAdvice(new ObjectMapper()))

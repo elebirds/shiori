@@ -3,6 +3,8 @@ package moe.hhm.shiori.product.admin.controller.v2;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.servlet.http.HttpServletRequest;
+import moe.hhm.shiori.common.security.authz.PermissionGuard;
 import moe.hhm.shiori.product.admin.dto.AdminProductOffShelfRequest;
 import moe.hhm.shiori.product.admin.service.AdminProductService;
 import moe.hhm.shiori.product.admin.service.AdminProductV2Service;
@@ -33,13 +35,16 @@ public class AdminProductV2Controller {
     private final ProductV2Service productV2Service;
     private final AdminProductService adminProductService;
     private final AdminProductV2Service adminProductV2Service;
+    private final PermissionGuard permissionGuard;
 
     public AdminProductV2Controller(ProductV2Service productV2Service,
                                     AdminProductService adminProductService,
-                                    AdminProductV2Service adminProductV2Service) {
+                                    AdminProductV2Service adminProductV2Service,
+                                    PermissionGuard permissionGuard) {
         this.productV2Service = productV2Service;
         this.adminProductService = adminProductService;
         this.adminProductV2Service = adminProductV2Service;
+        this.permissionGuard = permissionGuard;
     }
 
     @GetMapping
@@ -66,7 +71,9 @@ public class AdminProductV2Controller {
     @PostMapping("/{productId}/off-shelf")
     public ProductWriteResponse forceOffShelf(@PathVariable Long productId,
                                               @RequestBody(required = false) AdminProductOffShelfRequest request,
-                                              Authentication authentication) {
+                                              Authentication authentication,
+                                              HttpServletRequest httpServletRequest) {
+        permissionGuard.require("product.off_shelf", httpServletRequest::getHeader);
         Long operatorUserId = CurrentUserSupport.requireUserId(authentication);
         String reason = request == null ? null : request.reason();
         return adminProductService.forceOffShelf(productId, operatorUserId, reason);
@@ -74,7 +81,9 @@ public class AdminProductV2Controller {
 
     @PostMapping("/batch-off-shelf")
     public ProductV2BatchOffShelfResponse batchOffShelf(@Valid @RequestBody ProductV2BatchOffShelfRequest request,
-                                                        Authentication authentication) {
+                                                        Authentication authentication,
+                                                        HttpServletRequest httpServletRequest) {
+        permissionGuard.require("product.off_shelf", httpServletRequest::getHeader);
         Long operatorUserId = CurrentUserSupport.requireUserId(authentication);
         return adminProductV2Service.batchForceOffShelf(request.productIds(), operatorUserId, request.reason());
     }

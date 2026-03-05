@@ -20,6 +20,7 @@ var ErrMissingTargetUser = errors.New("event payload missing target user")
 
 type Hub interface {
 	SendToUser(userID string, payload []byte) (int, error)
+	KickUser(userID string) int
 }
 
 type EventStore interface {
@@ -54,6 +55,7 @@ type orderLifecyclePayload struct {
 
 type userGovernancePayload struct {
 	TargetUserID json.RawMessage `json:"targetUserId"`
+	UserID       json.RawMessage `json:"userId"`
 }
 
 func New(hub Hub, eventStore EventStore, logger *zerolog.Logger) *Router {
@@ -119,7 +121,7 @@ func (r *Router) extractTargetUserIDs(env event.Envelope) ([]string, error) {
 			return nil, fmt.Errorf("unmarshal order lifecycle payload: %w", err)
 		}
 		return parseUserIDs(payload.BuyerUserID, payload.SellerUserID)
-	case "UserStatusChanged", "UserRoleChanged", "UserPasswordReset":
+	case "UserStatusChanged", "UserRoleChanged", "UserPasswordReset", "UserPermissionOverrideChanged", "UserRoleBindingsChanged":
 		var payload userGovernancePayload
 		if err := json.Unmarshal(env.Payload, &payload); err != nil {
 			return nil, fmt.Errorf("unmarshal governance payload: %w", err)
@@ -127,6 +129,12 @@ func (r *Router) extractTargetUserIDs(env event.Envelope) ([]string, error) {
 		userID, err := parseUserID(payload.TargetUserID)
 		if err != nil {
 			return nil, fmt.Errorf("parse targetUserId: %w", err)
+		}
+		if strings.TrimSpace(userID) == "" {
+			userID, err = parseUserID(payload.UserID)
+			if err != nil {
+				return nil, fmt.Errorf("parse userId: %w", err)
+			}
 		}
 		return uniqueUserIDs(userID), nil
 	default:
@@ -139,6 +147,23 @@ func (r *Router) extractTargetUserIDs(env event.Envelope) ([]string, error) {
 }
 
 func (r *Router) routeToUsers(_ context.Context, env event.Envelope, targetUserIDs []string) error {
+	if isAuthzChangeEvent(env.Type) {
+		totalKicked := 0
+		for _, userID := range targetUserIDs {
+			totalKicked += r.hub.KickUser(userID)
+		}
+		if totalKicked > 0 {
+			metrics.AddNotifyWSKick(totalKicked)
+		}
+		r.logger.Info().
+			Str("eventId", env.EventID).
+			Str("type", env.Type).
+			Int("targets", len(targetUserIDs)).
+			Int("kicked", totalKicked).
+			Msg("权限变更事件处理完成，已执行 websocket 踢线")
+		return nil
+	}
+
 	message, err := json.Marshal(env)
 	if err != nil {
 		return fmt.Errorf("marshal ws payload: %w", err)
@@ -259,5 +284,14 @@ func detectStoreType(eventStore EventStore) string {
 		return "mysql"
 	default:
 		return "unknown"
+	}
+}
+
+func isAuthzChangeEvent(eventType string) bool {
+	switch strings.TrimSpace(eventType) {
+	case "UserPermissionOverrideChanged", "UserRoleBindingsChanged":
+		return true
+	default:
+		return false
 	}
 }

@@ -1,8 +1,10 @@
 package moe.hhm.shiori.order.controller.v2;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import moe.hhm.shiori.common.security.authz.PermissionGuard;
 import moe.hhm.shiori.order.dto.OrderDetailResponse;
 import moe.hhm.shiori.order.dto.OrderOperateResponse;
 import moe.hhm.shiori.order.dto.OrderTransitionRequest;
@@ -30,10 +32,14 @@ public class SellerOrderV2Controller {
 
     private final OrderCommandService orderCommandService;
     private final OrderService orderService;
+    private final PermissionGuard permissionGuard;
 
-    public SellerOrderV2Controller(OrderCommandService orderCommandService, OrderService orderService) {
+    public SellerOrderV2Controller(OrderCommandService orderCommandService,
+                                   OrderService orderService,
+                                   PermissionGuard permissionGuard) {
         this.orderCommandService = orderCommandService;
         this.orderService = orderService;
+        this.permissionGuard = permissionGuard;
     }
 
     @GetMapping
@@ -59,7 +65,9 @@ public class SellerOrderV2Controller {
     @PostMapping("/{orderNo}/deliver")
     public OrderOperateResponse deliver(@PathVariable String orderNo,
                                         @Valid @RequestBody(required = false) OrderTransitionRequest request,
-                                        Authentication authentication) {
+                                        Authentication authentication,
+                                        HttpServletRequest httpServletRequest) {
+        permissionGuard.require("order.deliver", httpServletRequest::getHeader);
         Long sellerUserId = CurrentUserSupport.requireUserId(authentication);
         String reason = request == null ? null : request.reason();
         return orderCommandService.deliverOrderAsSeller(sellerUserId, orderNo, reason);
@@ -68,7 +76,9 @@ public class SellerOrderV2Controller {
     @PostMapping("/{orderNo}/finish")
     public OrderOperateResponse finish(@PathVariable String orderNo,
                                        @Valid @RequestBody(required = false) OrderTransitionRequest request,
-                                       Authentication authentication) {
+                                       Authentication authentication,
+                                       HttpServletRequest httpServletRequest) {
+        permissionGuard.require("order.finish", httpServletRequest::getHeader);
         Long sellerUserId = CurrentUserSupport.requireUserId(authentication);
         String reason = request == null ? null : request.reason();
         return orderCommandService.finishOrderAsSeller(sellerUserId, orderNo, reason);

@@ -19,7 +19,8 @@ public enum UserErrorCode implements ErrorCode {
     AVATAR_UPLOAD_FAILED(30015, "头像上传失败"),
     AVATAR_NOT_FOUND(30016, "头像不存在"),
     AVATAR_READ_FAILED(30017, "头像读取失败"),
-    CAPABILITY_BAN_NOT_FOUND(30018, "用户能力封禁记录不存在");
+    CAPABILITY_BAN_NOT_FOUND(30018, "用户能力封禁记录不存在"),
+    PERMISSION_OVERRIDE_NOT_FOUND(30019, "用户权限覆盖记录不存在");
 
     private final int code;
     private final String message;

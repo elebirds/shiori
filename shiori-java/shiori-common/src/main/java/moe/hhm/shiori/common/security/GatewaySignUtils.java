@@ -14,21 +14,34 @@ public final class GatewaySignUtils {
 
     public static String buildCanonicalString(String method, String path, String rawQuery,
                                               String userId, String userRoles, String timestamp) {
-        return buildCanonicalString(method, path, rawQuery, userId, userRoles, timestamp, "");
+        return buildCanonicalString(method, path, rawQuery, userId, userRoles, "", "", "", timestamp, "");
     }
 
     public static String buildCanonicalString(String method, String path, String rawQuery,
                                               String userId, String userRoles, String timestamp,
                                               String nonce) {
+        return buildCanonicalString(method, path, rawQuery, userId, userRoles, "", "", "", timestamp, nonce);
+    }
+
+    public static String buildCanonicalString(String method, String path, String rawQuery,
+                                              String userId, String userRoles,
+                                              String authzVersion, String authzGrants, String authzDenies,
+                                              String timestamp, String nonce) {
         String safeQuery = rawQuery == null ? "" : rawQuery;
         String safeUserId = userId == null ? "" : userId;
         String safeUserRoles = userRoles == null ? "" : userRoles;
+        String safeAuthzVersion = authzVersion == null ? "" : authzVersion;
+        String safeAuthzGrants = authzGrants == null ? "" : authzGrants;
+        String safeAuthzDenies = authzDenies == null ? "" : authzDenies;
         return String.join("\n",
                 method == null ? "" : method.toUpperCase(),
                 path == null ? "" : path,
                 safeQuery,
                 safeUserId,
                 safeUserRoles,
+                safeAuthzVersion,
+                safeAuthzGrants,
+                safeAuthzDenies,
                 timestamp == null ? "" : timestamp,
                 nonce == null ? "" : nonce);
     }

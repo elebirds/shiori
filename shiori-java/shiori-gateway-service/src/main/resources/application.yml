@@ -100,6 +100,121 @@ security:
       - /api/user/profiles/**
       - /api/user/media/avatar/**
       - /api/v2/product/users/**
+  authz:
+    enabled: ${SECURITY_AUTHZ_ENABLED:true}
+    user-service-base-url: ${SECURITY_AUTHZ_USER_SERVICE_BASE_URL:http://shiori-user-service:8081}
+    query-timeout-ms: ${SECURITY_AUTHZ_QUERY_TIMEOUT_MS:800}
+    cache:
+      ttl-seconds: ${SECURITY_AUTHZ_CACHE_TTL_SECONDS:30}
+      stale-ttl-seconds: ${SECURITY_AUTHZ_CACHE_STALE_TTL_SECONDS:300}
+    degrade:
+      allow-without-snapshot: ${SECURITY_AUTHZ_DEGRADE_ALLOW_WITHOUT_SNAPSHOT:true}
+    route-rules:
+      - method: GET
+        path-pattern: /api/chat/**
+        permission-code: chat.read
+      - method: POST
+        path-pattern: /api/chat/**
+        permission-code: chat.send
+      - method: PUT
+        path-pattern: /api/chat/**
+        permission-code: chat.send
+      - method: DELETE
+        path-pattern: /api/chat/**
+        permission-code: chat.send
+      - method: GET
+        path-pattern: /ws
+        permission-code: chat.read
+      - method: POST
+        path-pattern: /api/order/orders
+        permission-code: order.create
+      - method: POST
+        path-pattern: /api/v2/order/orders
+        permission-code: order.create
+      - method: POST
+        path-pattern: /api/order/orders/*/pay
+        permission-code: order.pay
+      - method: POST
+        path-pattern: /api/v2/order/orders/*/pay
+        permission-code: order.pay
+      - method: POST
+        path-pattern: /api/order/orders/*/cancel
+        permission-code: order.cancel
+      - method: POST
+        path-pattern: /api/v2/order/orders/*/cancel
+        permission-code: order.cancel
+      - method: POST
+        path-pattern: /api/v2/order/orders/*/confirm-receipt
+        permission-code: order.confirm_receipt
+      - method: POST
+        path-pattern: /api/order/seller/orders/*/deliver
+        permission-code: order.deliver
+      - method: POST
+        path-pattern: /api/order/seller/orders/*/finish
+        permission-code: order.finish
+      - method: POST
+        path-pattern: /api/v2/order/seller/orders/*/deliver
+        permission-code: order.deliver
+      - method: POST
+        path-pattern: /api/v2/order/seller/orders/*/finish
+        permission-code: order.finish
+      - method: POST
+        path-pattern: /api/admin/orders/*/cancel
+        permission-code: order.cancel
+      - method: POST
+        path-pattern: /api/admin/orders/*/deliver
+        permission-code: order.deliver
+      - method: POST
+        path-pattern: /api/admin/orders/*/finish
+        permission-code: order.finish
+      - method: POST
+        path-pattern: /api/v2/admin/orders/*/cancel
+        permission-code: order.cancel
+      - method: POST
+        path-pattern: /api/v2/admin/orders/*/deliver
+        permission-code: order.deliver
+      - method: POST
+        path-pattern: /api/v2/admin/orders/*/finish
+        permission-code: order.finish
+      - method: POST
+        path-pattern: /api/product/products
+        permission-code: product.create
+      - method: POST
+        path-pattern: /api/v2/product/products
+        permission-code: product.create
+      - method: PUT
+        path-pattern: /api/product/products/*
+        permission-code: product.update
+      - method: PUT
+        path-pattern: /api/v2/product/products/*
+        permission-code: product.update
+      - method: POST
+        path-pattern: /api/product/products/*/publish
+        permission-code: product.publish
+      - method: POST
+        path-pattern: /api/v2/product/products/*/publish
+        permission-code: product.publish
+      - method: POST
+        path-pattern: /api/product/products/*/off-shelf
+        permission-code: product.off_shelf
+      - method: POST
+        path-pattern: /api/v2/product/products/*/off-shelf
+        permission-code: product.off_shelf
+      - method: POST
+        path-pattern: /api/admin/products/*/off-shelf
+        permission-code: product.off_shelf
+      - method: POST
+        path-pattern: /api/v2/admin/products/*/off-shelf
+        permission-code: product.off_shelf
+      - method: POST
+        path-pattern: /api/v2/admin/products/batch-off-shelf
+        permission-code: product.off_shelf
+      - method: POST
+        path-pattern: /api/product/internal/stock/**
+        permission-code: product.stock.adjust
+      - method: '*'
+        path-pattern: /api/v2/admin/users/*/permission-overrides/**
+        permission-code: admin.user.permission_override.manage
 
 server:
   port: 8080

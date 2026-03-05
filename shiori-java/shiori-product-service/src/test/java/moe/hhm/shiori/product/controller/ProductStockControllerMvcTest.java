@@ -3,6 +3,7 @@ package moe.hhm.shiori.product.controller;
 import java.util.List;
 import moe.hhm.shiori.common.mvc.GlobalExceptionHandler;
 import moe.hhm.shiori.common.mvc.ResultResponseBodyAdvice;
+import moe.hhm.shiori.common.security.authz.PermissionGuard;
 import moe.hhm.shiori.product.dto.StockDeductRequest;
 import moe.hhm.shiori.product.dto.StockOperateResponse;
 import moe.hhm.shiori.product.dto.StockReleaseRequest;
@@ -39,7 +40,7 @@ class ProductStockControllerMvcTest {
     void setUp() {
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
-        ProductStockController controller = new ProductStockController(productStockService);
+        ProductStockController controller = new ProductStockController(productStockService, new PermissionGuard());
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setValidator(validator)
                 .setControllerAdvice(new GlobalExceptionHandler(), new ResultResponseBodyAdvice(new ObjectMapper()))

@@ -3,8 +3,10 @@ package moe.hhm.shiori.order.controller;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.servlet.http.HttpServletRequest;
 import moe.hhm.shiori.common.error.CommonErrorCode;
 import moe.hhm.shiori.common.exception.BizException;
+import moe.hhm.shiori.common.security.authz.PermissionGuard;
 import moe.hhm.shiori.order.dto.CancelOrderRequest;
 import moe.hhm.shiori.order.dto.CreateOrderRequest;
 import moe.hhm.shiori.order.dto.CreateOrderResponse;
@@ -35,19 +37,25 @@ public class OrderController {
 
     private final OrderCommandService orderCommandService;
     private final OrderService orderService;
+    private final PermissionGuard permissionGuard;
 
-    public OrderController(OrderCommandService orderCommandService, OrderService orderService) {
+    public OrderController(OrderCommandService orderCommandService,
+                           OrderService orderService,
+                           PermissionGuard permissionGuard) {
         this.orderCommandService = orderCommandService;
         this.orderService = orderService;
+        this.permissionGuard = permissionGuard;
     }
 
     @PostMapping
     public CreateOrderResponse create(@Valid @RequestBody CreateOrderRequest request,
                                       @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
-                                      Authentication authentication) {
+                                      Authentication authentication,
+                                      HttpServletRequest httpServletRequest) {
         if (!StringUtils.hasText(idempotencyKey)) {
             throw new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST);
         }
+        permissionGuard.require("order.create", httpServletRequest::getHeader);
         Long userId = CurrentUserSupport.requireUserId(authentication);
         return orderCommandService.createOrder(
                 userId,
@@ -75,10 +83,12 @@ public class OrderController {
     public OrderOperateResponse pay(@PathVariable String orderNo,
                                     @Valid @RequestBody PayOrderRequest request,
                                     @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
-                                    Authentication authentication) {
+                                    Authentication authentication,
+                                    HttpServletRequest httpServletRequest) {
         if (!StringUtils.hasText(idempotencyKey)) {
             throw new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST);
         }
+        permissionGuard.require("order.pay", httpServletRequest::getHeader);
         Long userId = CurrentUserSupport.requireUserId(authentication);
         return orderCommandService.payOrder(userId, orderNo, request.paymentNo().trim(), idempotencyKey.trim());
     }
@@ -87,10 +97,12 @@ public class OrderController {
     public OrderOperateResponse cancel(@PathVariable String orderNo,
                                        @Valid @RequestBody(required = false) CancelOrderRequest request,
                                        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
-                                       Authentication authentication) {
+                                       Authentication authentication,
+                                       HttpServletRequest httpServletRequest) {
         if (!StringUtils.hasText(idempotencyKey)) {
             throw new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST);
         }
+        permissionGuard.require("order.cancel", httpServletRequest::getHeader);
         Long userId = CurrentUserSupport.requireUserId(authentication);
         String reason = request == null ? null : request.reason();
         return orderCommandService.cancelOrder(

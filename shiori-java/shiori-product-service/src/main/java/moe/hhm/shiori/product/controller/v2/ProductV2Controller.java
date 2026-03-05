@@ -1,6 +1,8 @@
 package moe.hhm.shiori.product.controller.v2;
 
 import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpServletRequest;
+import moe.hhm.shiori.common.security.authz.PermissionGuard;
 import moe.hhm.shiori.product.dto.ProductWriteResponse;
 import moe.hhm.shiori.product.dto.v2.CreateProductV2Request;
 import moe.hhm.shiori.product.dto.v2.ProductV2DetailResponse;
@@ -25,9 +27,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class ProductV2Controller {
 
     private final ProductV2Service productV2Service;
+    private final PermissionGuard permissionGuard;
 
-    public ProductV2Controller(ProductV2Service productV2Service) {
+    public ProductV2Controller(ProductV2Service productV2Service, PermissionGuard permissionGuard) {
         this.productV2Service = productV2Service;
+        this.permissionGuard = permissionGuard;
     }
 
     @GetMapping
@@ -50,7 +54,10 @@ public class ProductV2Controller {
     }
 
     @PostMapping
-    public ProductWriteResponse create(@Valid @RequestBody CreateProductV2Request request, Authentication authentication) {
+    public ProductWriteResponse create(@Valid @RequestBody CreateProductV2Request request,
+                                       Authentication authentication,
+                                       HttpServletRequest httpServletRequest) {
+        permissionGuard.require("product.create", httpServletRequest::getHeader);
         Long userId = CurrentUserSupport.requireUserId(authentication);
         return productV2Service.createProduct(userId, request);
     }
@@ -58,21 +65,29 @@ public class ProductV2Controller {
     @PutMapping("/{productId}")
     public ProductWriteResponse update(@PathVariable Long productId,
                                        @Valid @RequestBody UpdateProductV2Request request,
-                                       Authentication authentication) {
+                                       Authentication authentication,
+                                       HttpServletRequest httpServletRequest) {
+        permissionGuard.require("product.update", httpServletRequest::getHeader);
         Long userId = CurrentUserSupport.requireUserId(authentication);
         boolean admin = CurrentUserSupport.hasRoleAdmin(authentication);
         return productV2Service.updateProduct(productId, userId, admin, request);
     }
 
     @PostMapping("/{productId}/publish")
-    public ProductWriteResponse publish(@PathVariable Long productId, Authentication authentication) {
+    public ProductWriteResponse publish(@PathVariable Long productId,
+                                        Authentication authentication,
+                                        HttpServletRequest httpServletRequest) {
+        permissionGuard.require("product.publish", httpServletRequest::getHeader);
         Long userId = CurrentUserSupport.requireUserId(authentication);
         boolean admin = CurrentUserSupport.hasRoleAdmin(authentication);
         return productV2Service.publishProduct(productId, userId, admin);
     }
 
     @PostMapping("/{productId}/off-shelf")
-    public ProductWriteResponse offShelf(@PathVariable Long productId, Authentication authentication) {
+    public ProductWriteResponse offShelf(@PathVariable Long productId,
+                                         Authentication authentication,
+                                         HttpServletRequest httpServletRequest) {
+        permissionGuard.require("product.off_shelf", httpServletRequest::getHeader);
         Long userId = CurrentUserSupport.requireUserId(authentication);
         boolean admin = CurrentUserSupport.hasRoleAdmin(authentication);
         return productV2Service.offShelfProduct(productId, userId, admin);

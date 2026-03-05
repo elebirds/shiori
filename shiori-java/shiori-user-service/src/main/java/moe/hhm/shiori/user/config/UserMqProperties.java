@@ -12,6 +12,8 @@ public class UserMqProperties {
     private String userStatusChangedRoutingKey = "user.status.changed";
     private String userRoleChangedRoutingKey = "user.role.changed";
     private String userPasswordResetRoutingKey = "user.password.reset";
+    private String userPermissionOverrideChangedRoutingKey = "user.permission-override.changed";
+    private String userRoleBindingsChangedRoutingKey = "user.role-bindings.changed";
 
     public boolean isEnabled() {
         return enabled;
@@ -51,5 +53,21 @@ public class UserMqProperties {
 
     public void setUserPasswordResetRoutingKey(String userPasswordResetRoutingKey) {
         this.userPasswordResetRoutingKey = userPasswordResetRoutingKey;
+    }
+
+    public String getUserPermissionOverrideChangedRoutingKey() {
+        return userPermissionOverrideChangedRoutingKey;
+    }
+
+    public void setUserPermissionOverrideChangedRoutingKey(String userPermissionOverrideChangedRoutingKey) {
+        this.userPermissionOverrideChangedRoutingKey = userPermissionOverrideChangedRoutingKey;
+    }
+
+    public String getUserRoleBindingsChangedRoutingKey() {
+        return userRoleBindingsChangedRoutingKey;
+    }
+
+    public void setUserRoleBindingsChangedRoutingKey(String userRoleBindingsChangedRoutingKey) {
+        this.userRoleBindingsChangedRoutingKey = userRoleBindingsChangedRoutingKey;
     }
 }

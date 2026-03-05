@@ -33,6 +33,9 @@ public class GatewaySignVerifyFilter extends OncePerRequestFilter {
     public static final String HEADER_GATEWAY_NONCE = "X-Gateway-Nonce";
     public static final String HEADER_USER_ID = "X-User-Id";
     public static final String HEADER_USER_ROLES = "X-User-Roles";
+    public static final String HEADER_USER_AUTHZ_VERSION = "X-User-Authz-Version";
+    public static final String HEADER_USER_AUTHZ_GRANTS = "X-User-Authz-Grants";
+    public static final String HEADER_USER_AUTHZ_DENIES = "X-User-Authz-Denies";
 
     private final GatewaySignProperties properties;
     private final ObjectMapper objectMapper;
@@ -109,6 +112,9 @@ public class GatewaySignVerifyFilter extends OncePerRequestFilter {
                 request.getQueryString(),
                 userId,
                 userRoles,
+                request.getHeader(HEADER_USER_AUTHZ_VERSION),
+                request.getHeader(HEADER_USER_AUTHZ_GRANTS),
+                request.getHeader(HEADER_USER_AUTHZ_DENIES),
                 timestampHeader,
                 nonceHeader
         );

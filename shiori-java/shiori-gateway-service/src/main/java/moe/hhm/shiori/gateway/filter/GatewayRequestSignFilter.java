@@ -39,6 +39,9 @@ public class GatewayRequestSignFilter implements GlobalFilter, Ordered {
 
         String userId = firstHeader(exchange, GatewaySignVerifyFilter.HEADER_USER_ID);
         String userRoles = firstHeader(exchange, GatewaySignVerifyFilter.HEADER_USER_ROLES);
+        String authzVersion = firstHeader(exchange, GatewaySignVerifyFilter.HEADER_USER_AUTHZ_VERSION);
+        String authzGrants = firstHeader(exchange, GatewaySignVerifyFilter.HEADER_USER_AUTHZ_GRANTS);
+        String authzDenies = firstHeader(exchange, GatewaySignVerifyFilter.HEADER_USER_AUTHZ_DENIES);
         String timestamp = String.valueOf(System.currentTimeMillis());
         String nonce = UUID.randomUUID().toString().replace("-", "");
 
@@ -48,6 +51,9 @@ public class GatewayRequestSignFilter implements GlobalFilter, Ordered {
                 exchange.getRequest().getURI().getRawQuery(),
                 userId,
                 userRoles,
+                authzVersion,
+                authzGrants,
+                authzDenies,
                 timestamp,
                 nonce
         );

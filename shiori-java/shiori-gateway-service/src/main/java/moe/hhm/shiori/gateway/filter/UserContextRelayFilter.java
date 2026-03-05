@@ -1,6 +1,7 @@
 package moe.hhm.shiori.gateway.filter;
 
 import java.util.List;
+import moe.hhm.shiori.common.security.authz.AuthzHeaderNames;
 import moe.hhm.shiori.gateway.security.JwtClaimUtils;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
@@ -42,6 +43,9 @@ public class UserContextRelayFilter implements GlobalFilter, Ordered {
                 .request(exchange.getRequest().mutate().headers(headers -> {
                     headers.remove(HEADER_USER_ID);
                     headers.remove(HEADER_USER_ROLES);
+                    headers.remove(AuthzHeaderNames.USER_AUTHZ_VERSION);
+                    headers.remove(AuthzHeaderNames.USER_AUTHZ_GRANTS);
+                    headers.remove(AuthzHeaderNames.USER_AUTHZ_DENIES);
                 }).build())
                 .build();
     }

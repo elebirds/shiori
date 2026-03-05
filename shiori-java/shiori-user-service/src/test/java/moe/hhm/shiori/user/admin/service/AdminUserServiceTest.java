@@ -10,6 +10,7 @@ import moe.hhm.shiori.user.admin.dto.AdminUserStatusUpdateRequest;
 import moe.hhm.shiori.user.admin.model.AdminUserRecord;
 import moe.hhm.shiori.user.admin.repository.AdminUserMapper;
 import moe.hhm.shiori.user.auth.config.UserSecurityProperties;
+import moe.hhm.shiori.user.authz.service.AuthzSnapshotService;
 import moe.hhm.shiori.user.auth.service.TokenService;
 import moe.hhm.shiori.user.config.UserMqProperties;
 import moe.hhm.shiori.user.config.UserOutboxProperties;
@@ -52,6 +53,9 @@ class AdminUserServiceTest {
     @Mock
     private UserSecurityProperties userSecurityProperties;
 
+    @Mock
+    private AuthzSnapshotService authzSnapshotService;
+
     private AdminUserService adminUserService;
 
     @BeforeEach
@@ -60,9 +64,12 @@ class AdminUserServiceTest {
         when(userMqProperties.getUserStatusChangedRoutingKey()).thenReturn("user.status.changed");
         when(userMqProperties.getUserRoleChangedRoutingKey()).thenReturn("user.role.changed");
         when(userMqProperties.getUserPasswordResetRoutingKey()).thenReturn("user.password.reset");
+        when(userMqProperties.getUserPermissionOverrideChangedRoutingKey()).thenReturn("user.permission-override.changed");
+        when(userMqProperties.getUserRoleBindingsChangedRoutingKey()).thenReturn("user.role-bindings.changed");
         when(userMqProperties.isEnabled()).thenReturn(true);
         when(userOutboxProperties.isEnabled()).thenReturn(true);
         when(userSecurityProperties.getLockMinutes()).thenReturn(15L);
+        when(authzSnapshotService.bumpVersion(org.mockito.ArgumentMatchers.anyLong())).thenReturn(2L);
         adminUserService = new AdminUserService(
                 adminUserMapper,
                 new ObjectMapper(),
@@ -70,7 +77,8 @@ class AdminUserServiceTest {
                 tokenService,
                 userMqProperties,
                 userOutboxProperties,
-                userSecurityProperties
+                userSecurityProperties,
+                authzSnapshotService
         );
     }
 

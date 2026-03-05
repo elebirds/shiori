@@ -16,7 +16,8 @@ type hubCall struct {
 }
 
 type mockHub struct {
-	calls []hubCall
+	calls      []hubCall
+	kickedUser []string
 }
 
 func (m *mockHub) SendToUser(userID string, payload []byte) (int, error) {
@@ -25,6 +26,11 @@ func (m *mockHub) SendToUser(userID string, payload []byte) (int, error) {
 		payload: append([]byte(nil), payload...),
 	})
 	return 1, nil
+}
+
+func (m *mockHub) KickUser(userID string) int {
+	m.kickedUser = append(m.kickedUser, userID)
+	return 1
 }
 
 type mockStore struct {
@@ -209,5 +215,33 @@ func TestRouteDeduplicated(t *testing.T) {
 	}
 	if len(hub.calls) != 0 {
 		t.Fatalf("deduplicated event should not push, got calls=%d", len(hub.calls))
+	}
+}
+
+func TestRouteAuthzChangeShouldKickUser(t *testing.T) {
+	hub := &mockHub{}
+	logger := zerolog.New(io.Discard)
+	store := &mockStore{saveOK: true}
+	r := New(hub, store, &logger)
+
+	env := event.Envelope{
+		EventID:     "evt-authz",
+		Type:        "UserPermissionOverrideChanged",
+		AggregateID: "10001",
+		CreatedAt:   "2026-03-02T00:00:00Z",
+		Payload:     []byte(`{"userId":"10001","version":3}`),
+	}
+
+	if err := r.Route(context.Background(), env); err != nil {
+		t.Fatalf("unexpected route error: %v", err)
+	}
+	if len(hub.kickedUser) != 1 || hub.kickedUser[0] != "10001" {
+		t.Fatalf("expected kicked user 10001, got %+v", hub.kickedUser)
+	}
+	if len(hub.calls) != 0 {
+		t.Fatalf("authz change should not push payload, got calls=%d", len(hub.calls))
+	}
+	if len(store.saveCalls) != 0 {
+		t.Fatalf("authz change should not write store, got=%d", len(store.saveCalls))
 	}
 }

@@ -35,7 +35,12 @@ type wsIncoming struct {
 	LastReadMsgID  int64  `json:"lastReadMsgId"`
 }
 
-const headerUserCapabilityBans = "X-User-Capability-Bans"
+type wsAuthzSnapshot struct {
+	version  string
+	grants   map[string]struct{}
+	denies   map[string]struct{}
+	provided bool
+}
 
 func (s *Server) handleWS(c *gin.Context) {
 	userID, ok := s.resolveWSUserID(c)
@@ -43,6 +48,7 @@ func (s *Server) handleWS(c *gin.Context) {
 		return
 	}
 	lastEventID := strings.TrimSpace(c.Query("lastEventId"))
+	authzSnapshot := parseWSAuthzSnapshot(c)
 
 	conn, err := wsUpgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
@@ -69,10 +75,9 @@ func (s *Server) handleWS(c *gin.Context) {
 	}
 	joinedConversations := make(map[int64]struct{})
 	joinedCount := 0
-	userCapabilityBans := parseCapabilityBans(c.GetHeader(headerUserCapabilityBans))
 
 	go client.Run(func(payload []byte) {
-		s.handleWSMessage(client, numericUserID, joinedConversations, &joinedCount, userCapabilityBans, payload)
+		s.handleWSMessage(client, numericUserID, joinedConversations, &joinedCount, authzSnapshot, payload)
 	}, func() {
 		if joinedCount > 0 {
 			metrics.AddChatOnlineSessions(-joinedCount)
@@ -87,7 +92,12 @@ func (s *Server) handleWS(c *gin.Context) {
 	})
 }
 
-func (s *Server) handleWSMessage(client *ws.Client, userID int64, joined map[int64]struct{}, joinedCount *int, capabilityBans map[string]struct{}, payload []byte) {
+func (s *Server) handleWSMessage(client *ws.Client,
+	userID int64,
+	joined map[int64]struct{},
+	joinedCount *int,
+	authz wsAuthzSnapshot,
+	payload []byte) {
 	if client == nil {
 		return
 	}
@@ -107,19 +117,19 @@ func (s *Server) handleWSMessage(client *ws.Client, userID int64, joined map[int
 			s.sendChatError(client, "CHAT_INVALID_USER", chat.ErrInvalidArgument)
 			return
 		}
-		s.handleWSJoin(client, userID, joined, joinedCount, incoming)
+		s.handleWSJoin(client, userID, joined, joinedCount, authz, incoming)
 	case "send":
 		if userID <= 0 {
 			s.sendChatError(client, "CHAT_INVALID_USER", chat.ErrInvalidArgument)
 			return
 		}
-		s.handleWSSend(client, userID, joined, capabilityBans, incoming)
+		s.handleWSSend(client, userID, joined, authz, incoming)
 	case "read":
 		if userID <= 0 {
 			s.sendChatError(client, "CHAT_INVALID_USER", chat.ErrInvalidArgument)
 			return
 		}
-		s.handleWSRead(client, userID, joined, capabilityBans, incoming)
+		s.handleWSRead(client, userID, joined, authz, incoming)
 	default:
 		_ = client.Send(mustJSON(map[string]any{
 			"type":    "error",
@@ -129,13 +139,22 @@ func (s *Server) handleWSMessage(client *ws.Client, userID int64, joined map[int
 	}
 }
 
-func (s *Server) handleWSJoin(client *ws.Client, userID int64, joined map[int64]struct{}, joinedCount *int, incoming wsIncoming) {
+func (s *Server) handleWSJoin(client *ws.Client,
+	userID int64,
+	joined map[int64]struct{},
+	joinedCount *int,
+	authz wsAuthzSnapshot,
+	incoming wsIncoming) {
 	if s.chat == nil {
 		_ = client.Send(mustJSON(map[string]any{
 			"type":    "error",
 			"code":    "CHAT_DISABLED",
 			"message": "chat service unavailable",
 		}))
+		return
+	}
+	if !authz.allowed("chat.read") {
+		s.sendWSPermissionDenied(client, "chat.read")
 		return
 	}
 	conversation, claims, err := s.chat.Join(userID, incoming.ChatTicket)
@@ -161,13 +180,21 @@ func (s *Server) handleWSJoin(client *ws.Client, userID int64, joined map[int64]
 	}))
 }
 
-func (s *Server) handleWSSend(client *ws.Client, userID int64, joined map[int64]struct{}, capabilityBans map[string]struct{}, incoming wsIncoming) {
+func (s *Server) handleWSSend(client *ws.Client,
+	userID int64,
+	joined map[int64]struct{},
+	authz wsAuthzSnapshot,
+	incoming wsIncoming) {
 	if s.chat == nil {
 		_ = client.Send(mustJSON(map[string]any{
 			"type":    "error",
 			"code":    "CHAT_DISABLED",
 			"message": "chat service unavailable",
 		}))
+		return
+	}
+	if !authz.allowed("chat.send") {
+		s.sendWSPermissionDenied(client, "chat.send")
 		return
 	}
 	if incoming.ConversationID <= 0 {
@@ -179,10 +206,6 @@ func (s *Server) handleWSSend(client *ws.Client, userID int64, joined map[int64]
 			s.sendChatError(client, "CHAT_NOT_JOINED", chat.ErrForbidden)
 			return
 		}
-	}
-	if _, banned := capabilityBans["CHAT_SEND"]; banned {
-		s.sendChatError(client, "CHAT_SEND_FAILED", &chat.ErrCapabilityBanned{Capability: "CHAT_SEND"})
-		return
 	}
 	sendResult, err := s.chat.Send(userID, incoming.ConversationID, incoming.ClientMsgID, incoming.Content)
 	if err != nil {
@@ -245,13 +268,21 @@ func (s *Server) handleWSSend(client *ws.Client, userID int64, joined map[int64]
 	}
 }
 
-func (s *Server) handleWSRead(client *ws.Client, userID int64, joined map[int64]struct{}, capabilityBans map[string]struct{}, incoming wsIncoming) {
+func (s *Server) handleWSRead(client *ws.Client,
+	userID int64,
+	joined map[int64]struct{},
+	authz wsAuthzSnapshot,
+	incoming wsIncoming) {
 	if s.chat == nil {
 		_ = client.Send(mustJSON(map[string]any{
 			"type":    "error",
 			"code":    "CHAT_DISABLED",
 			"message": "chat service unavailable",
 		}))
+		return
+	}
+	if !authz.allowed("chat.read") {
+		s.sendWSPermissionDenied(client, "chat.read")
 		return
 	}
 	if incoming.ConversationID <= 0 {
@@ -264,10 +295,6 @@ func (s *Server) handleWSRead(client *ws.Client, userID int64, joined map[int64]
 			return
 		}
 	}
-	if _, banned := capabilityBans["CHAT_READ"]; banned {
-		s.sendChatError(client, "CHAT_READ_FAILED", &chat.ErrCapabilityBanned{Capability: "CHAT_READ"})
-		return
-	}
 	lastReadMsgID, err := s.chat.Read(userID, incoming.ConversationID, incoming.LastReadMsgID)
 	if err != nil {
 		s.sendChatError(client, "CHAT_READ_FAILED", err)
@@ -278,22 +305,6 @@ func (s *Server) handleWSRead(client *ws.Client, userID int64, joined map[int64]
 		"conversationId": incoming.ConversationID,
 		"lastReadMsgId":  lastReadMsgID,
 	}))
-}
-
-func parseCapabilityBans(raw string) map[string]struct{} {
-	bans := make(map[string]struct{})
-	if strings.TrimSpace(raw) == "" {
-		return bans
-	}
-	parts := strings.Split(raw, ",")
-	for i := range parts {
-		item := strings.TrimSpace(strings.ToUpper(parts[i]))
-		if item == "" {
-			continue
-		}
-		bans[item] = struct{}{}
-	}
-	return bans
 }
 
 func (s *Server) sendChatError(client *ws.Client, code string, err error) {
@@ -352,6 +363,15 @@ func (s *Server) sendChatError(client *ws.Client, code string, err error) {
 		payload["retryAfterSeconds"] = retryAfterSeconds
 	}
 	_ = client.Send(mustJSON(payload))
+}
+
+func (s *Server) sendWSPermissionDenied(client *ws.Client, permission string) {
+	_ = client.Send(mustJSON(map[string]any{
+		"type":       "error",
+		"code":       "CHAT_PERMISSION_DENIED",
+		"message":    "chat permission denied",
+		"permission": normalizePermissionCode(permission),
+	}))
 }
 
 func mustJSON(payload map[string]any) []byte {
@@ -455,4 +475,55 @@ func toEnvelope(item store.NotificationEvent) event.Envelope {
 		CreatedAt:   item.CreatedAt,
 		Payload:     append([]byte(nil), item.Payload...),
 	}
+}
+
+func parseWSAuthzSnapshot(c *gin.Context) wsAuthzSnapshot {
+	grantsRaw := strings.TrimSpace(c.GetHeader(headerUserAuthzG))
+	deniesRaw := strings.TrimSpace(c.GetHeader(headerUserAuthzD))
+	provided := grantsRaw != "" || deniesRaw != ""
+	return wsAuthzSnapshot{
+		version:  strings.TrimSpace(c.GetHeader(headerUserAuthzVer)),
+		grants:   parsePermissionSet(grantsRaw),
+		denies:   parsePermissionSet(deniesRaw),
+		provided: provided,
+	}
+}
+
+func parsePermissionSet(raw string) map[string]struct{} {
+	result := make(map[string]struct{})
+	if strings.TrimSpace(raw) == "" {
+		return result
+	}
+	parts := strings.Split(raw, ",")
+	for _, part := range parts {
+		code := normalizePermissionCode(part)
+		if code == "" {
+			continue
+		}
+		result[code] = struct{}{}
+	}
+	return result
+}
+
+func normalizePermissionCode(raw string) string {
+	normalized := strings.ToLower(strings.TrimSpace(raw))
+	normalized = strings.ReplaceAll(normalized, ":", ".")
+	return normalized
+}
+
+func (s wsAuthzSnapshot) allowed(permission string) bool {
+	if !s.provided {
+		return true
+	}
+	code := normalizePermissionCode(permission)
+	if code == "" {
+		return false
+	}
+	if _, denied := s.denies[code]; denied {
+		return false
+	}
+	if _, granted := s.grants[code]; granted {
+		return true
+	}
+	return false
 }

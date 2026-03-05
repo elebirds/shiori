@@ -1,8 +1,10 @@
 package moe.hhm.shiori.order.admin.controller.v2;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import moe.hhm.shiori.common.security.authz.PermissionGuard;
 import moe.hhm.shiori.order.dto.CancelOrderRequest;
 import moe.hhm.shiori.order.dto.OrderDetailResponse;
 import moe.hhm.shiori.order.dto.OrderOperateResponse;
@@ -31,10 +33,14 @@ public class AdminOrderV2Controller {
 
     private final OrderService orderService;
     private final OrderCommandService orderCommandService;
+    private final PermissionGuard permissionGuard;
 
-    public AdminOrderV2Controller(OrderService orderService, OrderCommandService orderCommandService) {
+    public AdminOrderV2Controller(OrderService orderService,
+                                  OrderCommandService orderCommandService,
+                                  PermissionGuard permissionGuard) {
         this.orderService = orderService;
         this.orderCommandService = orderCommandService;
+        this.permissionGuard = permissionGuard;
     }
 
     @GetMapping
@@ -55,7 +61,9 @@ public class AdminOrderV2Controller {
     @PostMapping("/{orderNo}/cancel")
     public OrderOperateResponse cancelOrder(@PathVariable String orderNo,
                                             @RequestBody(required = false) CancelOrderRequest request,
-                                            Authentication authentication) {
+                                            Authentication authentication,
+                                            HttpServletRequest httpServletRequest) {
+        permissionGuard.require("order.cancel", httpServletRequest::getHeader);
         Long operatorUserId = CurrentUserSupport.requireUserId(authentication);
         String reason = request == null ? null : request.reason();
         return orderCommandService.cancelOrderAsAdmin(
@@ -69,7 +77,9 @@ public class AdminOrderV2Controller {
     @PostMapping("/{orderNo}/deliver")
     public OrderOperateResponse deliverOrder(@PathVariable String orderNo,
                                              @Valid @RequestBody(required = false) OrderTransitionRequest request,
-                                             Authentication authentication) {
+                                             Authentication authentication,
+                                             HttpServletRequest httpServletRequest) {
+        permissionGuard.require("order.deliver", httpServletRequest::getHeader);
         Long operatorUserId = CurrentUserSupport.requireUserId(authentication);
         String reason = request == null ? null : request.reason();
         return orderCommandService.deliverOrderAsAdmin(operatorUserId, orderNo, reason);
@@ -78,7 +88,9 @@ public class AdminOrderV2Controller {
     @PostMapping("/{orderNo}/finish")
     public OrderOperateResponse finishOrder(@PathVariable String orderNo,
                                             @Valid @RequestBody(required = false) OrderTransitionRequest request,
-                                            Authentication authentication) {
+                                            Authentication authentication,
+                                            HttpServletRequest httpServletRequest) {
+        permissionGuard.require("order.finish", httpServletRequest::getHeader);
         Long operatorUserId = CurrentUserSupport.requireUserId(authentication);
         String reason = request == null ? null : request.reason();
         return orderCommandService.finishOrderAsAdmin(operatorUserId, orderNo, reason);

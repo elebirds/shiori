@@ -3,6 +3,7 @@ package moe.hhm.shiori.product.controller.v2;
 import java.util.List;
 import moe.hhm.shiori.common.mvc.GlobalExceptionHandler;
 import moe.hhm.shiori.common.mvc.ResultResponseBodyAdvice;
+import moe.hhm.shiori.common.security.authz.PermissionGuard;
 import moe.hhm.shiori.product.dto.ProductWriteResponse;
 import moe.hhm.shiori.product.dto.SkuResponse;
 import moe.hhm.shiori.product.dto.v2.ProductV2DetailResponse;
@@ -42,7 +43,7 @@ class ProductV2ControllerMvcTest {
     void setUp() {
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
-        ProductV2Controller controller = new ProductV2Controller(productV2Service);
+        ProductV2Controller controller = new ProductV2Controller(productV2Service, new PermissionGuard());
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setValidator(validator)
                 .setControllerAdvice(new GlobalExceptionHandler(), new ResultResponseBodyAdvice(new ObjectMapper()))

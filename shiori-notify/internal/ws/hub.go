@@ -100,6 +100,35 @@ func (h *Hub) UserConnectionCount(userID string) int {
 	return len(h.sessions[userID])
 }
 
+func (h *Hub) KickUser(userID string) int {
+	if userID == "" {
+		return 0
+	}
+
+	h.mu.Lock()
+	userSessions, ok := h.sessions[userID]
+	if !ok || len(userSessions) == 0 {
+		h.mu.Unlock()
+		return 0
+	}
+	senders := make([]Sender, 0, len(userSessions))
+	for sender := range userSessions {
+		senders = append(senders, sender)
+	}
+	delete(h.sessions, userID)
+	h.mu.Unlock()
+
+	kicked := 0
+	for _, sender := range senders {
+		if sender == nil {
+			continue
+		}
+		_ = sender.Close()
+		kicked++
+	}
+	return kicked
+}
+
 func (h *Hub) removeLocked(userID string, sender Sender) {
 	userSessions, ok := h.sessions[userID]
 	if !ok {

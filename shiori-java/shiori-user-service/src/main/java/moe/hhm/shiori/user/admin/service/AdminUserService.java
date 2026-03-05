@@ -30,17 +30,20 @@ import moe.hhm.shiori.user.admin.model.AdminUserCapabilityBanRecord;
 import moe.hhm.shiori.user.admin.model.AdminUserRecord;
 import moe.hhm.shiori.user.admin.model.UserCapability;
 import moe.hhm.shiori.user.admin.repository.AdminUserMapper;
+import moe.hhm.shiori.user.authz.service.AuthzSnapshotService;
 import moe.hhm.shiori.user.auth.service.TokenService;
 import moe.hhm.shiori.user.config.UserMqProperties;
 import moe.hhm.shiori.user.config.UserOutboxProperties;
 import moe.hhm.shiori.user.domain.UserStatus;
 import moe.hhm.shiori.user.event.EventEnvelope;
+import moe.hhm.shiori.user.event.UserAuthzChangedPayload;
 import moe.hhm.shiori.user.event.UserPasswordResetPayload;
 import moe.hhm.shiori.user.event.UserRoleChangedPayload;
 import moe.hhm.shiori.user.event.UserStatusChangedPayload;
 import moe.hhm.shiori.user.outbox.model.UserOutboxEventEntity;
 import moe.hhm.shiori.user.auth.config.UserSecurityProperties;
 import org.springframework.http.HttpStatus;
+import org.springframework.lang.Nullable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,6 +58,8 @@ public class AdminUserService {
     private static final String EVENT_USER_STATUS_CHANGED = "UserStatusChanged";
     private static final String EVENT_USER_ROLE_CHANGED = "UserRoleChanged";
     private static final String EVENT_USER_PASSWORD_RESET = "UserPasswordReset";
+    private static final String EVENT_USER_ROLE_BINDINGS_CHANGED = "UserRoleBindingsChanged";
+    private static final String EVENT_USER_PERMISSION_OVERRIDE_CHANGED = "UserPermissionOverrideChanged";
 
     private final AdminUserMapper adminUserMapper;
     private final ObjectMapper objectMapper;
@@ -63,6 +68,8 @@ public class AdminUserService {
     private final UserMqProperties userMqProperties;
     private final UserOutboxProperties userOutboxProperties;
     private final UserSecurityProperties userSecurityProperties;
+    @Nullable
+    private final AuthzSnapshotService authzSnapshotService;
 
     public AdminUserService(AdminUserMapper adminUserMapper,
                             ObjectMapper objectMapper,
@@ -70,7 +77,8 @@ public class AdminUserService {
                             TokenService tokenService,
                             UserMqProperties userMqProperties,
                             UserOutboxProperties userOutboxProperties,
-                            UserSecurityProperties userSecurityProperties) {
+                            UserSecurityProperties userSecurityProperties,
+                            @Nullable AuthzSnapshotService authzSnapshotService) {
         this.adminUserMapper = adminUserMapper;
         this.objectMapper = objectMapper;
         this.passwordEncoder = passwordEncoder;
@@ -78,6 +86,7 @@ public class AdminUserService {
         this.userMqProperties = userMqProperties;
         this.userOutboxProperties = userOutboxProperties;
         this.userSecurityProperties = userSecurityProperties;
+        this.authzSnapshotService = authzSnapshotService;
     }
 
     public AdminUserPageResponse listUsers(String keyword, String status, String role, int page, int size) {
@@ -210,6 +219,8 @@ public class AdminUserService {
                     operatorUserId,
                     request.reason()
             );
+            long version = bumpAuthzVersion(targetUserId);
+            appendRoleBindingsChangedOutbox(targetUserId, version, operatorUserId, request.reason());
         }
         return new AdminUserStatusResponse(after.userId(), resolveStatus(after.status()).name(), afterAdmin);
     }
@@ -349,6 +360,8 @@ public class AdminUserService {
                 afterSnapshot,
                 request.reason()
         );
+        long version = bumpAuthzVersion(targetUserId);
+        appendPermissionOverrideChangedOutbox(targetUserId, version, operatorUserId, request.reason());
         return findCapabilityBanResponse(targetUserId, capability.name());
     }
 
@@ -378,6 +391,8 @@ public class AdminUserService {
                 afterSnapshot,
                 reason
         );
+        long version = bumpAuthzVersion(targetUserId);
+        appendPermissionOverrideChangedOutbox(targetUserId, version, operatorUserId, reason);
         return findCapabilityBanResponse(targetUserId, capability.name());
     }
 
@@ -603,6 +618,44 @@ public class AdminUserService {
         appendOutbox(targetUserId, EVENT_USER_PASSWORD_RESET, payload, userMqProperties.getUserPasswordResetRoutingKey());
     }
 
+    private void appendRoleBindingsChangedOutbox(Long targetUserId,
+                                                 Long version,
+                                                 Long operatorUserId,
+                                                 String reason) {
+        UserAuthzChangedPayload payload = new UserAuthzChangedPayload(
+                targetUserId,
+                version,
+                Instant.now().toString(),
+                normalizeReason(reason),
+                operatorUserId
+        );
+        appendOutbox(
+                targetUserId,
+                EVENT_USER_ROLE_BINDINGS_CHANGED,
+                payload,
+                userMqProperties.getUserRoleBindingsChangedRoutingKey()
+        );
+    }
+
+    private void appendPermissionOverrideChangedOutbox(Long targetUserId,
+                                                       Long version,
+                                                       Long operatorUserId,
+                                                       String reason) {
+        UserAuthzChangedPayload payload = new UserAuthzChangedPayload(
+                targetUserId,
+                version,
+                Instant.now().toString(),
+                normalizeReason(reason),
+                operatorUserId
+        );
+        appendOutbox(
+                targetUserId,
+                EVENT_USER_PERMISSION_OVERRIDE_CHANGED,
+                payload,
+                userMqProperties.getUserPermissionOverrideChangedRoutingKey()
+        );
+    }
+
     private void appendOutbox(Long targetUserId, String type, Object payload, String routingKey) {
         if (!userOutboxProperties.isEnabled() || !userMqProperties.isEnabled()) {
             return;
@@ -639,5 +692,12 @@ public class AdminUserService {
 
     private String normalizeReason(String reason) {
         return StringUtils.hasText(reason) ? reason.trim() : null;
+    }
+
+    private long bumpAuthzVersion(Long userId) {
+        if (authzSnapshotService == null) {
+            return 0L;
+        }
+        return authzSnapshotService.bumpVersion(userId);
     }
 }

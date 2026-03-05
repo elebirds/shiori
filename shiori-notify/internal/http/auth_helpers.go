@@ -21,6 +21,9 @@ const (
 	headerGatewayNonce = "X-Gateway-Nonce"
 	headerUserID       = "X-User-Id"
 	headerUserRoles    = "X-User-Roles"
+	headerUserAuthzVer = "X-User-Authz-Version"
+	headerUserAuthzG   = "X-User-Authz-Grants"
+	headerUserAuthzD   = "X-User-Authz-Denies"
 )
 
 func (s *Server) resolveAPIUserID(c *gin.Context) (string, bool) {
@@ -114,6 +117,9 @@ func (s *Server) resolveGatewaySignedUserID(c *gin.Context) (int64, bool) {
 		c.Request.URL.RawQuery,
 		userIDText,
 		strings.TrimSpace(c.GetHeader(headerUserRoles)),
+		strings.TrimSpace(c.GetHeader(headerUserAuthzVer)),
+		strings.TrimSpace(c.GetHeader(headerUserAuthzG)),
+		strings.TrimSpace(c.GetHeader(headerUserAuthzD)),
 		ts,
 		nonce,
 	}, "\n")

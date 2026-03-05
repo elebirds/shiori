@@ -30,6 +30,7 @@ var (
 	chatCompensationQueryTotal    *prometheus.CounterVec
 	chatCompensationMessagesTotal prometheus.Counter
 	chatRateLimitHitTotal         *prometheus.CounterVec
+	notifyWSKickTotal             prometheus.Counter
 )
 
 func register() {
@@ -96,6 +97,10 @@ func register() {
 			Name: "shiori_notify_chat_rate_limit_hit_total",
 			Help: "Total chat rate-limit hits grouped by source",
 		}, []string{"source"})
+		notifyWSKickTotal = prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "notify_ws_kick_total",
+			Help: "Total websocket sessions kicked by permission changes",
+		})
 
 		prometheus.MustRegister(
 			wsConnections,
@@ -113,6 +118,7 @@ func register() {
 			chatCompensationQueryTotal,
 			chatCompensationMessagesTotal,
 			chatRateLimitHitTotal,
+			notifyWSKickTotal,
 		)
 	})
 }
@@ -222,6 +228,14 @@ func AddChatCompensationMessages(count int) {
 func IncChatRateLimitHit(source string) {
 	register()
 	chatRateLimitHitTotal.WithLabelValues(sanitizeLabel(source)).Inc()
+}
+
+func AddNotifyWSKick(count int) {
+	if count <= 0 {
+		return
+	}
+	register()
+	notifyWSKickTotal.Add(float64(count))
 }
 
 func sanitizeLabel(value string) string {

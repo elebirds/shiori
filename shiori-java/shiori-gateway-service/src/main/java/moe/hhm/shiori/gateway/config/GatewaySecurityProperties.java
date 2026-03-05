@@ -11,6 +11,7 @@ public class GatewaySecurityProperties {
     private final Auth auth = new Auth();
     private final GatewaySign gatewaySign = new GatewaySign();
     private final RateLimit rateLimit = new RateLimit();
+    private final Authz authz = new Authz();
     private final CapabilityBan capabilityBan = new CapabilityBan();
 
     public Jwt getJwt() {
@@ -27,6 +28,10 @@ public class GatewaySecurityProperties {
 
     public RateLimit getRateLimit() {
         return rateLimit;
+    }
+
+    public Authz getAuthz() {
+        return authz;
     }
 
     public CapabilityBan getCapabilityBan() {
@@ -156,6 +161,118 @@ public class GatewaySecurityProperties {
 
         public void setOrderPayPerSecond(int orderPayPerSecond) {
             this.orderPayPerSecond = orderPayPerSecond;
+        }
+    }
+
+    public static class Authz {
+        private boolean enabled = true;
+        private String userServiceBaseUrl = "http://shiori-user-service:8081";
+        private int queryTimeoutMs = 800;
+        private final Cache cache = new Cache();
+        private final Degrade degrade = new Degrade();
+        private List<RouteRule> routeRules = new ArrayList<>();
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getUserServiceBaseUrl() {
+            return userServiceBaseUrl;
+        }
+
+        public void setUserServiceBaseUrl(String userServiceBaseUrl) {
+            this.userServiceBaseUrl = userServiceBaseUrl;
+        }
+
+        public int getQueryTimeoutMs() {
+            return queryTimeoutMs;
+        }
+
+        public void setQueryTimeoutMs(int queryTimeoutMs) {
+            this.queryTimeoutMs = queryTimeoutMs;
+        }
+
+        public Cache getCache() {
+            return cache;
+        }
+
+        public Degrade getDegrade() {
+            return degrade;
+        }
+
+        public List<RouteRule> getRouteRules() {
+            return routeRules;
+        }
+
+        public void setRouteRules(List<RouteRule> routeRules) {
+            this.routeRules = routeRules;
+        }
+    }
+
+    public static class Cache {
+        private int ttlSeconds = 30;
+        private int staleTtlSeconds = 300;
+
+        public int getTtlSeconds() {
+            return ttlSeconds;
+        }
+
+        public void setTtlSeconds(int ttlSeconds) {
+            this.ttlSeconds = ttlSeconds;
+        }
+
+        public int getStaleTtlSeconds() {
+            return staleTtlSeconds;
+        }
+
+        public void setStaleTtlSeconds(int staleTtlSeconds) {
+            this.staleTtlSeconds = staleTtlSeconds;
+        }
+    }
+
+    public static class Degrade {
+        private boolean allowWithoutSnapshot = true;
+
+        public boolean isAllowWithoutSnapshot() {
+            return allowWithoutSnapshot;
+        }
+
+        public void setAllowWithoutSnapshot(boolean allowWithoutSnapshot) {
+            this.allowWithoutSnapshot = allowWithoutSnapshot;
+        }
+    }
+
+    public static class RouteRule {
+        private String pathPattern;
+        private String method;
+        private String permissionCode;
+
+        public String getPathPattern() {
+            return pathPattern;
+        }
+
+        public void setPathPattern(String pathPattern) {
+            this.pathPattern = pathPattern;
+        }
+
+        public String getMethod() {
+            return method;
+        }
+
+        public void setMethod(String method) {
+            this.method = method;
+        }
+
+        public String getPermissionCode() {
+            return permissionCode;
+        }
+
+        public void setPermissionCode(String permissionCode) {
+            this.permissionCode = permissionCode;
         }
     }
 
