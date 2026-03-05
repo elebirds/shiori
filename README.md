@@ -277,6 +277,11 @@
    2. 修复 CDK 短码掩码边界，避免明文落库
    3. 修复 `reserve` 并发冲突状态分支
    4. 补齐支付服务单测与控制器鉴权测试
+8. v0.8 前端支付对接：
+   1. 用户端新增独立收银台：`/checkout/{orderNo}`（PayPal 风格支付页）
+   2. 用户端新增钱包页：`/wallet`（余额展示 + CDK 兑换）
+   3. 订单页“立即支付”改为跳转收银台，v2 支付严格无请求体
+   4. 管理端新增 CDK 管理页：`/payments/cdks`（批次创建、明文一次展示、CSV 导出）
 
 ---
 
@@ -903,13 +908,16 @@ pnpm dev
 - `VITE_API_BASE_URL=http://localhost:8080`
 - `VITE_NOTIFY_WS_BASE_URL=ws://localhost:8090/ws`
 
-前端 Playwright 冒烟（注册/登录 -> 创建商品 -> 多 SKU 下单 -> 支付 -> 通知）：
+前端 Playwright 冒烟（注册/登录 -> 创建商品 -> 下单 -> 收银台支付 -> 通知）：
 
 ```bash
 cd shiori-app
 pnpm e2e:install
 pnpm e2e
 ```
+
+可选环境变量：
+- `E2E_BUYER_CDK`：当收银台余额不足时用于自动兑换并继续支付。
 
 ### 5) Run Admin Web
 
@@ -922,7 +930,7 @@ pnpm dev
 
 默认地址：`http://localhost:5173`（仅 `ROLE_ADMIN` 可登录）。
 
-管理端 Playwright 冒烟（登录 -> 用户禁用/启用 -> 商品强制下架 -> 订单取消）：
+管理端 Playwright 冒烟（登录 -> CDK 批次创建与 CSV 导出 -> 用户禁用/启用 -> 商品强制下架 -> 订单取消）：
 
 ```bash
 cd shiori-admin-web
