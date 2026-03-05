@@ -51,6 +51,17 @@ test.describe('管理端前端烟测', () => {
 
     await login(page, prepared.admin.username, prepared.admin.password)
 
+    await page.goto('/payments/cdks')
+    await expect(page.getByRole('heading', { name: '支付 / CDK 管理' })).toBeVisible()
+    await page.getByRole('spinbutton').first().fill('3')
+    await page.getByRole('spinbutton').nth(1).fill('1200')
+    await page.getByRole('button', { name: '创建批次' }).click()
+    await expect(page.getByText('创建成功：批次')).toBeVisible({ timeout: 20_000 })
+    const downloadPromise = page.waitForEvent('download')
+    await page.getByRole('button', { name: '下载 CSV' }).click()
+    const download = await downloadPromise
+    expect(download.suggestedFilename()).toContain('cdk-batch-')
+
     await page.goto('/users')
     await page.getByPlaceholder('用户名/昵称/userNo').fill(prepared.buyer.username)
     await page.getByRole('button', { name: '查询' }).click()
@@ -83,7 +94,7 @@ test.describe('管理端前端烟测', () => {
     await page.getByPlaceholder('orderNo').fill(prepared.orderNo)
     await page.getByRole('button', { name: '查询' }).click()
     await expect(page.locator('tr').filter({ hasText: prepared.orderNo }).first()).toBeVisible()
-    await page.locator('tr').filter({ hasText: prepared.orderNo }).first().getByRole('button', { name: '取消订单' }).click()
+    await page.locator('tr').filter({ hasText: prepared.orderNo }).first().getByRole('button', { name: '取消' }).click()
     await expect
       .poll(() => fetchAdminOrderStatus(request, prepared.admin.username, prepared.admin.password, prepared.orderNo))
       .toBe('CANCELED')

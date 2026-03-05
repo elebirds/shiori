@@ -2,6 +2,7 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 
 const GATEWAY_BASE_URL = process.env.E2E_GATEWAY_BASE_URL || process.env.VITE_API_BASE_URL || 'http://localhost:8080'
 const NOTIFY_HTTP_BASE_URL = process.env.E2E_NOTIFY_HTTP_BASE_URL || 'http://localhost:8090'
+const BUYER_CDK = process.env.E2E_BUYER_CDK || ''
 
 test.describe('交易与通知前端烟测', () => {
   test('应完成 注册/登录 -> 创建商品 -> 多SKU下单 -> 支付 -> 收到通知', async ({ page, request }) => {
@@ -67,7 +68,20 @@ test.describe('交易与通知前端烟测', () => {
     const orderNo = orderNoMatch?.[1]
     expect(orderNo).toBeTruthy()
 
-    await page.getByRole('button', { name: '立即支付' }).click()
+    await page.getByRole('button', { name: '前往收银台' }).click()
+    await page.waitForURL(/\/checkout\/[A-Za-z0-9_-]+$/)
+    const payButton = page.getByRole('button', { name: '确认余额支付' })
+    if (await payButton.isDisabled()) {
+      if (!BUYER_CDK) {
+        throw new Error('收银台余额不足且未提供 E2E_BUYER_CDK，无法继续支付。')
+      }
+      await page.getByPlaceholder('输入 CDK 兑换码').fill(BUYER_CDK)
+      await page.getByRole('button', { name: '兑换并刷新余额' }).click()
+      await expect(page.getByText('CDK 兑换成功')).toBeVisible({ timeout: 20_000 })
+    }
+    await expect(payButton).toBeEnabled({ timeout: 20_000 })
+    await payButton.click()
+    await page.waitForURL(new RegExp(`/orders/${orderNo}`))
     await expect(page.locator('span').filter({ hasText: 'PAID' }).first()).toBeVisible({ timeout: 20_000 })
 
     await page.goto('/notifications')
