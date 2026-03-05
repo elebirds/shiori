@@ -2,6 +2,32 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
 
+const APP_TITLE = 'Shiori'
+const ROUTE_TITLE_MAP: Record<string, string> = {
+  login: '登录',
+  register: '注册',
+  products: '商品',
+  'product-detail': '商品详情',
+  orders: '我的订单',
+  'order-detail': '订单详情',
+  checkout: '收银台',
+  cart: '购物车',
+  'seller-orders': '卖家工作台',
+  'seller-order-detail': '卖家订单详情',
+  wallet: '钱包',
+  sell: '发布商品',
+  'my-products': '我的商品',
+  'my-product-edit': '编辑商品',
+  'user-center': '用户主页',
+  'user-followers': '粉丝',
+  'user-following': '关注',
+  profile: '个人中心',
+  'profile-edit': '编辑资料',
+  'account-security': '账号安全',
+  notifications: '通知中心',
+  chat: '聊天中心',
+}
+
 const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -186,6 +212,12 @@ router.beforeEach((to) => {
   }
 
   return true
+})
+
+router.afterEach((to) => {
+  const routeName = typeof to.name === 'string' ? to.name : ''
+  const pageTitle = ROUTE_TITLE_MAP[routeName] || APP_TITLE
+  document.title = pageTitle === APP_TITLE ? APP_TITLE : `${pageTitle} - ${APP_TITLE}`
 })
 
 export default router

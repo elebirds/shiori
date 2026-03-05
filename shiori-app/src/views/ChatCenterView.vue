@@ -34,6 +34,13 @@ const conversations = computed(() => chatStore.conversations)
 const activeConversationId = computed(() => chatStore.activeConversationId)
 const activeMessages = computed(() => chatStore.activeMessages)
 const unreadCount = computed(() => chatStore.chatUnreadMessageCount)
+const routeConversationId = computed(() => {
+  const raw = Number(route.query.conversationId || 0)
+  return Number.isFinite(raw) && raw > 0 ? raw : 0
+})
+const isMobileLikeLayout = ref(false)
+const showConversationList = computed(() => !isMobileLikeLayout.value || routeConversationId.value <= 0)
+const showConversationPanel = computed(() => !isMobileLikeLayout.value || routeConversationId.value > 0)
 
 const activeConversation = computed(() => {
   if (!activeConversationId.value) {
@@ -83,13 +90,22 @@ const timelineEntries = computed<ChatTimelineEntry[]>(() => {
   return entries
 })
 
+function updateLayoutMode(): void {
+  const width = window.innerWidth
+  const height = Math.max(window.innerHeight || 0, 1)
+  const aspectRatio = width / height
+  isMobileLikeLayout.value = width <= 960 && aspectRatio <= 0.82
+}
+
 onMounted(async () => {
+  updateLayoutMode()
+  window.addEventListener('resize', updateLayoutMode)
   unlistenIncomingMessage = chatStore.registerIncomingMessageListener(handleIncomingMessage)
   await chatStore.bootstrap()
-  const queryConversationId = Number(route.query.conversationId || 0)
+  const queryConversationId = routeConversationId.value
   if (queryConversationId > 0) {
     await openConversationAndStickBottom(queryConversationId)
-  } else if (chatStore.conversations.length > 0) {
+  } else if (!isMobileLikeLayout.value && chatStore.conversations.length > 0) {
     const firstConversation = chatStore.conversations[0]
     if (firstConversation) {
       await openConversationAndStickBottom(firstConversation.conversationId)
@@ -98,6 +114,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateLayoutMode)
   if (unlistenIncomingMessage) {
     unlistenIncomingMessage()
     unlistenIncomingMessage = null
@@ -250,6 +267,12 @@ async function selectConversation(conversationId: number): Promise<void> {
   })
 }
 
+async function backToConversationList(): Promise<void> {
+  await router.replace({
+    path: '/chat',
+  })
+}
+
 async function goToListingOrder(): Promise<void> {
   if (!activeConversation.value?.listingId || !activeConversation.value?.conversationId) {
     return
@@ -390,7 +413,10 @@ function jumpToLatest(): void {
     </header>
 
     <div class="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
-      <aside class="h-[60vh] min-h-[420px] max-h-[760px] overflow-auto rounded-2xl border border-stone-200 bg-white/95 lg:h-[70vh]">
+      <aside
+        v-if="showConversationList"
+        class="h-[60vh] min-h-[420px] max-h-[760px] overflow-auto rounded-2xl border border-stone-200 bg-white/95 lg:h-[70vh]"
+      >
         <article
           v-for="item in conversations"
           :key="item.conversationId"
@@ -419,13 +445,27 @@ function jumpToLatest(): void {
         <div v-if="conversations.length === 0" class="p-6 text-center text-sm text-stone-500">暂无会话</div>
       </aside>
 
-      <section class="flex h-[60vh] min-h-[420px] max-h-[760px] flex-col rounded-2xl border border-stone-200 bg-white/95 lg:h-[70vh]">
+      <section
+        v-if="showConversationPanel"
+        class="flex h-[60vh] min-h-[420px] max-h-[760px] flex-col rounded-2xl border border-stone-200 bg-white/95 lg:h-[70vh]"
+      >
         <header class="flex items-center justify-between gap-3 border-b border-stone-100 px-4 py-3">
-          <div class="min-w-0">
-            <h2 class="truncate text-sm font-semibold text-stone-900">
-              {{ activeConversation?.peerProfile?.nickname || (activeConversation ? ('用户 ' + activeConversation.peerUserId) : '请选择会话') }}
-            </h2>
-            <p class="mt-1 truncate text-xs text-stone-500">{{ activeConversation?.listingTitle || '' }}</p>
+          <div class="flex min-w-0 items-center gap-2">
+            <button
+              v-if="isMobileLikeLayout && routeConversationId > 0"
+              type="button"
+              class="flex h-8 w-8 items-center justify-center rounded-lg border border-stone-300 text-sm text-stone-700 transition hover:bg-stone-100"
+              aria-label="返回会话列表"
+              @click="backToConversationList"
+            >
+              <span aria-hidden="true">&lt;</span>
+            </button>
+            <div class="min-w-0">
+              <h2 class="truncate text-sm font-semibold text-stone-900">
+                {{ activeConversation?.peerProfile?.nickname || (activeConversation ? ('用户 ' + activeConversation.peerUserId) : '请选择会话') }}
+              </h2>
+              <p class="mt-1 truncate text-xs text-stone-500">{{ activeConversation?.listingTitle || '' }}</p>
+            </div>
           </div>
           <button
             v-if="activeConversation"
@@ -556,7 +596,8 @@ function jumpToLatest(): void {
               :disabled="!activeConversation || !draft.trim()"
               @click="submitMessage"
             >
-              发送
+              <span aria-hidden="true">-&gt;</span>
+              <span class="sr-only">发送</span>
             </button>
           </div>
         </footer>
