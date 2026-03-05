@@ -7,7 +7,7 @@ import { ApiBizError } from '@/types/result'
 
 const form = reactive({
   quantity: 20,
-  amountCent: 1000,
+  amountYuan: '10.00',
   expireAt: '',
 })
 
@@ -15,13 +15,30 @@ const result = ref<CreateCdkBatchResponse | null>(null)
 const actionMessage = ref('')
 const actionError = ref('')
 
+function yuanTextToCent(raw: string): number | null {
+  const normalized = raw.trim()
+  if (!/^\d+(\.\d{1,2})?$/.test(normalized)) {
+    return null
+  }
+  const amount = Number(normalized)
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return null
+  }
+  return Math.round(amount * 100)
+}
+
 const createMutation = useMutation({
-  mutationFn: () =>
-    createAdminCdkBatch({
+  mutationFn: () => {
+    const amountCent = yuanTextToCent(form.amountYuan)
+    if (amountCent == null) {
+      throw new Error('面额必须大于 0 元，且最多保留两位小数')
+    }
+    return createAdminCdkBatch({
       quantity: Math.max(1, Math.floor(Number(form.quantity) || 1)),
-      amountCent: Math.max(1, Math.floor(Number(form.amountCent) || 1)),
+      amountCent,
       expireAt: form.expireAt || undefined,
-    }),
+    })
+  },
   onSuccess: (response) => {
     result.value = response
     actionError.value = ''
@@ -29,11 +46,12 @@ const createMutation = useMutation({
   },
   onError: (error) => {
     actionMessage.value = ''
-    actionError.value = error instanceof ApiBizError ? error.message : '创建失败，请稍后重试'
+    actionError.value = error instanceof ApiBizError ? error.message : error instanceof Error ? error.message : '创建失败，请稍后重试'
   },
 })
 
 const resultCount = computed(() => result.value?.codes?.length || 0)
+const currentAmountCent = computed(() => yuanTextToCent(form.amountYuan))
 
 function formatMoney(amountCent: number): string {
   return `¥${(amountCent / 100).toFixed(2)}`
@@ -91,6 +109,11 @@ function downloadCsv(codes: CdkItemResponse[]): void {
 }
 
 function handleSubmit(): void {
+  if (currentAmountCent.value == null) {
+    actionMessage.value = ''
+    actionError.value = '面额必须大于 0 元，且最多保留两位小数'
+    return
+  }
   createMutation.mutate()
 }
 </script>
@@ -110,8 +133,14 @@ function handleSubmit(): void {
           <input v-model.number="form.quantity" type="number" min="1" max="500" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
         </label>
         <label class="space-y-1 text-sm text-slate-600">
-          <span>面额（分）</span>
-          <input v-model.number="form.amountCent" type="number" min="1" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+          <span>面额（元）</span>
+          <input
+            v-model.trim="form.amountYuan"
+            type="text"
+            inputmode="decimal"
+            placeholder="0.00"
+            class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+          />
         </label>
         <label class="space-y-1 text-sm text-slate-600 md:col-span-2">
           <span>过期时间（可选）</span>
@@ -127,7 +156,7 @@ function handleSubmit(): void {
         >
           {{ createMutation.isPending.value ? '创建中...' : '创建批次' }}
         </button>
-        <span class="text-sm text-slate-500">当前面额：{{ formatMoney(form.amountCent) }}</span>
+        <span class="text-sm text-slate-500">当前面额：{{ currentAmountCent == null ? '-' : formatMoney(currentAmountCent) }}</span>
       </div>
       <p v-if="actionMessage" class="mt-3 text-sm text-emerald-700">{{ actionMessage }}</p>
       <p v-if="actionError" class="mt-2 text-sm text-rose-600">{{ actionError }}</p>

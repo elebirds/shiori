@@ -11,14 +11,17 @@ import {
   type ProductCategoryCode,
   type ProductConditionLevel,
   type ProductTradeMode,
-  type SkuInput,
 } from '@/api/productV2'
 import { ApiBizError } from '@/types/result'
 
 const router = useRouter()
 
-interface DraftSku extends SkuInput {
+interface DraftSku {
   localId: string
+  skuName: string
+  specJson: string
+  priceYuan: string
+  stock: number
 }
 
 const categoryOptions: Array<{ label: string; value: ProductCategoryCode }> = [
@@ -57,7 +60,7 @@ const skus = ref<DraftSku[]>([
     localId: crypto.randomUUID(),
     skuName: '',
     specJson: '',
-    priceCent: 100,
+    priceYuan: '1.00',
     stock: 1,
   },
 ])
@@ -81,12 +84,18 @@ const createMutation = useMutation({
       conditionLevel: form.conditionLevel,
       tradeMode: form.tradeMode,
       campusCode: form.campusCode.trim(),
-      skus: skus.value.map((item) => ({
-        skuName: item.skuName.trim(),
-        specJson: item.specJson?.trim() || undefined,
-        priceCent: item.priceCent,
-        stock: item.stock,
-      })),
+      skus: skus.value.map((item) => {
+        const priceCent = yuanTextToCent(item.priceYuan)
+        if (priceCent == null) {
+          throw new Error('SKU 价格必须大于 0 元，且最多保留两位小数')
+        }
+        return {
+          skuName: item.skuName.trim(),
+          specJson: item.specJson?.trim() || undefined,
+          priceCent,
+          stock: item.stock,
+        }
+      }),
     })
 
     if (publishDirectly.value) {
@@ -105,9 +114,21 @@ function addSku(): void {
     localId: crypto.randomUUID(),
     skuName: '',
     specJson: '',
-    priceCent: 100,
+    priceYuan: '1.00',
     stock: 1,
   })
+}
+
+function yuanTextToCent(raw: string): number | null {
+  const normalized = raw.trim()
+  if (!/^\d+(\.\d{1,2})?$/.test(normalized)) {
+    return null
+  }
+  const amount = Number(normalized)
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return null
+  }
+  return Math.round(amount * 100)
 }
 
 function removeSku(localId: string): void {
@@ -132,8 +153,8 @@ function validate(): string | null {
     if (!item.skuName.trim()) {
       return 'SKU 名称不能为空'
     }
-    if (!Number.isInteger(item.priceCent) || item.priceCent <= 0) {
-      return 'SKU 价格必须为正整数（分）'
+    if (yuanTextToCent(item.priceYuan) == null) {
+      return 'SKU 价格必须大于 0 元，且最多保留两位小数'
     }
     if (!Number.isInteger(item.stock) || item.stock < 0) {
       return 'SKU 库存必须为非负整数'
@@ -346,12 +367,12 @@ onUnmounted(() => {
           </label>
 
           <label class="text-sm text-stone-700">
-            价格（分）
+            价格（元）
             <input
-              v-model.number="sku.priceCent"
-              type="number"
-              min="1"
-              step="1"
+              v-model.trim="sku.priceYuan"
+              type="text"
+              inputmode="decimal"
+              placeholder="0.00"
               class="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 outline-none transition focus:border-amber-500"
             />
           </label>
