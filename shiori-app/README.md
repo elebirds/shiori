@@ -14,7 +14,7 @@ pnpm dev
 ## 环境变量
 
 - `VITE_API_BASE_URL` 默认 `http://localhost:8080`
-- `VITE_NOTIFY_WS_BASE_URL` 默认 `ws://localhost:8090/ws`
+- `VITE_NOTIFY_WS_BASE_URL` 默认 `ws://localhost:8080/ws`
 
 ## 常用命令
 
@@ -29,7 +29,7 @@ pnpm e2e
 
 前置条件：
 - 网关与后端服务已启动（`http://localhost:8080`）
-- notify 已启动（`ws://localhost:8090/ws`）
+- gateway 已启动并可转发 WS（`ws://localhost:8080/ws`）
 
 首次运行需安装浏览器：
 

@@ -51,8 +51,10 @@ public class GatewayCapabilityBanFilter implements GlobalFilter, Ordered {
             return chain.filter(sanitizedExchange);
         }
 
+        String path = sanitizedExchange.getRequest().getURI().getRawPath();
         String requiredCapability = matchRequiredCapability(sanitizedExchange);
-        if (!StringUtils.hasText(requiredCapability)) {
+        boolean wsHandshake = isWsHandshakePath(path);
+        if (!StringUtils.hasText(requiredCapability) && !wsHandshake) {
             return chain.filter(sanitizedExchange);
         }
 
@@ -62,7 +64,7 @@ public class GatewayCapabilityBanFilter implements GlobalFilter, Ordered {
         }
         return loadActiveCapabilities(userId.trim())
                 .flatMap(activeCapabilities -> {
-                    if (activeCapabilities.contains(requiredCapability)) {
+                    if (StringUtils.hasText(requiredCapability) && activeCapabilities.contains(requiredCapability)) {
                         governanceMetrics.incCapabilityCheck(requiredCapability, "blocked");
                         throw new BizException(
                                 GatewayErrorCode.ACCESS_DENIED,
@@ -70,16 +72,27 @@ public class GatewayCapabilityBanFilter implements GlobalFilter, Ordered {
                                 "capability=" + requiredCapability
                         );
                     }
-                    governanceMetrics.incCapabilityCheck(requiredCapability, "allow");
+                    if (StringUtils.hasText(requiredCapability)) {
+                        governanceMetrics.incCapabilityCheck(requiredCapability, "allow");
+                    }
                     return chain.filter(addCapabilityHeader(sanitizedExchange, activeCapabilities));
                 })
                 .onErrorResume(throwable -> {
                     if (throwable instanceof BizException) {
                         return Mono.error(throwable);
                     }
-                    governanceMetrics.incCapabilityCheck(requiredCapability, "check_error");
+                    if (StringUtils.hasText(requiredCapability)) {
+                        governanceMetrics.incCapabilityCheck(requiredCapability, "check_error");
+                    }
                     return chain.filter(sanitizedExchange);
                 });
+    }
+
+    private boolean isWsHandshakePath(String path) {
+        if (!StringUtils.hasText(path)) {
+            return false;
+        }
+        return "/ws".equals(path.trim());
     }
 
     private String matchRequiredCapability(ServerWebExchange exchange) {

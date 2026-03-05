@@ -35,6 +35,8 @@ type wsIncoming struct {
 	LastReadMsgID  int64  `json:"lastReadMsgId"`
 }
 
+const headerUserCapabilityBans = "X-User-Capability-Bans"
+
 func (s *Server) handleWS(c *gin.Context) {
 	userID, ok := s.resolveWSUserID(c)
 	if !ok {
@@ -67,9 +69,10 @@ func (s *Server) handleWS(c *gin.Context) {
 	}
 	joinedConversations := make(map[int64]struct{})
 	joinedCount := 0
+	userCapabilityBans := parseCapabilityBans(c.GetHeader(headerUserCapabilityBans))
 
 	go client.Run(func(payload []byte) {
-		s.handleWSMessage(client, numericUserID, joinedConversations, &joinedCount, payload)
+		s.handleWSMessage(client, numericUserID, joinedConversations, &joinedCount, userCapabilityBans, payload)
 	}, func() {
 		if joinedCount > 0 {
 			metrics.AddChatOnlineSessions(-joinedCount)
@@ -84,7 +87,7 @@ func (s *Server) handleWS(c *gin.Context) {
 	})
 }
 
-func (s *Server) handleWSMessage(client *ws.Client, userID int64, joined map[int64]struct{}, joinedCount *int, payload []byte) {
+func (s *Server) handleWSMessage(client *ws.Client, userID int64, joined map[int64]struct{}, joinedCount *int, capabilityBans map[string]struct{}, payload []byte) {
 	if client == nil {
 		return
 	}
@@ -110,13 +113,13 @@ func (s *Server) handleWSMessage(client *ws.Client, userID int64, joined map[int
 			s.sendChatError(client, "CHAT_INVALID_USER", chat.ErrInvalidArgument)
 			return
 		}
-		s.handleWSSend(client, userID, joined, incoming)
+		s.handleWSSend(client, userID, joined, capabilityBans, incoming)
 	case "read":
 		if userID <= 0 {
 			s.sendChatError(client, "CHAT_INVALID_USER", chat.ErrInvalidArgument)
 			return
 		}
-		s.handleWSRead(client, userID, joined, incoming)
+		s.handleWSRead(client, userID, joined, capabilityBans, incoming)
 	default:
 		_ = client.Send(mustJSON(map[string]any{
 			"type":    "error",
@@ -158,7 +161,7 @@ func (s *Server) handleWSJoin(client *ws.Client, userID int64, joined map[int64]
 	}))
 }
 
-func (s *Server) handleWSSend(client *ws.Client, userID int64, joined map[int64]struct{}, incoming wsIncoming) {
+func (s *Server) handleWSSend(client *ws.Client, userID int64, joined map[int64]struct{}, capabilityBans map[string]struct{}, incoming wsIncoming) {
 	if s.chat == nil {
 		_ = client.Send(mustJSON(map[string]any{
 			"type":    "error",
@@ -176,6 +179,10 @@ func (s *Server) handleWSSend(client *ws.Client, userID int64, joined map[int64]
 			s.sendChatError(client, "CHAT_NOT_JOINED", chat.ErrForbidden)
 			return
 		}
+	}
+	if _, banned := capabilityBans["CHAT_SEND"]; banned {
+		s.sendChatError(client, "CHAT_SEND_FAILED", &chat.ErrCapabilityBanned{Capability: "CHAT_SEND"})
+		return
 	}
 	sendResult, err := s.chat.Send(userID, incoming.ConversationID, incoming.ClientMsgID, incoming.Content)
 	if err != nil {
@@ -238,7 +245,7 @@ func (s *Server) handleWSSend(client *ws.Client, userID int64, joined map[int64]
 	}
 }
 
-func (s *Server) handleWSRead(client *ws.Client, userID int64, joined map[int64]struct{}, incoming wsIncoming) {
+func (s *Server) handleWSRead(client *ws.Client, userID int64, joined map[int64]struct{}, capabilityBans map[string]struct{}, incoming wsIncoming) {
 	if s.chat == nil {
 		_ = client.Send(mustJSON(map[string]any{
 			"type":    "error",
@@ -257,6 +264,10 @@ func (s *Server) handleWSRead(client *ws.Client, userID int64, joined map[int64]
 			return
 		}
 	}
+	if _, banned := capabilityBans["CHAT_READ"]; banned {
+		s.sendChatError(client, "CHAT_READ_FAILED", &chat.ErrCapabilityBanned{Capability: "CHAT_READ"})
+		return
+	}
 	lastReadMsgID, err := s.chat.Read(userID, incoming.ConversationID, incoming.LastReadMsgID)
 	if err != nil {
 		s.sendChatError(client, "CHAT_READ_FAILED", err)
@@ -267,6 +278,22 @@ func (s *Server) handleWSRead(client *ws.Client, userID int64, joined map[int64]
 		"conversationId": incoming.ConversationID,
 		"lastReadMsgId":  lastReadMsgID,
 	}))
+}
+
+func parseCapabilityBans(raw string) map[string]struct{} {
+	bans := make(map[string]struct{})
+	if strings.TrimSpace(raw) == "" {
+		return bans
+	}
+	parts := strings.Split(raw, ",")
+	for i := range parts {
+		item := strings.TrimSpace(strings.ToUpper(parts[i]))
+		if item == "" {
+			continue
+		}
+		bans[item] = struct{}{}
+	}
+	return bans
 }
 
 func (s *Server) sendChatError(client *ws.Client, code string, err error) {

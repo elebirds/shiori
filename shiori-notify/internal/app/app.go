@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	notifyauth "github.com/hhm/shiori/shiori-notify/internal/auth"
 	"github.com/hhm/shiori/shiori-notify/internal/chat"
@@ -79,11 +78,7 @@ func New(cfg config.Config, logger *zerolog.Logger) (*App, error) {
 			closeAll(closeFns, logger)
 			return nil, verifyErr
 		}
-		capabilityChecker := chat.NewHTTPUserCapabilityChecker(
-			cfg.UserServiceBaseURL,
-			time.Duration(cfg.UserServiceTimeoutMs)*time.Millisecond,
-		)
-		chatService = chat.NewService(chatRepo, ticketVerifier, cfg.ChatMaxLimit).WithCapabilityChecker(capabilityChecker)
+		chatService = chat.NewService(chatRepo, ticketVerifier, cfg.ChatMaxLimit)
 		chatPublisher = chatmq.NewPublisher(
 			cfg.ChatMQEnabled,
 			cfg.RabbitMQAddr,
