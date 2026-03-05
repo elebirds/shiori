@@ -3,7 +3,7 @@
 > “栞”（しおり），意为书签。一本教材的流转，就像上一位读者在书中夹入书签，交递给下一位求知者。
 
 **Shiori** 是一个基于 **核心/边缘异构微服务（Core/Edge Polyglot Microservices）** 的校园二手教材交易平台：
-- **Core（Java / Spring）**：承载交易关键链路（用户、商品/库存、订单、支付模拟、权限）
+- **Core（Java / Spring）**：承载交易关键链路（用户、商品/库存、订单、支付（余额托管）、权限）
 - **Edge（Go / WebSocket）**：承载实时通知与长连接推送（事件消费 → 会话路由 → 推送）
 
 项目目标：以可落地、可验证的方式实践分布式系统关键问题：**防超卖、最终一致性、超时关单、幂等、可观测性与压测资产**。
@@ -13,7 +13,7 @@
 ### 🚀 核心/边缘异构微服务 (Core & Edge Polyglot)
 
 - **Java 核心域 (Spring Cloud 体系)**  
-  采用 **JDK 21 + Spring Boot 4.0.x + Spring Cloud（Gateway / OpenFeign）** 承载核心交易链路（用户/商品/订单/支付模拟）。  
+  采用 **JDK 21 + Spring Boot 4.0.x + Spring Cloud（Gateway / OpenFeign）** 承载核心交易链路（用户/商品/订单/支付）。  
   重点落地：订单状态机、库存扣减、幂等控制、Outbox 事件发布、超时关单等可追问能力。
 
 - **Go 边缘域 (Gin + WebSocket)**  
@@ -81,9 +81,10 @@
    │      │
    │      └─▶ (异步投递) 发送延迟超时事件 OrderTimeout 至 MQ (TTL=15min, DLX)
    │
-[用户支付成功（模拟支付/回调）]
+[用户支付成功（v2 余额托管支付）]
    │
-   ├─▶ [Java 订单服务] 幂等校验(Idempotency-Key / payment_no) 
+   ├─▶ [Java 订单服务] 幂等校验(Idempotency-Key)
+   │      ├─▶ 调用 [Java 支付服务] 余额托管（available -> frozen）
    │      ├─▶ 更新订单状态 (Status: PAID)
    │      └─▶ 写入 Outbox(OrderPaid) → Relay 投递 MQ
    │
@@ -251,6 +252,27 @@
 4. perf 资产新增：
    1. `perf/k6-chat-conversation.js`（建连、发消息、断线重连、`afterSeq` 补偿）
 
+## 🆕 v0.7 支付微服务（余额托管 + CDK）
+
+1. 新增独立支付微服务 `shiori-payment-service`（Spring Boot）：
+   1. 余额账户（可用/冻结）与资金流水
+   2. 订单托管支付记录（`RESERVED/SETTLED/RELEASED`）
+2. v2 支付链路切换为余额托管：
+   1. `POST /api/v2/order/orders/{orderNo}/pay` 改为严格无请求体
+   2. 支付时买家 `available -> frozen`，订单状态更新为 `PAID`
+3. 订单完结触发结算：
+   1. 订单进入 `FINISHED` 时执行托管资金转移（买家冻结扣减，卖家可用增加）
+   2. 结算失败阻塞完结（状态不进入 `FINISHED`）
+4. CDK 能力：
+   1. 管理员支持批量创建 CDK（单码一次、可选过期）
+   2. 用户支持兑换 CDK 入账余额
+5. 新增支付域接口：
+   1. 用户：`GET /api/v2/payment/wallet/balance`
+   2. 用户：`POST /api/v2/payment/cdks/redeem`
+   3. 管理员：`POST /api/v2/admin/payments/cdks/batches`
+6. 详细方案文档：
+   1. `docs/roadmaps/v0.7-payment-balance-plan.md`
+
 ---
 
 ## 🛠️ 技术栈清单 (Tech Stack)
@@ -258,7 +280,7 @@
 ### 核心后端 (Core Services)
 
 * **主语言 & 框架:** Java 21 / Spring Boot 4.0.x / Spring Cloud (Gateway, OpenFeign)
-* **持久层:** MySQL 8.0（单实例多库：`shiori_user`/`shiori_product`/`shiori_order`） / MyBatis-Plus / Flyway
+* **持久层:** MySQL 8.0（单实例多库：`shiori_user`/`shiori_product`/`shiori_order`/`shiori_payment`） / MyBatis-Plus / Flyway
 * **微服务大脑:** Nacos (服务注册与动态配置)
 * **接口文档:** SpringDoc OpenAPI 3 (Swagger UI)
 * **构建工具:** Gradle
@@ -295,7 +317,8 @@ shiori/
 │   ├── shiori-gateway-service/       # API 网关与 JWT 统一鉴权拦截
 │   ├── shiori-user-service/          # 用户服务
 │   ├── shiori-product-service/       # 商品/库存服务
-│   └── shiori-order-service/         # 订单交易服务（Outbox + 超时关单）
+│   ├── shiori-order-service/         # 订单交易服务（Outbox + 超时关单）
+│   └── shiori-payment-service/       # 支付服务（余额托管 + CDK）
 ├── shiori-notify/                    # 🐹 [推送边缘服务] 请使用 GoLand 打开
 │   └── main.go                       # 监听 MQ 并通过 WebSocket 推送前端
 ├── shiori-app/                       # 🌐 [用户端 Web] 请使用 VSCode / WebStorm 打开
@@ -382,6 +405,7 @@ docker compose --profile app --profile web up -d
 - `shiori_user`
 - `shiori_product`
 - `shiori_order`
+- `shiori_payment`
 
 并通过一次性容器自动渲染并导入 Nacos 配置模板（`deploy/nacos/templates/*.yml.tmpl`）：
 - `nacos-config-init`：导入容器网络地址配置（默认 group 为 `SHIORI_DEV_DOCKER`，或按 `SHIORI_ENV`/`NACOS_CONFIG_GROUP` 覆盖）。
@@ -393,6 +417,8 @@ docker compose --profile app --profile web up -d
 - `shiori-product-service-secret.yml`
 - `shiori-order-service-base.yml`
 - `shiori-order-service-secret.yml`
+- `shiori-payment-service-base.yml`
+- `shiori-payment-service-secret.yml`
 - `shiori-gateway-service-base.yml`
 - `shiori-security-base.yml`
 - `shiori-security-secret.yml`
@@ -484,6 +510,7 @@ cd shiori-java
 ./gradlew :shiori-user-service:bootRun
 ./gradlew :shiori-product-service:bootRun
 ./gradlew :shiori-order-service:bootRun
+./gradlew :shiori-payment-service:bootRun
 ```
 
 ### 2.2) Nacos 数据源配置（必须）
@@ -492,6 +519,7 @@ cd shiori-java
 - user: `shiori-user-service-base.yml` + `shiori-user-service-secret.yml`
 - product: `shiori-product-service-base.yml` + `shiori-product-service-secret.yml`
 - order: `shiori-order-service-base.yml` + `shiori-order-service-secret.yml`
+- payment: `shiori-payment-service-base.yml` + `shiori-payment-service-secret.yml`
 - shared: `shiori-security-base.yml` + `shiori-security-secret.yml`
 
 网关额外加载：`shiori-gateway-service-base.yml`。
