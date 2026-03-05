@@ -66,6 +66,14 @@ spring:
               uri: lb://shiori-order-service
               predicates:
                 - Path=/api/v2/admin/orders/**
+            - id: payment-service-v2
+              uri: lb://shiori-payment-service
+              predicates:
+                - Path=/api/v2/payment/**
+            - id: admin-payment-service-v2
+              uri: lb://shiori-payment-service
+              predicates:
+                - Path=/api/v2/admin/payments/**
             - id: notify-service
               uri: lb://shiori-notify-service
               predicates:
@@ -137,6 +145,15 @@ security:
       - method: POST
         path-pattern: /api/v2/order/orders/*/pay
         permission-code: order.pay
+      - method: GET
+        path-pattern: /api/v2/payment/wallet/**
+        permission-code: payment.wallet.read
+      - method: POST
+        path-pattern: /api/v2/payment/cdks/redeem
+        permission-code: payment.cdk.redeem
+      - method: POST
+        path-pattern: /api/v2/admin/payments/**
+        permission-code: payment.cdk.manage
       - method: POST
         path-pattern: /api/order/orders/*/cancel
         permission-code: order.cancel
