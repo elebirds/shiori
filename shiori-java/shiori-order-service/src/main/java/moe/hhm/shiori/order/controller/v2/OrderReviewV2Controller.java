@@ -10,6 +10,7 @@ import moe.hhm.shiori.order.dto.v2.OrderReviewItemResponse;
 import moe.hhm.shiori.order.dto.v2.OrderReviewUpsertRequest;
 import moe.hhm.shiori.order.dto.v2.PraiseWallPageResponse;
 import moe.hhm.shiori.order.dto.v2.UserCreditProfileResponse;
+import moe.hhm.shiori.order.dto.v2.UserReviewPageResponse;
 import moe.hhm.shiori.order.security.CurrentUserSupport;
 import moe.hhm.shiori.order.service.OrderReviewService;
 import org.springframework.security.core.Authentication;
@@ -75,5 +76,11 @@ public class OrderReviewV2Controller {
                                                  @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
         return orderReviewService.listPraiseWall(userId, page, size);
     }
-}
 
+    @GetMapping("/reviews/users/{userId}/reviews")
+    public UserReviewPageResponse listUserReviews(@PathVariable Long userId,
+                                                  @RequestParam(defaultValue = "1") @Min(1) int page,
+                                                  @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
+        return orderReviewService.listUserReviews(userId, page, size);
+    }
+}

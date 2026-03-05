@@ -16,12 +16,15 @@ import moe.hhm.shiori.order.dto.v2.PraiseWallPageResponse;
 import moe.hhm.shiori.order.dto.v2.UserCreditCompositeResponse;
 import moe.hhm.shiori.order.dto.v2.UserCreditProfileResponse;
 import moe.hhm.shiori.order.dto.v2.UserCreditRoleProfileResponse;
+import moe.hhm.shiori.order.dto.v2.UserReviewItemResponse;
+import moe.hhm.shiori.order.dto.v2.UserReviewPageResponse;
 import moe.hhm.shiori.order.model.OrderRecord;
 import moe.hhm.shiori.order.model.OrderReviewEntity;
 import moe.hhm.shiori.order.model.OrderReviewRecord;
 import moe.hhm.shiori.order.model.OrderReviewRoleAggregateRecord;
 import moe.hhm.shiori.order.repository.OrderMapper;
 import moe.hhm.shiori.order.repository.OrderReviewMapper;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -82,7 +85,12 @@ public class OrderReviewService {
         entity.setComment(normalizeComment(request.comment()));
         entity.setVisibilityStatus(OrderReviewVisibilityStatus.VISIBLE.name());
         entity.setEditCount(0);
-        orderReviewMapper.insertReview(entity);
+        try {
+            orderReviewMapper.insertReview(entity);
+        } catch (DuplicateKeyException ex) {
+            orderMetrics.incOrderReviewSubmit(party.role().name(), "duplicate");
+            throw new BizException(OrderErrorCode.ORDER_DUPLICATE_REQUEST, HttpStatus.CONFLICT);
+        }
         orderMetrics.incOrderReviewSubmit(party.role().name(), "success");
 
         OrderReviewRecord created = requireReviewByOrderAndReviewer(orderNo, reviewerUserId);
@@ -217,6 +225,34 @@ public class OrderReviewService {
                 .toList();
         orderMetrics.incOrderCreditQuery("praise_wall");
         return new PraiseWallPageResponse(total, normalizedPage, normalizedSize, items);
+    }
+
+    public UserReviewPageResponse listUserReviews(Long userId, int page, int size) {
+        if (userId == null || userId <= 0) {
+            throw new BizException(OrderErrorCode.ORDER_ITEM_INVALID, HttpStatus.BAD_REQUEST);
+        }
+        int normalizedPage = Math.max(page, 1);
+        int normalizedSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
+        int offset = (normalizedPage - 1) * normalizedSize;
+
+        long total = orderReviewMapper.countVisibleReviewsByReviewedUser(userId);
+        List<UserReviewItemResponse> items = orderReviewMapper.listVisibleReviewsByReviewedUser(userId, normalizedSize, offset)
+                .stream()
+                .map(item -> new UserReviewItemResponse(
+                        item.id(),
+                        item.orderNo(),
+                        item.reviewerUserId(),
+                        item.reviewerRole(),
+                        item.communicationStar(),
+                        item.timelinessStar(),
+                        item.credibilityStar(),
+                        item.overallStar(),
+                        resolvePublicComment(item.overallStar(), item.comment()),
+                        item.createdAt()
+                ))
+                .toList();
+        orderMetrics.incOrderCreditQuery("review_list");
+        return new UserReviewPageResponse(total, normalizedPage, normalizedSize, items);
     }
 
     public AdminOrderReviewPageResponse listAdminReviews(Long reviewedUserId,
@@ -391,6 +427,13 @@ public class OrderReviewService {
         return trimmed;
     }
 
+    private String resolvePublicComment(BigDecimal overallStar, String comment) {
+        if (overallStar == null || overallStar.compareTo(BigDecimal.valueOf(4)) < 0) {
+            return null;
+        }
+        return comment;
+    }
+
     private OrderReviewItemResponse toItemResponse(OrderReviewRecord record) {
         return new OrderReviewItemResponse(
                 record.id(),
@@ -471,4 +514,3 @@ public class OrderReviewService {
     private record ReviewParty(OrderReviewerRole role, Long reviewedUserId) {
     }
 }
-

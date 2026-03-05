@@ -4,7 +4,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { followUser, getUserProfileByUserNo, getUserProfilesByUserIds, unfollowUser } from '@/api/auth'
-import { getUserCreditProfileV2, listUserPraiseWallV2 } from '@/api/orderV2'
+import { getUserCreditProfileV2, listUserPraiseWallV2, listUserReviewsV2 } from '@/api/orderV2'
 import {
   listUserProductsV2,
   type ProductCategoryCode,
@@ -61,42 +61,54 @@ const creditQuery = useQuery({
   enabled: computed(() => Boolean(ownerUserId.value)),
 })
 
-const praiseWallQuery = useQuery({
-  queryKey: computed(() => ['user-praise-wall-v2', ownerUserId.value, reviewPage.value, reviewSize]),
+const praisePreviewQuery = useQuery({
+  queryKey: computed(() => ['user-praise-wall-preview-v2', ownerUserId.value]),
   queryFn: () =>
     listUserPraiseWallV2(ownerUserId.value as number, {
-      page: reviewPage.value,
-      size: reviewSize,
+      page: 1,
+      size: 3,
     }),
   enabled: computed(() => Boolean(ownerUserId.value)),
 })
 
-const praiseReviewerIds = computed(() => {
-  const values = (praiseWallQuery.data.value?.items || []).map((item) => item.reviewerUserId).filter((item) => item > 0)
+const reviewQuery = useQuery({
+  queryKey: computed(() => ['user-reviews-v2', ownerUserId.value, reviewPage.value, reviewSize]),
+  queryFn: () =>
+    listUserReviewsV2(ownerUserId.value as number, {
+      page: reviewPage.value,
+      size: reviewSize,
+    }),
+  enabled: computed(() => activeTab.value === 'reviews' && Boolean(ownerUserId.value)),
+})
+
+const reviewerIds = computed(() => {
+  const values = (reviewQuery.data.value?.items || []).map((item) => item.reviewerUserId).filter((item) => item > 0)
   return Array.from(new Set(values))
 })
 
-const praiseReviewerProfilesQuery = useQuery({
-  queryKey: computed(() => ['user-praise-reviewer-profiles', praiseReviewerIds.value.join(',')]),
-  queryFn: () => getUserProfilesByUserIds(praiseReviewerIds.value),
-  enabled: computed(() => praiseReviewerIds.value.length > 0),
+const reviewerProfilesQuery = useQuery({
+  queryKey: computed(() => ['user-reviewer-profiles', reviewerIds.value.join(',')]),
+  queryFn: () => getUserProfilesByUserIds(reviewerIds.value),
+  enabled: computed(() => reviewerIds.value.length > 0),
 })
 
 const profile = computed(() => profileQuery.data.value)
 const profileErrorMessage = computed(() => (profileQuery.error.value instanceof Error ? profileQuery.error.value.message : ''))
 const productsErrorMessage = computed(() => (productsQuery.error.value instanceof Error ? productsQuery.error.value.message : ''))
 const creditErrorMessage = computed(() => (creditQuery.error.value instanceof Error ? creditQuery.error.value.message : ''))
-const praiseWallErrorMessage = computed(() => (praiseWallQuery.error.value instanceof Error ? praiseWallQuery.error.value.message : ''))
+const reviewErrorMessage = computed(() => (reviewQuery.error.value instanceof Error ? reviewQuery.error.value.message : ''))
 const items = computed(() => productsQuery.data.value?.items || [])
 const total = computed(() => productsQuery.data.value?.total || 0)
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / size)))
 const creditProfile = computed(() => creditQuery.data.value)
-const praiseItems = computed(() => praiseWallQuery.data.value?.items || [])
-const praiseTotal = computed(() => praiseWallQuery.data.value?.total || 0)
-const praiseTotalPages = computed(() => Math.max(1, Math.ceil(praiseTotal.value / reviewSize)))
-const praiseReviewerProfileMap = computed(() => {
+const praiseItems = computed(() => praisePreviewQuery.data.value?.items || [])
+const praiseTotal = computed(() => praisePreviewQuery.data.value?.total || 0)
+const reviewItems = computed(() => reviewQuery.data.value?.items || [])
+const reviewTotal = computed(() => reviewQuery.data.value?.total || 0)
+const reviewTotalPages = computed(() => Math.max(1, Math.ceil(reviewTotal.value / reviewSize)))
+const reviewerProfileMap = computed(() => {
   const map = new Map<number, { nickname: string; avatarUrl?: string; userNo: string }>()
-  for (const item of praiseReviewerProfilesQuery.data.value || []) {
+  for (const item of reviewerProfilesQuery.data.value || []) {
     map.set(item.userId, {
       nickname: item.nickname || item.username || item.userNo,
       avatarUrl: item.avatarUrl,
@@ -293,7 +305,7 @@ function formatReviewTime(raw?: string): string {
 }
 
 function reviewerMeta(userId: number): { nickname: string; avatarUrl?: string; userNo: string } {
-  const profile = praiseReviewerProfileMap.value.get(userId)
+  const profile = reviewerProfileMap.value.get(userId)
   if (profile) {
     return profile
   }
@@ -499,14 +511,14 @@ function reviewerMeta(userId: number): { nickname: string; avatarUrl?: string; u
 
             <ResultState
               v-else-if="activeTab === 'reviews'"
-              :loading="praiseWallQuery.isLoading.value || praiseWallQuery.isFetching.value"
-              :error="praiseWallErrorMessage"
-              :empty="!praiseWallQuery.isLoading.value && praiseItems.length === 0"
-              empty-text="还没有公开评价"
+              :loading="reviewQuery.isLoading.value || reviewQuery.isFetching.value"
+              :error="reviewErrorMessage"
+              :empty="!reviewQuery.isLoading.value && reviewItems.length === 0"
+              empty-text="还没有评价记录"
             >
               <div class="space-y-3">
                 <article
-                  v-for="item in praiseItems"
+                  v-for="item in reviewItems"
                   :key="item.reviewId"
                   class="rounded-2xl border border-stone-200 bg-white p-4"
                 >
@@ -529,7 +541,7 @@ function reviewerMeta(userId: number): { nickname: string; avatarUrl?: string; u
                     <span class="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700">{{ Number(item.overallStar).toFixed(1) }} 星</span>
                   </div>
 
-                  <p class="mt-3 text-sm text-stone-700">{{ item.comment }}</p>
+                  <p class="mt-3 text-sm text-stone-700">{{ item.comment || '该评价未公开评论' }}</p>
                   <div class="mt-2 flex flex-wrap gap-2 text-xs text-stone-600">
                     <span class="rounded-full bg-stone-100 px-2 py-1">沟通 {{ item.communicationStar }}</span>
                     <span class="rounded-full bg-stone-100 px-2 py-1">及时 {{ item.timelinessStar }}</span>
@@ -557,12 +569,12 @@ function reviewerMeta(userId: number): { nickname: string; avatarUrl?: string; u
               </div>
 
               <div class="mt-4 flex items-center justify-between rounded-2xl border border-stone-200 bg-white/90 px-4 py-3 text-sm">
-                <span class="text-stone-600">第 {{ reviewPage }} / {{ praiseTotalPages }} 页，共 {{ praiseTotal }} 条</span>
+                <span class="text-stone-600">第 {{ reviewPage }} / {{ reviewTotalPages }} 页，共 {{ reviewTotal }} 条</span>
                 <div class="flex gap-2">
                   <button
                     type="button"
                     class="rounded-lg border border-stone-300 px-3 py-1.5 text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60"
-                    :disabled="reviewPage <= 1 || praiseWallQuery.isFetching.value"
+                    :disabled="reviewPage <= 1 || reviewQuery.isFetching.value"
                     @click="reviewPage -= 1"
                   >
                     上一页
@@ -570,7 +582,7 @@ function reviewerMeta(userId: number): { nickname: string; avatarUrl?: string; u
                   <button
                     type="button"
                     class="rounded-lg border border-stone-300 px-3 py-1.5 text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60"
-                    :disabled="reviewPage >= praiseTotalPages || praiseWallQuery.isFetching.value"
+                    :disabled="reviewPage >= reviewTotalPages || reviewQuery.isFetching.value"
                     @click="reviewPage += 1"
                   >
                     下一页

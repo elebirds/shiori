@@ -94,6 +94,7 @@ const errorMessage = computed(() => (query.error.value instanceof Error ? query.
 const reviewErrorMessage = computed(() => (reviewContextQuery.error.value instanceof Error ? reviewContextQuery.error.value.message : ''))
 const reviewModalOpen = ref(false)
 const reviewMode = ref<'create' | 'edit'>('create')
+const actionErrorMessage = ref('')
 
 const ORDER_STATUS_TEXT: Record<OrderStatus, string> = {
   UNPAID: '待支付',
@@ -163,6 +164,7 @@ function openEditReviewModal(): void {
 
 async function submitReview(payload: OrderReviewUpsertRequest): Promise<void> {
   try {
+    actionErrorMessage.value = ''
     if (reviewMode.value === 'edit') {
       await updateReviewMutation.mutateAsync(payload)
     } else {
@@ -171,6 +173,7 @@ async function submitReview(payload: OrderReviewUpsertRequest): Promise<void> {
     reviewModalOpen.value = false
   } catch (error) {
     if (error instanceof ApiBizError) {
+      actionErrorMessage.value = error.message
       return
     }
   }
@@ -178,9 +181,11 @@ async function submitReview(payload: OrderReviewUpsertRequest): Promise<void> {
 
 async function handleCancel(): Promise<void> {
   try {
+    actionErrorMessage.value = ''
     await cancelMutation.mutateAsync()
   } catch (error) {
     if (error instanceof ApiBizError) {
+      actionErrorMessage.value = error.message
       return
     }
   }
@@ -188,6 +193,7 @@ async function handleCancel(): Promise<void> {
 
 async function handleConfirm(): Promise<void> {
   try {
+    actionErrorMessage.value = ''
     await confirmMutation.mutateAsync()
     const conversationId = detail.value?.conversationId || routeConversationId.value
     if (conversationId && conversationId > 0) {
@@ -195,6 +201,7 @@ async function handleConfirm(): Promise<void> {
     }
   } catch (error) {
     if (error instanceof ApiBizError) {
+      actionErrorMessage.value = error.message
       return
     }
   }
@@ -289,6 +296,7 @@ async function handleConfirm(): Promise<void> {
           </div>
 
           <p v-if="reviewErrorMessage" class="text-xs text-rose-600">{{ reviewErrorMessage }}</p>
+          <p v-if="actionErrorMessage" class="text-xs text-rose-600">{{ actionErrorMessage }}</p>
 
           <div class="grid gap-3 sm:grid-cols-2">
             <article class="rounded-lg bg-white p-3 text-sm">
@@ -362,6 +370,7 @@ async function handleConfirm(): Promise<void> {
             {{ confirmMutation.isPending.value ? '提交中...' : '确认收货' }}
           </button>
         </div>
+        <p v-if="actionErrorMessage" class="text-xs text-rose-600">{{ actionErrorMessage }}</p>
       </article>
 
       <OrderReviewDialog

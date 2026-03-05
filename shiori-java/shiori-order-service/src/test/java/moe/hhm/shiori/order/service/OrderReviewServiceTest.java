@@ -229,6 +229,55 @@ class OrderReviewServiceTest {
     }
 
     @Test
+    void shouldListVisibleReviewsAndHideNegativeComments() {
+        LocalDateTime now = LocalDateTime.now();
+        when(orderReviewMapper.countVisibleReviewsByReviewedUser(3001L)).thenReturn(2L);
+        when(orderReviewMapper.listVisibleReviewsByReviewedUser(3001L, 10, 0))
+                .thenReturn(List.of(
+                        review(
+                                21L,
+                                "O202603060021",
+                                1002L,
+                                3001L,
+                                OrderReviewerRole.BUYER.name(),
+                                5,
+                                5,
+                                4,
+                                BigDecimal.valueOf(4.7),
+                                0,
+                                now.minusDays(1)
+                        ),
+                        new OrderReviewRecord(
+                                22L,
+                                "O202603060022",
+                                1003L,
+                                3001L,
+                                OrderReviewerRole.SELLER.name(),
+                                2,
+                                2,
+                                2,
+                                BigDecimal.valueOf(2.0),
+                                "不太顺利",
+                                OrderReviewVisibilityStatus.VISIBLE.name(),
+                                null,
+                                null,
+                                null,
+                                0,
+                                null,
+                                now.minusHours(1),
+                                now.minusHours(1)
+                        )
+                ));
+
+        var response = orderReviewService.listUserReviews(3001L, 1, 10);
+
+        assertThat(response.total()).isEqualTo(2L);
+        assertThat(response.items()).hasSize(2);
+        assertThat(response.items().get(0).comment()).isEqualTo("comment");
+        assertThat(response.items().get(1).comment()).isNull();
+    }
+
+    @Test
     void shouldUpdateVisibilityForAdminModeration() {
         when(orderReviewMapper.updateReviewVisibility(eq(77L), eq(OrderReviewVisibilityStatus.HIDDEN_BY_ADMIN.name()), any(), eq(9001L), any()))
                 .thenReturn(1);

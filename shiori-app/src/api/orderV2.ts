@@ -229,6 +229,26 @@ export interface PraiseWallPageResponse {
   items: PraiseWallItemResponse[]
 }
 
+export interface UserReviewItemResponse {
+  reviewId: number
+  orderNo: string
+  reviewerUserId: number
+  reviewerRole: 'BUYER' | 'SELLER'
+  communicationStar: number
+  timelinessStar: number
+  credibilityStar: number
+  overallStar: number
+  comment?: string
+  createdAt: string
+}
+
+export interface UserReviewPageResponse {
+  total: number
+  page: number
+  size: number
+  items: UserReviewItemResponse[]
+}
+
 export interface CartSpecItemResponse {
   name: string
   value: string
@@ -346,6 +366,13 @@ export function listUserPraiseWallV2(
   query?: { page?: number; size?: number },
 ): Promise<PraiseWallPageResponse> {
   return httpGet<PraiseWallPageResponse>(`/api/v2/order/reviews/users/${userId}/praise-wall`, { params: query })
+}
+
+export function listUserReviewsV2(
+  userId: number,
+  query?: { page?: number; size?: number },
+): Promise<UserReviewPageResponse> {
+  return httpGet<UserReviewPageResponse>(`/api/v2/order/reviews/users/${userId}/reviews`, { params: query })
 }
 
 export function listSellerOrdersV2(query: SellerOrderQuery): Promise<SellerOrderPageResponse> {

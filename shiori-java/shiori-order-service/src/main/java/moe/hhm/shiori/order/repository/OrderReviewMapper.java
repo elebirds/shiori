@@ -174,6 +174,14 @@ public interface OrderReviewMapper {
     long countPraiseWallByReviewedUser(@Param("reviewedUserId") Long reviewedUserId);
 
     @Select("""
+            SELECT COUNT(1)
+            FROM o_order_review
+            WHERE reviewed_user_id = #{reviewedUserId}
+              AND visibility_status = 'VISIBLE'
+            """)
+    long countVisibleReviewsByReviewedUser(@Param("reviewedUserId") Long reviewedUserId);
+
+    @Select("""
             SELECT id,
                    order_no AS orderNo,
                    reviewer_user_id AS reviewerUserId,
@@ -204,6 +212,35 @@ public interface OrderReviewMapper {
     List<OrderReviewRecord> listPraiseWallByReviewedUser(@Param("reviewedUserId") Long reviewedUserId,
                                                          @Param("size") int size,
                                                          @Param("offset") int offset);
+
+    @Select("""
+            SELECT id,
+                   order_no AS orderNo,
+                   reviewer_user_id AS reviewerUserId,
+                   reviewed_user_id AS reviewedUserId,
+                   reviewer_role AS reviewerRole,
+                   communication_star AS communicationStar,
+                   timeliness_star AS timelinessStar,
+                   credibility_star AS credibilityStar,
+                   overall_star AS overallStar,
+                   comment,
+                   visibility_status AS visibilityStatus,
+                   visibility_reason AS visibilityReason,
+                   visibility_operator_user_id AS visibilityOperatorUserId,
+                   visibility_updated_at AS visibilityUpdatedAt,
+                   edit_count AS editCount,
+                   last_edited_at AS lastEditedAt,
+                   created_at AS createdAt,
+                   updated_at AS updatedAt
+            FROM o_order_review
+            WHERE reviewed_user_id = #{reviewedUserId}
+              AND visibility_status = 'VISIBLE'
+            ORDER BY created_at DESC, id DESC
+            LIMIT #{size} OFFSET #{offset}
+            """)
+    List<OrderReviewRecord> listVisibleReviewsByReviewedUser(@Param("reviewedUserId") Long reviewedUserId,
+                                                             @Param("size") int size,
+                                                             @Param("offset") int offset);
 
     @Select("""
             <script>
@@ -306,4 +343,3 @@ public interface OrderReviewMapper {
                                              @Param("size") int size,
                                              @Param("offset") int offset);
 }
-
