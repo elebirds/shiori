@@ -135,20 +135,47 @@ security:
         path-pattern: /api/v2/order/orders/*/pay
         permission-code: order.pay
       - method: GET
-        path-pattern: /api/v2/payment/wallet/**
+        path-pattern: /api/v2/payment/wallet/ledger
+        permission-code: payment.wallet.ledger.read
+      - method: GET
+        path-pattern: /api/v2/payment/wallet/balance
         permission-code: payment.wallet.read
       - method: POST
         path-pattern: /api/v2/payment/cdks/redeem
         permission-code: payment.cdk.redeem
       - method: POST
-        path-pattern: /api/v2/admin/payments/**
+        path-pattern: /api/v2/admin/payments/cdks/**
         permission-code: payment.cdk.manage
+      - method: GET
+        path-pattern: /api/v2/admin/payments/wallet-ledgers
+        permission-code: payment.wallet.ledger.manage
+      - method: GET
+        path-pattern: /api/v2/admin/payments/reconcile/issues
+        permission-code: payment.wallet.ledger.manage
+      - method: POST
+        path-pattern: /api/v2/admin/payments/reconcile/issues/*/status
+        permission-code: payment.wallet.ledger.manage
       - method: POST
         path-pattern: /api/v2/order/orders/*/cancel
         permission-code: order.cancel
       - method: POST
+        path-pattern: /api/v2/order/orders/*/refunds
+        permission-code: order.refund.apply
+      - method: GET
+        path-pattern: /api/v2/order/orders/*/refunds/latest
+        permission-code: order.refund.apply
+      - method: POST
         path-pattern: /api/v2/order/orders/*/confirm-receipt
         permission-code: order.confirm_receipt
+      - method: GET
+        path-pattern: /api/v2/order/seller/refunds
+        permission-code: order.refund.review
+      - method: POST
+        path-pattern: /api/v2/order/seller/refunds/*/approve
+        permission-code: order.refund.review
+      - method: POST
+        path-pattern: /api/v2/order/seller/refunds/*/reject
+        permission-code: order.refund.review
       - method: POST
         path-pattern: /api/v2/order/seller/orders/*/deliver
         permission-code: order.deliver
@@ -164,6 +191,12 @@ security:
       - method: POST
         path-pattern: /api/v2/admin/orders/*/finish
         permission-code: order.finish
+      - method: GET
+        path-pattern: /api/v2/admin/orders/refunds
+        permission-code: order.refund.manage
+      - method: POST
+        path-pattern: /api/v2/admin/orders/refunds/*/retry
+        permission-code: order.refund.manage
       - method: POST
         path-pattern: /api/v2/product/products
         permission-code: product.create
