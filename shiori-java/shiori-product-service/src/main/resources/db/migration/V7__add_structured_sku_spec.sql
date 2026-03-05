@@ -20,7 +20,6 @@ SET s.spec_items_json = (
                                    'name', t.key_name,
                                    'value', JSON_UNQUOTE(JSON_EXTRACT(CAST(s.spec_json AS JSON), CONCAT('$.', t.key_name)))
                            )
-                           ORDER BY t.key_name
                    )
             FROM JSON_TABLE(
                          JSON_KEYS(CAST(s.spec_json AS JSON)),
