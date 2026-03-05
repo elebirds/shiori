@@ -15,6 +15,8 @@ import moe.hhm.shiori.user.admin.dto.AdminRoleResponse;
 import moe.hhm.shiori.user.admin.dto.AdminUserAdminRoleUpdateRequest;
 import moe.hhm.shiori.user.admin.dto.AdminUserAuditItemResponse;
 import moe.hhm.shiori.user.admin.dto.AdminUserAuditPageResponse;
+import moe.hhm.shiori.user.admin.dto.AdminUserCapabilityBanResponse;
+import moe.hhm.shiori.user.admin.dto.AdminUserCapabilityBanUpsertRequest;
 import moe.hhm.shiori.user.admin.dto.AdminUserDetailResponse;
 import moe.hhm.shiori.user.admin.dto.AdminUserLockRequest;
 import moe.hhm.shiori.user.admin.dto.AdminUserPasswordResetRequest;
@@ -24,7 +26,9 @@ import moe.hhm.shiori.user.admin.dto.AdminUserStatusUpdateRequest;
 import moe.hhm.shiori.user.admin.dto.AdminUserSummaryResponse;
 import moe.hhm.shiori.user.admin.dto.AdminUserUnlockRequest;
 import moe.hhm.shiori.user.admin.model.AdminUserAuditRecord;
+import moe.hhm.shiori.user.admin.model.AdminUserCapabilityBanRecord;
 import moe.hhm.shiori.user.admin.model.AdminUserRecord;
+import moe.hhm.shiori.user.admin.model.UserCapability;
 import moe.hhm.shiori.user.admin.repository.AdminUserMapper;
 import moe.hhm.shiori.user.auth.service.TokenService;
 import moe.hhm.shiori.user.config.UserMqProperties;
@@ -307,6 +311,83 @@ public class AdminUserService {
                 .toList();
     }
 
+    public List<AdminUserCapabilityBanResponse> listCapabilityBans(Long userId) {
+        requireUser(userId);
+        return adminUserMapper.listCapabilityBansByUserId(userId).stream()
+                .map(this::toCapabilityBanResponse)
+                .toList();
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public AdminUserCapabilityBanResponse upsertCapabilityBan(Long operatorUserId,
+                                                              Long targetUserId,
+                                                              AdminUserCapabilityBanUpsertRequest request) {
+        requireUser(targetUserId);
+        UserCapability capability = parseCapability(request.capability());
+        LocalDateTime startAt = request.startAt() == null ? LocalDateTime.now() : request.startAt();
+        LocalDateTime endAt = request.endAt();
+        if (endAt != null && !endAt.isAfter(startAt)) {
+            throw new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST);
+        }
+
+        String beforeSnapshot = capabilityBanSnapshot(targetUserId);
+        adminUserMapper.upsertCapabilityBan(
+                targetUserId,
+                capability.name(),
+                1,
+                normalizeReason(request.reason()),
+                operatorUserId,
+                startAt,
+                endAt
+        );
+        String afterSnapshot = capabilityBanSnapshot(targetUserId);
+        insertAudit(
+                operatorUserId,
+                targetUserId,
+                "USER_CAPABILITY_BAN_UPSERT",
+                beforeSnapshot,
+                afterSnapshot,
+                request.reason()
+        );
+        return findCapabilityBanResponse(targetUserId, capability.name());
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public AdminUserCapabilityBanResponse removeCapabilityBan(Long operatorUserId,
+                                                              Long targetUserId,
+                                                              String capabilityRaw,
+                                                              String reason) {
+        requireUser(targetUserId);
+        UserCapability capability = parseCapability(capabilityRaw);
+        String beforeSnapshot = capabilityBanSnapshot(targetUserId);
+        int affected = adminUserMapper.disableCapabilityBan(
+                targetUserId,
+                capability.name(),
+                normalizeReason(reason),
+                operatorUserId
+        );
+        if (affected == 0) {
+            throw new BizException(UserErrorCode.CAPABILITY_BAN_NOT_FOUND, HttpStatus.NOT_FOUND);
+        }
+        String afterSnapshot = capabilityBanSnapshot(targetUserId);
+        insertAudit(
+                operatorUserId,
+                targetUserId,
+                "USER_CAPABILITY_BAN_REMOVE",
+                beforeSnapshot,
+                afterSnapshot,
+                reason
+        );
+        return findCapabilityBanResponse(targetUserId, capability.name());
+    }
+
+    public List<String> listActiveCapabilities(Long userId) {
+        if (userId == null || userId <= 0) {
+            return List.of();
+        }
+        return adminUserMapper.listActiveCapabilityCodes(userId);
+    }
+
     private AdminUserRecord requireUser(Long userId) {
         AdminUserRecord record = adminUserMapper.findByUserId(userId);
         if (record == null || (record.isDeleted() != null && record.isDeleted() == 1)) {
@@ -334,6 +415,15 @@ public class AdminUserService {
             return objectMapper.writeValueAsString(mutable);
         } catch (JacksonException e) {
             return "{}";
+        }
+    }
+
+    private String capabilityBanSnapshot(Long userId) {
+        List<AdminUserCapabilityBanRecord> records = adminUserMapper.listCapabilityBansByUserId(userId);
+        try {
+            return objectMapper.writeValueAsString(records);
+        } catch (JacksonException e) {
+            return "[]";
         }
     }
 
@@ -385,6 +475,37 @@ public class AdminUserService {
             }
         }
         return new ArrayList<>(set);
+    }
+
+    private AdminUserCapabilityBanResponse findCapabilityBanResponse(Long userId, String capabilityCode) {
+        return adminUserMapper.listCapabilityBansByUserId(userId).stream()
+                .filter(item -> capabilityCode.equalsIgnoreCase(item.capabilityCode()))
+                .findFirst()
+                .map(this::toCapabilityBanResponse)
+                .orElseThrow(() -> new BizException(UserErrorCode.CAPABILITY_BAN_NOT_FOUND, HttpStatus.NOT_FOUND));
+    }
+
+    private UserCapability parseCapability(String rawCapability) {
+        try {
+            return UserCapability.parse(rawCapability);
+        } catch (IllegalArgumentException ex) {
+            throw new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    private AdminUserCapabilityBanResponse toCapabilityBanResponse(AdminUserCapabilityBanRecord record) {
+        return new AdminUserCapabilityBanResponse(
+                record.id(),
+                record.userId(),
+                record.capabilityCode(),
+                record.isBanned() != null && record.isBanned() == 1,
+                record.reason(),
+                record.operatorUserId(),
+                record.startAt(),
+                record.endAt(),
+                record.createdAt(),
+                record.updatedAt()
+        );
     }
 
     private UserStatus resolveStatusForUpdate(String status) {

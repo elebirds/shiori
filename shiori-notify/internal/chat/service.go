@@ -12,6 +12,7 @@ import (
 type Service struct {
 	repo         Repository
 	ticketVerify TicketVerifier
+	capability   CapabilityChecker
 	maxPageLimit int
 	rateLimiter  *conversationRateLimiter
 }
@@ -34,6 +35,11 @@ func NewService(repo Repository, ticketVerify TicketVerifier, maxPageLimit int) 
 		maxPageLimit: maxPageLimit,
 		rateLimiter:  newConversationRateLimiter(defaultSendBurst, defaultSendWindow, defaultSendCooldown),
 	}
+}
+
+func (s *Service) WithCapabilityChecker(checker CapabilityChecker) *Service {
+	s.capability = checker
+	return s
 }
 
 func (s *Service) Join(userID int64, ticket string) (Conversation, ChatTicketClaims, error) {
@@ -82,6 +88,15 @@ func (s *Service) Send(userID, conversationID int64, clientMsgID, content string
 	}
 	if len(clientMsgID) > maxClientMsgIDLength || len(content) > maxContentLength {
 		return SendResult{}, ErrInvalidArgument
+	}
+	if s.capability != nil {
+		banned, err := s.capability.IsBanned(userID, "CHAT_SEND")
+		if err != nil {
+			return SendResult{}, err
+		}
+		if banned {
+			return SendResult{}, &ErrCapabilityBanned{Capability: "CHAT_SEND"}
+		}
 	}
 
 	conversation, err := s.repo.GetConversationForUser(conversationID, userID)

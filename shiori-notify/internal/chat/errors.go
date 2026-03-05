@@ -3,6 +3,7 @@ package chat
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 var (
@@ -22,4 +23,16 @@ type ErrRateLimited struct {
 
 func (e *ErrRateLimited) Error() string {
 	return fmt.Sprintf("chat rate limited, retry after %ds", e.RetryAfterSeconds)
+}
+
+type ErrCapabilityBanned struct {
+	Capability string
+}
+
+func (e *ErrCapabilityBanned) Error() string {
+	capability := strings.TrimSpace(strings.ToUpper(e.Capability))
+	if capability == "" {
+		capability = "UNKNOWN"
+	}
+	return fmt.Sprintf("chat capability banned: %s", capability)
 }

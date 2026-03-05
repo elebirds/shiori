@@ -5,10 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
+	notifyauth "github.com/hhm/shiori/shiori-notify/internal/auth"
 	"github.com/hhm/shiori/shiori-notify/internal/chat"
 	"github.com/hhm/shiori/shiori-notify/internal/chatmq"
-	notifyauth "github.com/hhm/shiori/shiori-notify/internal/auth"
 	"github.com/hhm/shiori/shiori-notify/internal/config"
 	notifyhttp "github.com/hhm/shiori/shiori-notify/internal/http"
 	"github.com/hhm/shiori/shiori-notify/internal/mq"
@@ -19,11 +20,11 @@ import (
 )
 
 type App struct {
-	logger     *zerolog.Logger
-	httpSrv    *notifyhttp.Server
-	consumer   *mq.Consumer
-	chatSub    *chatmq.Consumer
-	closeFns   []func() error
+	logger   *zerolog.Logger
+	httpSrv  *notifyhttp.Server
+	consumer *mq.Consumer
+	chatSub  *chatmq.Consumer
+	closeFns []func() error
 }
 
 func New(cfg config.Config, logger *zerolog.Logger) (*App, error) {
@@ -49,9 +50,9 @@ func New(cfg config.Config, logger *zerolog.Logger) (*App, error) {
 
 	hub := ws.NewHub()
 	var (
-		chatService     *chat.Service
-		chatPublisher   chat.Broadcaster
-		chatSubscriber  *chatmq.Consumer
+		chatService    *chat.Service
+		chatPublisher  chat.Broadcaster
+		chatSubscriber *chatmq.Consumer
 	)
 	if cfg.ChatEnabled {
 		if strings.ToLower(strings.TrimSpace(cfg.StoreDriver)) != "mysql" {
@@ -78,7 +79,11 @@ func New(cfg config.Config, logger *zerolog.Logger) (*App, error) {
 			closeAll(closeFns, logger)
 			return nil, verifyErr
 		}
-		chatService = chat.NewService(chatRepo, ticketVerifier, cfg.ChatMaxLimit)
+		capabilityChecker := chat.NewHTTPUserCapabilityChecker(
+			cfg.UserServiceBaseURL,
+			time.Duration(cfg.UserServiceTimeoutMs)*time.Millisecond,
+		)
+		chatService = chat.NewService(chatRepo, ticketVerifier, cfg.ChatMaxLimit).WithCapabilityChecker(capabilityChecker)
 		chatPublisher = chatmq.NewPublisher(
 			cfg.ChatMQEnabled,
 			cfg.RabbitMQAddr,

@@ -24,6 +24,15 @@ public class GatewayGovernanceMetrics {
         ).increment();
     }
 
+    public void incCapabilityCheck(String capability, String decision) {
+        meterRegistry.counter(
+                GOVERNANCE_TOTAL,
+                "type", "capability_ban",
+                "endpoint", sanitize(capability),
+                "decision", sanitize(decision)
+        ).increment();
+    }
+
     private String sanitize(String value) {
         if (!StringUtils.hasText(value)) {
             return "unknown";

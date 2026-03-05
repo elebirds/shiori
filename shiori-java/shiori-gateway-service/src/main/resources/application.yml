@@ -26,6 +26,10 @@ spring:
               uri: lb://shiori-user-service
               predicates:
                 - Path=/api/admin/users/**
+            - id: admin-user-service-v2
+              uri: lb://shiori-user-service
+              predicates:
+                - Path=/api/v2/admin/users/**
             - id: admin-role-service
               uri: lb://shiori-user-service
               predicates:

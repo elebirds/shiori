@@ -4,13 +4,16 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
 import {
   getAdminUser,
+  listAdminUserCapabilityBans,
   listAdminRoles,
   listAdminUserAudits,
   listAdminUsers,
   lockAdminUser,
+  removeAdminUserCapabilityBan,
   resetAdminUserPassword,
   unlockAdminUser,
   updateAdminRole,
+  upsertAdminUserCapabilityBan,
   updateAdminUserStatus,
   type AdminUserSummary,
 } from '@/api/adminUser'
@@ -31,6 +34,9 @@ const unlockReason = ref('后台手动解锁用户')
 const resetPassword = ref('')
 const resetReason = ref('后台重置密码')
 const forceChangePassword = ref(true)
+const capability = ref<'CHAT_SEND' | 'CHAT_READ' | 'PRODUCT_PUBLISH' | 'ORDER_CREATE'>('CHAT_SEND')
+const capabilityReason = ref('后台能力封禁')
+const capabilityEndAt = ref('')
 
 const auditPage = ref(1)
 const auditSize = ref(10)
@@ -67,6 +73,12 @@ const auditsQuery = useQuery({
       size: auditSize.value,
       action: auditAction.value || undefined,
     }),
+  enabled: computed(() => selectedUserId.value !== null),
+})
+
+const capabilityBansQuery = useQuery({
+  queryKey: computed(() => ['admin-user-capability-bans', selectedUserId.value]),
+  queryFn: () => listAdminUserCapabilityBans(selectedUserId.value as number),
   enabled: computed(() => selectedUserId.value !== null),
 })
 
@@ -128,6 +140,28 @@ const resetPasswordMutation = useMutation({
     resetPassword.value = ''
     handleMutationSuccess()
   },
+  onError: (error) => {
+    actionError.value = resolveError(error)
+  },
+})
+
+const upsertCapabilityBanMutation = useMutation({
+  mutationFn: (userId: number) =>
+    upsertAdminUserCapabilityBan(userId, {
+      capability: capability.value,
+      reason: capabilityReason.value || undefined,
+      endAt: capabilityEndAt.value || undefined,
+    }),
+  onSuccess: () => handleMutationSuccess(),
+  onError: (error) => {
+    actionError.value = resolveError(error)
+  },
+})
+
+const removeCapabilityBanMutation = useMutation({
+  mutationFn: ({ userId, capabilityCode }: { userId: number; capabilityCode: 'CHAT_SEND' | 'CHAT_READ' | 'PRODUCT_PUBLISH' | 'ORDER_CREATE' }) =>
+    removeAdminUserCapabilityBan(userId, capabilityCode, capabilityReason.value || undefined),
+  onSuccess: () => handleMutationSuccess(),
   onError: (error) => {
     actionError.value = resolveError(error)
   },
@@ -196,6 +230,23 @@ function executeResetPassword() {
   resetPasswordMutation.mutate(currentSelectedUserId.value)
 }
 
+function executeUpsertCapabilityBan() {
+  if (!currentSelectedUserId.value) {
+    return
+  }
+  upsertCapabilityBanMutation.mutate(currentSelectedUserId.value)
+}
+
+function executeRemoveCapabilityBan(capabilityCode: 'CHAT_SEND' | 'CHAT_READ' | 'PRODUCT_PUBLISH' | 'ORDER_CREATE') {
+  if (!currentSelectedUserId.value) {
+    return
+  }
+  removeCapabilityBanMutation.mutate({
+    userId: currentSelectedUserId.value,
+    capabilityCode,
+  })
+}
+
 function resolveError(error: unknown): string {
   return error instanceof ApiBizError ? error.message : '操作失败'
 }
@@ -206,6 +257,7 @@ function handleMutationSuccess() {
   if (selectedUserId.value != null) {
     void queryClient.invalidateQueries({ queryKey: ['admin-user-detail', selectedUserId.value] })
     void queryClient.invalidateQueries({ queryKey: ['admin-user-audits', selectedUserId.value] })
+    void queryClient.invalidateQueries({ queryKey: ['admin-user-capability-bans', selectedUserId.value] })
   }
 }
 </script>
@@ -324,6 +376,52 @@ function handleMutationSuccess() {
             </label>
             <button class="w-full rounded bg-rose-600 px-2 py-1.5 text-xs text-white" @click="executeResetPassword">重置密码</button>
           </div>
+
+          <div class="mt-4 space-y-2 border-t border-slate-200 pt-3">
+            <label class="block text-xs text-slate-600">能力封禁</label>
+            <select v-model="capability" class="w-full rounded border border-slate-300 px-2 py-1 text-sm">
+              <option value="CHAT_SEND">CHAT_SEND</option>
+              <option value="CHAT_READ">CHAT_READ</option>
+              <option value="PRODUCT_PUBLISH">PRODUCT_PUBLISH</option>
+              <option value="ORDER_CREATE">ORDER_CREATE</option>
+            </select>
+            <input
+              v-model.trim="capabilityReason"
+              type="text"
+              placeholder="封禁/解封原因"
+              class="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+            />
+            <input
+              v-model="capabilityEndAt"
+              type="datetime-local"
+              class="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+            />
+            <button class="w-full rounded bg-indigo-600 px-2 py-1.5 text-xs text-white" @click="executeUpsertCapabilityBan">
+              新增/更新能力封禁
+            </button>
+
+            <div class="space-y-1 pt-2">
+              <p class="text-xs text-slate-500">当前能力封禁：</p>
+              <div
+                v-for="item in capabilityBansQuery.data.value || []"
+                :key="`${item.userId}-${item.capability}`"
+                class="flex items-center justify-between rounded border border-slate-200 px-2 py-1 text-xs"
+              >
+                <div>
+                  <p class="font-medium text-slate-700">{{ item.capability }} · {{ item.banned ? 'BANNED' : 'UNBANNED' }}</p>
+                  <p class="text-slate-500">{{ item.reason || '-' }}</p>
+                </div>
+                <button
+                  class="rounded bg-emerald-600 px-2 py-1 text-white"
+                  :disabled="!item.banned"
+                  @click="executeRemoveCapabilityBan(item.capability)"
+                >
+                  解封
+                </button>
+              </div>
+              <p v-if="(capabilityBansQuery.data.value || []).length === 0" class="text-xs text-slate-400">暂无能力封禁记录</p>
+            </div>
+          </div>
         </section>
       </aside>
     </div>
@@ -372,4 +470,3 @@ function handleMutationSuccess() {
     </section>
   </section>
 </template>
-

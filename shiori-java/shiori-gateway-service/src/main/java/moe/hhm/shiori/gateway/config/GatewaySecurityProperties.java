@@ -11,6 +11,7 @@ public class GatewaySecurityProperties {
     private final Auth auth = new Auth();
     private final GatewaySign gatewaySign = new GatewaySign();
     private final RateLimit rateLimit = new RateLimit();
+    private final CapabilityBan capabilityBan = new CapabilityBan();
 
     public Jwt getJwt() {
         return jwt;
@@ -26,6 +27,10 @@ public class GatewaySecurityProperties {
 
     public RateLimit getRateLimit() {
         return rateLimit;
+    }
+
+    public CapabilityBan getCapabilityBan() {
+        return capabilityBan;
     }
 
     public static class Jwt {
@@ -151,6 +156,45 @@ public class GatewaySecurityProperties {
 
         public void setOrderPayPerSecond(int orderPayPerSecond) {
             this.orderPayPerSecond = orderPayPerSecond;
+        }
+    }
+
+    public static class CapabilityBan {
+        private boolean enabled = true;
+        private String userServiceBaseUrl = "http://shiori-user-service:8081";
+        private int queryTimeoutMs = 800;
+        private int cacheTtlSeconds = 15;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getUserServiceBaseUrl() {
+            return userServiceBaseUrl;
+        }
+
+        public void setUserServiceBaseUrl(String userServiceBaseUrl) {
+            this.userServiceBaseUrl = userServiceBaseUrl;
+        }
+
+        public int getQueryTimeoutMs() {
+            return queryTimeoutMs;
+        }
+
+        public void setQueryTimeoutMs(int queryTimeoutMs) {
+            this.queryTimeoutMs = queryTimeoutMs;
+        }
+
+        public int getCacheTtlSeconds() {
+            return cacheTtlSeconds;
+        }
+
+        public void setCacheTtlSeconds(int cacheTtlSeconds) {
+            this.cacheTtlSeconds = cacheTtlSeconds;
         }
     }
 }

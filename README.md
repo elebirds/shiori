@@ -216,6 +216,24 @@
    3. `chat_forbidden_word`
    4. `chat_moderation_audit`
 
+## 🆕 v0.6（M3）RBAC 能力级封禁
+
+1. 新增能力封禁管理接口：
+   1. `POST /api/v2/admin/users/{userId}/capability-bans`
+   2. `DELETE /api/v2/admin/users/{userId}/capability-bans/{capability}`
+   3. `GET /api/v2/admin/users/{userId}/capability-bans`
+2. 能力项覆盖：
+   1. `CHAT_SEND`
+   2. `CHAT_READ`
+   3. `PRODUCT_PUBLISH`
+   4. `ORDER_CREATE`
+3. 双重校验：
+   1. 网关新增能力封禁过滤器，按路径与方法执行能力校验
+   2. notify 聊天发送链路增加 `CHAT_SEND` 服务侧校验，返回稳定错误码（`40304`）
+4. 审计与查询：
+   1. 封禁记录支持原因、操作人、开始时间、结束时间
+   2. 管理端用户页新增能力封禁操作与记录查看
+
 ---
 
 ## 🛠️ 技术栈清单 (Tech Stack)

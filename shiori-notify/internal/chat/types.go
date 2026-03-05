@@ -156,3 +156,7 @@ type Repository interface {
 type TicketVerifier interface {
 	Verify(ticket string) (ChatTicketClaims, error)
 }
+
+type CapabilityChecker interface {
+	IsBanned(userID int64, capability string) (bool, error)
+}

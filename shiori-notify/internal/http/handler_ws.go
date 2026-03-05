@@ -254,6 +254,7 @@ func (s *Server) sendChatError(client *ws.Client, code string, err error) {
 	message := "chat operation failed"
 	retryAfterSeconds := 0
 	var rateLimited *chat.ErrRateLimited
+	var capabilityBanned *chat.ErrCapabilityBanned
 	switch {
 	case errors.Is(err, chat.ErrInvalidTicket):
 		message = "invalid chat ticket"
@@ -274,6 +275,8 @@ func (s *Server) sendChatError(client *ws.Client, code string, err error) {
 	case errors.As(err, &rateLimited):
 		message = "chat message rate limited"
 		retryAfterSeconds = rateLimited.RetryAfterSeconds
+	case errors.As(err, &capabilityBanned):
+		message = "chat capability banned: " + strings.TrimSpace(strings.ToUpper(capabilityBanned.Capability))
 	}
 	payload := map[string]any{
 		"type":    "error",

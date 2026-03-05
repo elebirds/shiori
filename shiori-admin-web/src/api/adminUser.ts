@@ -1,4 +1,4 @@
-import { httpGet, httpPost, httpPut } from '@/api/http'
+import { httpDelete, httpGet, httpPost, httpPut } from '@/api/http'
 
 export interface AdminUserSummary {
   userId: number
@@ -90,6 +90,26 @@ export interface AdminUserPasswordResetPayload {
   reason?: string
 }
 
+export interface AdminUserCapabilityBan {
+  id: number
+  userId: number
+  capability: 'CHAT_SEND' | 'CHAT_READ' | 'PRODUCT_PUBLISH' | 'ORDER_CREATE'
+  banned: boolean
+  reason?: string
+  operatorUserId: number
+  startAt: string
+  endAt?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AdminUserCapabilityBanPayload {
+  capability: 'CHAT_SEND' | 'CHAT_READ' | 'PRODUCT_PUBLISH' | 'ORDER_CREATE'
+  reason?: string
+  startAt?: string
+  endAt?: string
+}
+
 export function listAdminUsers(params: {
   page?: number
   size?: number
@@ -140,4 +160,27 @@ export function resetAdminUserPassword(
   payload: AdminUserPasswordResetPayload,
 ): Promise<AdminUserStatusResponse> {
   return httpPost(`/api/admin/users/${userId}/password/reset`, payload)
+}
+
+export function listAdminUserCapabilityBans(userId: number): Promise<AdminUserCapabilityBan[]> {
+  return httpGet(`/api/v2/admin/users/${userId}/capability-bans`)
+}
+
+export function upsertAdminUserCapabilityBan(
+  userId: number,
+  payload: AdminUserCapabilityBanPayload,
+): Promise<AdminUserCapabilityBan> {
+  return httpPost(`/api/v2/admin/users/${userId}/capability-bans`, payload)
+}
+
+export function removeAdminUserCapabilityBan(
+  userId: number,
+  capability: 'CHAT_SEND' | 'CHAT_READ' | 'PRODUCT_PUBLISH' | 'ORDER_CREATE',
+  reason?: string,
+): Promise<AdminUserCapabilityBan> {
+  return httpDelete(`/api/v2/admin/users/${userId}/capability-bans/${capability}`, {
+    params: {
+      reason,
+    },
+  })
 }
