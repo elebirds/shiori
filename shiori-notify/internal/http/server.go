@@ -124,6 +124,21 @@ func (s *Server) registerRoutes() {
 		chatGroup.GET("/conversations/:conversationId", s.handleGetConversation)
 		chatGroup.GET("/conversations/:conversationId/messages", s.handleListMessages)
 		chatGroup.POST("/conversations/:conversationId/read", s.handleReadConversation)
+		chatGroup.POST("/blocks/:targetUserId", s.handleBlockUser)
+		chatGroup.DELETE("/blocks/:targetUserId", s.handleUnblockUser)
+		chatGroup.GET("/blocks", s.handleListBlocks)
+		chatGroup.POST("/reports", s.handleCreateReport)
+	}
+
+	adminChatGroup := s.engine.Group("/api/admin/chat")
+	{
+		adminChatGroup.GET("/reports", s.handleAdminListReports)
+		adminChatGroup.POST("/reports/:reportId/handle", s.handleAdminHandleReport)
+		adminChatGroup.GET("/blocks", s.handleAdminListBlocks)
+		adminChatGroup.GET("/forbidden-words", s.handleAdminListForbiddenWords)
+		adminChatGroup.POST("/forbidden-words", s.handleAdminCreateForbiddenWord)
+		adminChatGroup.PUT("/forbidden-words/:ruleId", s.handleAdminUpdateForbiddenWord)
+		adminChatGroup.DELETE("/forbidden-words/:ruleId", s.handleAdminDeleteForbiddenWord)
 	}
 
 	internalChatGroup := s.engine.Group("/internal/chat")

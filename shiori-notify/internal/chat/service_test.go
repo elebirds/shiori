@@ -28,6 +28,8 @@ type fakeRepo struct {
 	unreadMsg    int64
 	forbid       bool
 	missing      bool
+	blocked      bool
+	rules        []ForbiddenWordRule
 }
 
 func (f *fakeRepo) GetOrCreateConversation(listingID, buyerID, sellerID int64) (Conversation, error) {
@@ -94,6 +96,86 @@ func (f *fakeRepo) CountUnreadConversations(userID int64) (int64, error) {
 
 func (f *fakeRepo) CountUnreadMessages(userID int64) (int64, error) {
 	return f.unreadMsg, nil
+}
+
+func (f *fakeRepo) IsEitherBlocked(userA, userB int64) (bool, error) {
+	return f.blocked, nil
+}
+
+func (f *fakeRepo) UpsertBlock(blockerUserID, targetUserID int64) error {
+	return nil
+}
+
+func (f *fakeRepo) DeleteBlock(blockerUserID, targetUserID int64) error {
+	return nil
+}
+
+func (f *fakeRepo) ListBlocksByUser(userID int64) ([]BlockRecord, error) {
+	return []BlockRecord{}, nil
+}
+
+func (f *fakeRepo) ListBlocksForAdmin(query BlockQuery) ([]BlockRecord, int64, error) {
+	return []BlockRecord{}, 0, nil
+}
+
+func (f *fakeRepo) InsertReport(reporterUserID, targetUserID, conversationID int64, messageID *int64, reason string) (ReportRecord, error) {
+	return ReportRecord{
+		ID:             1,
+		ReporterUserID: reporterUserID,
+		TargetUserID:   targetUserID,
+		ConversationID: conversationID,
+		MessageID:      messageID,
+		Reason:         reason,
+		Status:         "PENDING",
+		CreatedAt:      time.Now().UTC(),
+		UpdatedAt:      time.Now().UTC(),
+	}, nil
+}
+
+func (f *fakeRepo) ListReports(status string, page, size int) ([]ReportRecord, int64, error) {
+	return []ReportRecord{}, 0, nil
+}
+
+func (f *fakeRepo) HandleReport(reportID, operatorUserID int64, status, remark string) error {
+	return nil
+}
+
+func (f *fakeRepo) ListForbiddenWords(includeDisabled bool) ([]ForbiddenWordRule, error) {
+	return f.rules, nil
+}
+
+func (f *fakeRepo) UpsertForbiddenWord(operatorUserID int64, request UpsertForbiddenWordRequest) (ForbiddenWordRule, error) {
+	return ForbiddenWordRule{
+		ID:        1,
+		Word:      request.Word,
+		MatchType: request.MatchType,
+		Policy:    request.Policy,
+		Mask:      request.Mask,
+		Status:    request.Status,
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}, nil
+}
+
+func (f *fakeRepo) UpdateForbiddenWord(ruleID, operatorUserID int64, request UpsertForbiddenWordRequest) (ForbiddenWordRule, error) {
+	return ForbiddenWordRule{
+		ID:        ruleID,
+		Word:      request.Word,
+		MatchType: request.MatchType,
+		Policy:    request.Policy,
+		Mask:      request.Mask,
+		Status:    request.Status,
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}, nil
+}
+
+func (f *fakeRepo) DeleteForbiddenWord(ruleID, operatorUserID int64) error {
+	return nil
+}
+
+func (f *fakeRepo) InsertModerationAudit(userID, conversationID int64, originalContent, processedContent, action, matchedWord string) error {
+	return nil
 }
 
 func TestServiceJoinIdempotentConversation(t *testing.T) {

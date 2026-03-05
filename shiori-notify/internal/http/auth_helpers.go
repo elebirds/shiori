@@ -137,6 +137,32 @@ func (s *Server) resolveGatewaySignedUserID(c *gin.Context) (int64, bool) {
 	return userID, true
 }
 
+func (s *Server) resolveGatewaySignedAdmin(c *gin.Context) (int64, bool) {
+	userID, ok := s.resolveGatewaySignedUserID(c)
+	if !ok {
+		return 0, false
+	}
+	rolesRaw := strings.TrimSpace(c.GetHeader(headerUserRoles))
+	if rolesRaw == "" {
+		s.writeJSON(c, http.StatusForbidden, gin.H{
+			"code":    40302,
+			"message": "admin role required",
+		})
+		return 0, false
+	}
+	roles := strings.Split(rolesRaw, ",")
+	for _, role := range roles {
+		if strings.EqualFold(strings.TrimSpace(role), "ROLE_ADMIN") {
+			return userID, true
+		}
+	}
+	s.writeJSON(c, http.StatusForbidden, gin.H{
+		"code":    40302,
+		"message": "admin role required",
+	})
+	return 0, false
+}
+
 func hmacSHA256Hex(secret, canonical string) string {
 	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write([]byte(canonical))

@@ -70,6 +70,10 @@ spring:
               uri: lb://shiori-notify-service
               predicates:
                 - Path=/api/chat/**
+            - id: admin-chat-service
+              uri: lb://shiori-notify-service
+              predicates:
+                - Path=/api/admin/chat/**
             - id: notify-ws
               uri: lb:ws://shiori-notify-service
               predicates:

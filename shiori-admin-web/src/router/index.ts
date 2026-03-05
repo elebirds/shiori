@@ -34,6 +34,12 @@ const router = createRouter({
       meta: { requiresAdmin: true },
     },
     {
+      path: '/chat-governance',
+      name: 'chat-governance',
+      component: () => import('@/views/ChatGovernanceView.vue'),
+      meta: { requiresAdmin: true },
+    },
+    {
       path: '/:pathMatch(.*)*',
       redirect: '/users',
     },

@@ -197,6 +197,25 @@
 5. 数据库迁移：
    1. `shiori-order-service`：`V7__add_chat_source_to_order.sql`
 
+## 🆕 v0.6（M2）会话治理与基础聊天治理能力
+
+1. 用户侧治理能力：
+   1. `POST /api/chat/blocks/{targetUserId}`、`DELETE /api/chat/blocks/{targetUserId}`、`GET /api/chat/blocks`
+   2. `POST /api/chat/reports`（会话/消息维度举报）
+2. 管理侧治理能力：
+   1. 举报处理：`GET /api/admin/chat/reports`、`POST /api/admin/chat/reports/{reportId}/handle`
+   2. 拉黑查询：`GET /api/admin/chat/blocks`
+   3. 违禁词管理：`GET/POST/PUT/DELETE /api/admin/chat/forbidden-words`
+3. 治理策略与落库：
+   1. 拉黑双向发送拦截（保留历史消息）
+   2. 违禁词策略支持 `REJECT` 与 `MASK`
+   3. 发送频控（按用户+会话）返回稳定错误码与冷却秒数
+4. 数据库扩展（`shiori_notify`）：
+   1. `chat_block`
+   2. `chat_report`
+   3. `chat_forbidden_word`
+   4. `chat_moderation_audit`
+
 ---
 
 ## 🛠️ 技术栈清单 (Tech Stack)

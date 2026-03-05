@@ -152,3 +152,8 @@ export async function httpPut<T>(url: string, body?: unknown, config?: AxiosRequ
   const data = await apiClient.put(url, body, config)
   return data as T
 }
+
+export async function httpDelete<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  const data = await apiClient.delete(url, config)
+  return data as T
+}

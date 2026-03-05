@@ -12,6 +12,7 @@ const navItems = [
   { path: '/users', label: '用户管理' },
   { path: '/products', label: '商品管理' },
   { path: '/orders', label: '订单管理' },
+  { path: '/chat-governance', label: '聊天治理' },
 ]
 
 const username = computed(() => authStore.user?.username || '管理员')

@@ -252,6 +252,8 @@ func (s *Server) handleWSRead(client *ws.Client, userID int64, joined map[int64]
 
 func (s *Server) sendChatError(client *ws.Client, code string, err error) {
 	message := "chat operation failed"
+	retryAfterSeconds := 0
+	var rateLimited *chat.ErrRateLimited
 	switch {
 	case errors.Is(err, chat.ErrInvalidTicket):
 		message = "invalid chat ticket"
@@ -261,12 +263,27 @@ func (s *Server) sendChatError(client *ws.Client, code string, err error) {
 		message = "conversation access forbidden"
 	case errors.Is(err, chat.ErrConversationAbsent):
 		message = "conversation not found"
+	case errors.Is(err, chat.ErrReportAbsent):
+		message = "report not found"
+	case errors.Is(err, chat.ErrForbiddenWordRule):
+		message = "forbidden word rule not found"
+	case errors.Is(err, chat.ErrBlocked):
+		message = "chat blocked between users"
+	case errors.Is(err, chat.ErrForbiddenWord):
+		message = "chat message contains forbidden content"
+	case errors.As(err, &rateLimited):
+		message = "chat message rate limited"
+		retryAfterSeconds = rateLimited.RetryAfterSeconds
 	}
-	_ = client.Send(mustJSON(map[string]any{
+	payload := map[string]any{
 		"type":    "error",
 		"code":    code,
 		"message": message,
-	}))
+	}
+	if retryAfterSeconds > 0 {
+		payload["retryAfterSeconds"] = retryAfterSeconds
+	}
+	_ = client.Send(mustJSON(payload))
 }
 
 func mustJSON(payload map[string]any) []byte {

@@ -103,6 +103,111 @@ func (chatTestRepo) CountUnreadMessages(userID int64) (int64, error) {
 	return 3, nil
 }
 
+func (chatTestRepo) IsEitherBlocked(userA, userB int64) (bool, error) {
+	return false, nil
+}
+
+func (chatTestRepo) UpsertBlock(blockerUserID, targetUserID int64) error {
+	return nil
+}
+
+func (chatTestRepo) DeleteBlock(blockerUserID, targetUserID int64) error {
+	return nil
+}
+
+func (chatTestRepo) ListBlocksByUser(userID int64) ([]chat.BlockRecord, error) {
+	return []chat.BlockRecord{
+		{
+			BlockerUserID: userID,
+			TargetUserID:  2002,
+			CreatedAt:     time.Now().UTC(),
+		},
+	}, nil
+}
+
+func (chatTestRepo) ListBlocksForAdmin(query chat.BlockQuery) ([]chat.BlockRecord, int64, error) {
+	items := []chat.BlockRecord{
+		{
+			BlockerUserID: 1001,
+			TargetUserID:  2002,
+			CreatedAt:     time.Now().UTC(),
+		},
+	}
+	return items, int64(len(items)), nil
+}
+
+func (chatTestRepo) InsertReport(reporterUserID, targetUserID, conversationID int64, messageID *int64, reason string) (chat.ReportRecord, error) {
+	return chat.ReportRecord{
+		ID:             1,
+		ReporterUserID: reporterUserID,
+		TargetUserID:   targetUserID,
+		ConversationID: conversationID,
+		MessageID:      messageID,
+		Reason:         reason,
+		Status:         "PENDING",
+		CreatedAt:      time.Now().UTC(),
+		UpdatedAt:      time.Now().UTC(),
+	}, nil
+}
+
+func (chatTestRepo) ListReports(status string, page, size int) ([]chat.ReportRecord, int64, error) {
+	items := []chat.ReportRecord{
+		{
+			ID:             1,
+			ReporterUserID: 1001,
+			TargetUserID:   2002,
+			ConversationID: 11,
+			Reason:         "骚扰",
+			Status:         "PENDING",
+			CreatedAt:      time.Now().UTC(),
+			UpdatedAt:      time.Now().UTC(),
+		},
+	}
+	return items, int64(len(items)), nil
+}
+
+func (chatTestRepo) HandleReport(reportID, operatorUserID int64, status, remark string) error {
+	return nil
+}
+
+func (chatTestRepo) ListForbiddenWords(includeDisabled bool) ([]chat.ForbiddenWordRule, error) {
+	return []chat.ForbiddenWordRule{}, nil
+}
+
+func (chatTestRepo) UpsertForbiddenWord(operatorUserID int64, request chat.UpsertForbiddenWordRequest) (chat.ForbiddenWordRule, error) {
+	return chat.ForbiddenWordRule{
+		ID:        1,
+		Word:      request.Word,
+		MatchType: request.MatchType,
+		Policy:    request.Policy,
+		Mask:      request.Mask,
+		Status:    request.Status,
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}, nil
+}
+
+func (chatTestRepo) UpdateForbiddenWord(ruleID, operatorUserID int64, request chat.UpsertForbiddenWordRequest) (chat.ForbiddenWordRule, error) {
+	return chat.ForbiddenWordRule{
+		ID:        ruleID,
+		Word:      request.Word,
+		MatchType: request.MatchType,
+		Policy:    request.Policy,
+		Mask:      request.Mask,
+		Status:    request.Status,
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}, nil
+}
+
+func (chatTestRepo) DeleteForbiddenWord(ruleID, operatorUserID int64) error {
+	return nil
+}
+
+func (chatTestRepo) InsertModerationAudit(userID, conversationID int64, originalContent, processedContent, action, matchedWord string) error {
+	return nil
+}
+
 type staticVerifier struct{}
 
 func (staticVerifier) Verify(string) (chat.ChatTicketClaims, error) {

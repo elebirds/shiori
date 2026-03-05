@@ -58,6 +58,73 @@ type BroadcastEvent struct {
 	OriginInstance string    `json:"originInstanceId"`
 }
 
+type BlockRecord struct {
+	BlockerUserID int64     `json:"blockerUserId"`
+	TargetUserID  int64     `json:"targetUserId"`
+	CreatedAt     time.Time `json:"createdAt"`
+}
+
+type ReportRecord struct {
+	ID             int64      `json:"id"`
+	ReporterUserID int64      `json:"reporterUserId"`
+	TargetUserID   int64      `json:"targetUserId"`
+	ConversationID int64      `json:"conversationId"`
+	MessageID      *int64     `json:"messageId,omitempty"`
+	Reason         string     `json:"reason"`
+	Status         string     `json:"status"`
+	Remark         string     `json:"remark,omitempty"`
+	HandledBy      *int64     `json:"handledBy,omitempty"`
+	HandledAt      *time.Time `json:"handledAt,omitempty"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	UpdatedAt      time.Time  `json:"updatedAt"`
+}
+
+type ForbiddenWordRule struct {
+	ID        int64     `json:"id"`
+	Word      string    `json:"word"`
+	MatchType string    `json:"matchType"`
+	Policy    string    `json:"policy"`
+	Mask      string    `json:"mask"`
+	Status    string    `json:"status"`
+	CreatedBy *int64    `json:"createdBy,omitempty"`
+	UpdatedBy *int64    `json:"updatedBy,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+type ModerationAuditRecord struct {
+	ID               int64     `json:"id"`
+	UserID           int64     `json:"userId"`
+	ConversationID   int64     `json:"conversationId"`
+	OriginalContent  string    `json:"originalContent"`
+	ProcessedContent string    `json:"processedContent"`
+	Action           string    `json:"action"`
+	MatchedWord      string    `json:"matchedWord"`
+	CreatedAt        time.Time `json:"createdAt"`
+}
+
+type CreateReportRequest struct {
+	ConversationID int64
+	MessageID      *int64
+	TargetUserID   *int64
+	Reason         string
+}
+
+type BlockQuery struct {
+	BlockerUserID int64
+	TargetUserID  int64
+	Page          int
+	Size          int
+}
+
+type UpsertForbiddenWordRequest struct {
+	Word      string
+	MatchType string
+	Policy    string
+	Mask      string
+	Status    string
+}
+
 type Broadcaster interface {
 	PublishMessage(event BroadcastEvent) error
 }
@@ -71,6 +138,19 @@ type Repository interface {
 	ListMessages(userID, conversationID, before int64, limit int) ([]Message, bool, error)
 	CountUnreadConversations(userID int64) (int64, error)
 	CountUnreadMessages(userID int64) (int64, error)
+	IsEitherBlocked(userA, userB int64) (bool, error)
+	UpsertBlock(blockerUserID, targetUserID int64) error
+	DeleteBlock(blockerUserID, targetUserID int64) error
+	ListBlocksByUser(userID int64) ([]BlockRecord, error)
+	ListBlocksForAdmin(query BlockQuery) ([]BlockRecord, int64, error)
+	InsertReport(reporterUserID, targetUserID, conversationID int64, messageID *int64, reason string) (ReportRecord, error)
+	ListReports(status string, page, size int) ([]ReportRecord, int64, error)
+	HandleReport(reportID, operatorUserID int64, status, remark string) error
+	ListForbiddenWords(includeDisabled bool) ([]ForbiddenWordRule, error)
+	UpsertForbiddenWord(operatorUserID int64, request UpsertForbiddenWordRequest) (ForbiddenWordRule, error)
+	UpdateForbiddenWord(ruleID, operatorUserID int64, request UpsertForbiddenWordRequest) (ForbiddenWordRule, error)
+	DeleteForbiddenWord(ruleID, operatorUserID int64) error
+	InsertModerationAudit(userID, conversationID int64, originalContent, processedContent, action, matchedWord string) error
 }
 
 type TicketVerifier interface {
