@@ -28,6 +28,11 @@ management:
       show-details: never
 
 user:
+  authz:
+    snapshot-ttl-seconds: ${USER_AUTHZ_SNAPSHOT_TTL_SECONDS:30}
+    event:
+      enabled: ${USER_AUTHZ_EVENT_ENABLED:true}
+      redis-channel: ${USER_AUTHZ_EVENT_REDIS_CHANNEL:shiori.authz.user.changed}
   outbox:
     enabled: ${USER_OUTBOX_ENABLED:true}
     relay-fixed-delay-ms: ${USER_OUTBOX_RELAY_FIXED_DELAY_MS:3000}
@@ -39,6 +44,8 @@ user:
     user-status-changed-routing-key: ${USER_STATUS_CHANGED_ROUTING_KEY:user.status.changed}
     user-role-changed-routing-key: ${USER_ROLE_CHANGED_ROUTING_KEY:user.role.changed}
     user-password-reset-routing-key: ${USER_PASSWORD_RESET_ROUTING_KEY:user.password.reset}
+    user-permission-override-changed-routing-key: ${USER_PERMISSION_OVERRIDE_CHANGED_ROUTING_KEY:user.permission-override.changed}
+    user-role-bindings-changed-routing-key: ${USER_ROLE_BINDINGS_CHANGED_ROUTING_KEY:user.role-bindings.changed}
   avatar:
     storage:
       endpoint: ${PRODUCT_OSS_ENDPOINT}

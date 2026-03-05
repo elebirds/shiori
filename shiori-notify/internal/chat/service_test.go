@@ -182,18 +182,6 @@ func (f *fakeRepo) InsertModerationAudit(userID, conversationID int64, originalC
 	return nil
 }
 
-type fakeCapabilityChecker struct {
-	banned bool
-	err    error
-}
-
-func (f *fakeCapabilityChecker) IsBanned(userID int64, capability string) (bool, error) {
-	if f.err != nil {
-		return false, f.err
-	}
-	return f.banned, nil
-}
-
 func TestServiceJoinIdempotentConversation(t *testing.T) {
 	repo := &fakeRepo{}
 	svc := NewService(repo, &fakeTicketVerifier{
@@ -309,23 +297,5 @@ func TestServiceSendRejectsOversizePayload(t *testing.T) {
 	}
 	if _, err := svc.Send(1001, 1, "client-1", string(tooLongContent)); !errors.Is(err, ErrInvalidArgument) {
 		t.Fatalf("expected invalid argument for too long content, got %v", err)
-	}
-}
-
-func TestServiceSendBlockedByCapabilityBan(t *testing.T) {
-	repo := &fakeRepo{
-		conversation: Conversation{ID: 1, ListingID: 101, BuyerID: 1001, SellerID: 2002},
-	}
-	svc := NewService(repo, &fakeTicketVerifier{}, 100).WithCapabilityChecker(&fakeCapabilityChecker{banned: true})
-	_, err := svc.Send(1001, 1, "client-1", "hi")
-	if err == nil {
-		t.Fatalf("expected capability banned error")
-	}
-	var capabilityErr *ErrCapabilityBanned
-	if !errors.As(err, &capabilityErr) {
-		t.Fatalf("expected ErrCapabilityBanned, got %v", err)
-	}
-	if capabilityErr.Capability != "CHAT_SEND" {
-		t.Fatalf("unexpected capability: %s", capabilityErr.Capability)
 	}
 }

@@ -30,6 +30,16 @@ security:
     login-per-second: 8
     order-create-per-second: 10
     order-pay-per-second: 15
+  authz:
+    cache:
+      redis:
+        enabled: ${SECURITY_AUTHZ_CACHE_REDIS_ENABLED:true}
+        key-prefix: ${SECURITY_AUTHZ_CACHE_REDIS_KEY_PREFIX:authz:snapshot:}
+        ttl-seconds: ${SECURITY_AUTHZ_CACHE_REDIS_TTL_SECONDS:30}
+        stale-ttl-seconds: ${SECURITY_AUTHZ_CACHE_REDIS_STALE_TTL_SECONDS:300}
+    event:
+      enabled: ${SECURITY_AUTHZ_EVENT_ENABLED:true}
+      redis-channel: ${SECURITY_AUTHZ_EVENT_REDIS_CHANNEL:shiori.authz.user.changed}
 
 management:
   endpoints:

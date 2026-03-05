@@ -33,8 +33,6 @@ const (
 	defaultChatMQExchange            = "shiori.chat.event"
 	defaultJWTIssuer                 = "shiori"
 	defaultGatewaySignMaxSkewSeconds = 300
-	defaultUserServiceBaseURL        = "http://shiori-user-service:8081"
-	defaultUserServiceTimeoutMs      = 800
 )
 
 var (
@@ -86,8 +84,6 @@ type Config struct {
 	InstanceID                string
 	GatewaySignSecret         string
 	GatewaySignMaxSkewSeconds int64
-	UserServiceBaseURL        string
-	UserServiceTimeoutMs      int
 }
 
 type NotifyNacosConfig struct {
@@ -166,8 +162,6 @@ type notifyChatSection struct {
 	TicketPublicKey      string `yaml:"ticket-public-key-pem-base64"`
 	MQEnabled            *bool  `yaml:"mq-enabled"`
 	MQExchange           string `yaml:"mq-exchange"`
-	UserServiceBaseURL   string `yaml:"user-service-base-url"`
-	UserServiceTimeoutMs int    `yaml:"user-service-timeout-ms"`
 }
 
 type notifyInstanceSection struct {
@@ -253,8 +247,6 @@ func (c NotifyNacosConfig) ToRuntimeConfig() (Config, error) {
 		ChatTicketPublicKey:       strings.TrimSpace(c.Notify.Chat.TicketPublicKey),
 		ChatMQEnabled:             boolOrDefault(c.Notify.Chat.MQEnabled, defaultChatMQEnabled),
 		ChatMQExchange:            stringOrDefault(c.Notify.Chat.MQExchange, defaultChatMQExchange),
-		UserServiceBaseURL:        stringOrDefault(c.Notify.Chat.UserServiceBaseURL, defaultUserServiceBaseURL),
-		UserServiceTimeoutMs:      intOrDefault(c.Notify.Chat.UserServiceTimeoutMs, defaultUserServiceTimeoutMs),
 		InstanceID:                strings.TrimSpace(c.Notify.Instance.ID),
 		GatewaySignSecret:         strings.TrimSpace(c.Security.GatewaySign.InternalSecret),
 		GatewaySignMaxSkewSeconds: int64OrDefault(c.Security.GatewaySign.MaxSkewSeconds, defaultGatewaySignMaxSkewSeconds),

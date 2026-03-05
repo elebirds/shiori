@@ -24,15 +24,6 @@ public class GatewayGovernanceMetrics {
         ).increment();
     }
 
-    public void incCapabilityCheck(String capability, String decision) {
-        meterRegistry.counter(
-                GOVERNANCE_TOTAL,
-                "type", "capability_ban",
-                "endpoint", sanitize(capability),
-                "decision", sanitize(decision)
-        ).increment();
-    }
-
     public void incAuthzDecision(String permissionCode, String decision) {
         meterRegistry.counter(
                 "authz_decision_total",
@@ -50,6 +41,17 @@ public class GatewayGovernanceMetrics {
 
     public void observeAuthzSnapshotStaleSeconds(double seconds) {
         meterRegistry.summary("authz_snapshot_stale_seconds").record(Math.max(0D, seconds));
+    }
+
+    public void incAuthzL2Hit(String result) {
+        meterRegistry.counter(
+                "authz_l2_hit_total",
+                "result", sanitize(result)
+        ).increment();
+    }
+
+    public void observeAuthzEventLagMs(double lagMs) {
+        meterRegistry.summary("authz_event_lag_ms").record(Math.max(0D, lagMs));
     }
 
     private String sanitize(String value) {

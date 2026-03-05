@@ -1,14 +1,11 @@
 package moe.hhm.shiori.gateway.filter;
 
-import java.time.Duration;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.nio.charset.StandardCharsets;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.crypto.MACVerifier;
 import com.nimbusds.jwt.JWTClaimsSet;
@@ -26,7 +23,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.util.AntPathMatcher;
 import org.springframework.util.StringUtils;
-import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
@@ -35,17 +31,15 @@ public class GatewayAuthorizationFilter implements GlobalFilter, Ordered {
 
     private final GatewaySecurityProperties properties;
     private final GatewayGovernanceMetrics governanceMetrics;
-    private final WebClient webClient;
-    private final ConcurrentHashMap<String, CachedSnapshot> cache = new ConcurrentHashMap<>();
+    private final AuthzSnapshotCacheService authzSnapshotCacheService;
     private final AntPathMatcher pathMatcher = new AntPathMatcher();
 
     public GatewayAuthorizationFilter(GatewaySecurityProperties properties,
-                                      GatewayGovernanceMetrics governanceMetrics) {
+                                      GatewayGovernanceMetrics governanceMetrics,
+                                      AuthzSnapshotCacheService authzSnapshotCacheService) {
         this.properties = properties;
         this.governanceMetrics = governanceMetrics;
-        this.webClient = WebClient.builder()
-                .baseUrl(properties.getAuthz().getUserServiceBaseUrl())
-                .build();
+        this.authzSnapshotCacheService = authzSnapshotCacheService;
     }
 
     @Override
@@ -73,7 +67,7 @@ public class GatewayAuthorizationFilter implements GlobalFilter, Ordered {
         String normalizedUserId = userId.trim();
         String normalizedPermission = normalizePermission(matchedRule.permissionCode());
 
-        return resolveSnapshot(normalizedUserId)
+        return authzSnapshotCacheService.resolveSnapshot(normalizedUserId)
                 .flatMap(resolveResult -> {
                     if (resolveResult.degradedAllow()) {
                         governanceMetrics.incAuthzDecision(normalizedPermission, "degraded_allow");
@@ -108,48 +102,7 @@ public class GatewayAuthorizationFilter implements GlobalFilter, Ordered {
                 });
     }
 
-    private Mono<SnapshotResolveResult> resolveSnapshot(String userId) {
-        long nowMillis = System.currentTimeMillis();
-        CachedSnapshot cached = cache.get(userId);
-        if (cached != null && cached.expireAtMillis() > nowMillis) {
-            return Mono.just(new SnapshotResolveResult(cached.snapshot(), "fresh_cache", false, false));
-        }
-
-        int timeoutMs = Math.max(200, properties.getAuthz().getQueryTimeoutMs());
-        int ttlSeconds = Math.max(5, properties.getAuthz().getCache().getTtlSeconds());
-        int staleTtlSeconds = Math.max(ttlSeconds, properties.getAuthz().getCache().getStaleTtlSeconds());
-
-        return webClient.get()
-                .uri("/internal/authz/users/{userId}/snapshot", userId)
-                .retrieve()
-                .bodyToMono(AuthzSnapshotResponse.class)
-                .timeout(Duration.ofMillis(timeoutMs))
-                .map(this::normalizeSnapshot)
-                .map(snapshot -> {
-                    cache.put(
-                            userId,
-                            new CachedSnapshot(
-                                    snapshot,
-                                    nowMillis + ttlSeconds * 1000L,
-                                    nowMillis + staleTtlSeconds * 1000L
-                            )
-                    );
-                    return new SnapshotResolveResult(snapshot, "remote", false, false);
-                })
-                .onErrorResume(error -> {
-                    if (cached != null && cached.staleExpireAtMillis() > nowMillis) {
-                        long staleMillis = Math.max(0L, nowMillis - cached.expireAtMillis());
-                        governanceMetrics.observeAuthzSnapshotStaleSeconds(staleMillis / 1000D);
-                        return Mono.just(new SnapshotResolveResult(cached.snapshot(), "stale_cache", true, false));
-                    }
-                    if (properties.getAuthz().getDegrade().isAllowWithoutSnapshot()) {
-                        return Mono.just(new SnapshotResolveResult(null, "no_snapshot", false, true));
-                    }
-                    return Mono.error(error);
-                });
-    }
-
-    private Decision evaluate(String permissionCode, AuthzSnapshotResponse snapshot) {
+    private Decision evaluate(String permissionCode, AuthzSnapshotCacheService.AuthzSnapshotResponse snapshot) {
         if (snapshot == null) {
             return new Decision(false, "deny_no_snapshot");
         }
@@ -230,20 +183,6 @@ public class GatewayAuthorizationFilter implements GlobalFilter, Ordered {
         }
     }
 
-    private AuthzSnapshotResponse normalizeSnapshot(AuthzSnapshotResponse snapshot) {
-        if (snapshot == null) {
-            return new AuthzSnapshotResponse(null, 0L, List.of(), List.of(), null, null);
-        }
-        return new AuthzSnapshotResponse(
-                snapshot.userId(),
-                snapshot.version() == null ? 0L : Math.max(snapshot.version(), 0L),
-                new ArrayList<>(normalizeSet(snapshot.grants())),
-                new ArrayList<>(normalizeSet(snapshot.denies())),
-                snapshot.generatedAt(),
-                snapshot.expireAt()
-        );
-    }
-
     private Set<String> normalizeSet(List<String> values) {
         if (values == null || values.isEmpty()) {
             return Set.of();
@@ -275,7 +214,8 @@ public class GatewayAuthorizationFilter implements GlobalFilter, Ordered {
                 .build();
     }
 
-    private ServerWebExchange addAuthzHeaders(ServerWebExchange exchange, AuthzSnapshotResponse snapshot) {
+    private ServerWebExchange addAuthzHeaders(ServerWebExchange exchange,
+                                              AuthzSnapshotCacheService.AuthzSnapshotResponse snapshot) {
         return exchange.mutate()
                 .request(exchange.getRequest().mutate().headers(headers -> {
                     headers.remove(AuthzHeaderNames.USER_AUTHZ_VERSION);
@@ -300,22 +240,5 @@ public class GatewayAuthorizationFilter implements GlobalFilter, Ordered {
     }
 
     private record Decision(boolean allowed, String reason) {
-    }
-
-    private record CachedSnapshot(AuthzSnapshotResponse snapshot, long expireAtMillis, long staleExpireAtMillis) {
-    }
-
-    private record SnapshotResolveResult(AuthzSnapshotResponse snapshot,
-                                         String source,
-                                         boolean fromStaleCache,
-                                         boolean degradedAllow) {
-    }
-
-    private record AuthzSnapshotResponse(Long userId,
-                                         Long version,
-                                         List<String> grants,
-                                         List<String> denies,
-                                         String generatedAt,
-                                         String expireAt) {
     }
 }

@@ -2,6 +2,7 @@ package moe.hhm.shiori.user.authz.repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import moe.hhm.shiori.user.authz.model.PermissionCatalogRecord;
 import moe.hhm.shiori.user.authz.model.UserAuthzVersionRecord;
 import moe.hhm.shiori.user.authz.model.UserPermissionOverrideRecord;
 import org.apache.ibatis.annotations.Delete;
@@ -36,6 +37,19 @@ public interface UserAuthzMapper {
             ORDER BY p.id ASC
             """)
     List<String> listRolePermissionCodes(@Param("userId") Long userId);
+
+    @Select("""
+            SELECT perm_code AS permissionCode,
+                   domain,
+                   SUBSTRING_INDEX(perm_code, '.', -1) AS action,
+                   perm_name AS displayName,
+                   description,
+                   CASE WHEN status = 1 AND is_deleted = 0 THEN FALSE ELSE TRUE END AS deprecated
+            FROM u_permission
+            WHERE is_deleted = 0
+            ORDER BY domain ASC, perm_code ASC
+            """)
+    List<PermissionCatalogRecord> listPermissionCatalog();
 
     @Select("""
             SELECT id,
@@ -152,17 +166,6 @@ public interface UserAuthzMapper {
             """)
     int deleteOverride(@Param("userId") Long userId,
                        @Param("overrideId") Long overrideId);
-
-    @Select("""
-            SELECT capability_code
-            FROM u_user_capability_ban
-            WHERE user_id = #{userId}
-              AND is_banned = 1
-              AND (start_at IS NULL OR start_at <= CURRENT_TIMESTAMP(3))
-              AND (end_at IS NULL OR end_at > CURRENT_TIMESTAMP(3))
-            ORDER BY capability_code ASC
-            """)
-    List<String> listActiveCapabilityCodes(@Param("userId") Long userId);
 
     @Update("""
             INSERT INTO u_user_authz_version (user_id, version, updated_at)

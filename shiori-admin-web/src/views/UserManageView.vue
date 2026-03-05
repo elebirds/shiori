@@ -1,19 +1,21 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
 import {
+  createAdminUserPermissionOverride,
   getAdminUser,
-  listAdminUserCapabilityBans,
+  listAdminPermissionCatalog,
+  listAdminUserPermissionOverrides,
   listAdminRoles,
   listAdminUserAudits,
   listAdminUsers,
   lockAdminUser,
-  removeAdminUserCapabilityBan,
+  removeAdminUserPermissionOverride,
   resetAdminUserPassword,
   unlockAdminUser,
+  updateAdminUserPermissionOverride,
   updateAdminRole,
-  upsertAdminUserCapabilityBan,
   updateAdminUserStatus,
   type AdminUserSummary,
 } from '@/api/adminUser'
@@ -34,9 +36,11 @@ const unlockReason = ref('后台手动解锁用户')
 const resetPassword = ref('')
 const resetReason = ref('后台重置密码')
 const forceChangePassword = ref(true)
-const capability = ref<'CHAT_SEND' | 'CHAT_READ' | 'PRODUCT_PUBLISH' | 'ORDER_CREATE'>('CHAT_SEND')
-const capabilityReason = ref('后台能力封禁')
-const capabilityEndAt = ref('')
+const permissionCode = ref('')
+const permissionEffect = ref<'ALLOW' | 'DENY'>('DENY')
+const permissionReason = ref('后台权限覆盖')
+const permissionStartAt = ref('')
+const permissionEndAt = ref('')
 
 const auditPage = ref(1)
 const auditSize = ref(10)
@@ -65,6 +69,22 @@ const selectedUserQuery = useQuery({
   enabled: computed(() => selectedUserId.value !== null),
 })
 
+const permissionCatalogQuery = useQuery({
+  queryKey: ['admin-permission-catalog'],
+  queryFn: () => listAdminPermissionCatalog(),
+})
+
+watch(
+  () => permissionCatalogQuery.data.value,
+  (catalog) => {
+    if (permissionCode.value || !catalog || catalog.length === 0) {
+      return
+    }
+    permissionCode.value = catalog.find((item) => !item.deprecated)?.permissionCode || catalog[0]?.permissionCode || ''
+  },
+  { immediate: true },
+)
+
 const auditsQuery = useQuery({
   queryKey: computed(() => ['admin-user-audits', selectedUserId.value, auditPage.value, auditSize.value, auditAction.value]),
   queryFn: () =>
@@ -76,9 +96,9 @@ const auditsQuery = useQuery({
   enabled: computed(() => selectedUserId.value !== null),
 })
 
-const capabilityBansQuery = useQuery({
-  queryKey: computed(() => ['admin-user-capability-bans', selectedUserId.value]),
-  queryFn: () => listAdminUserCapabilityBans(selectedUserId.value as number),
+const permissionOverridesQuery = useQuery({
+  queryKey: computed(() => ['admin-user-permission-overrides', selectedUserId.value]),
+  queryFn: () => listAdminUserPermissionOverrides(selectedUserId.value as number),
   enabled: computed(() => selectedUserId.value !== null),
 })
 
@@ -145,22 +165,30 @@ const resetPasswordMutation = useMutation({
   },
 })
 
-const upsertCapabilityBanMutation = useMutation({
-  mutationFn: (userId: number) =>
-    upsertAdminUserCapabilityBan(userId, {
-      capability: capability.value,
-      reason: capabilityReason.value || undefined,
-      endAt: capabilityEndAt.value || undefined,
-    }),
+const savePermissionOverrideMutation = useMutation({
+  mutationFn: async (userId: number) => {
+    const payload = {
+      permissionCode: permissionCode.value.trim(),
+      effect: permissionEffect.value,
+      reason: permissionReason.value || undefined,
+      startAt: permissionStartAt.value || undefined,
+      endAt: permissionEndAt.value || undefined,
+    }
+    const existing = (permissionOverridesQuery.data.value || []).find((item) => item.permissionCode === payload.permissionCode)
+    if (existing) {
+      return updateAdminUserPermissionOverride(userId, existing.id, payload)
+    }
+    return createAdminUserPermissionOverride(userId, payload)
+  },
   onSuccess: () => handleMutationSuccess(),
   onError: (error) => {
     actionError.value = resolveError(error)
   },
 })
 
-const removeCapabilityBanMutation = useMutation({
-  mutationFn: ({ userId, capabilityCode }: { userId: number; capabilityCode: 'CHAT_SEND' | 'CHAT_READ' | 'PRODUCT_PUBLISH' | 'ORDER_CREATE' }) =>
-    removeAdminUserCapabilityBan(userId, capabilityCode, capabilityReason.value || undefined),
+const removePermissionOverrideMutation = useMutation({
+  mutationFn: ({ userId, overrideId }: { userId: number; overrideId: number }) =>
+    removeAdminUserPermissionOverride(userId, overrideId, permissionReason.value || undefined),
   onSuccess: () => handleMutationSuccess(),
   onError: (error) => {
     actionError.value = resolveError(error)
@@ -230,20 +258,29 @@ function executeResetPassword() {
   resetPasswordMutation.mutate(currentSelectedUserId.value)
 }
 
-function executeUpsertCapabilityBan() {
+function executeSavePermissionOverride() {
   if (!currentSelectedUserId.value) {
     return
   }
-  upsertCapabilityBanMutation.mutate(currentSelectedUserId.value)
+  const normalizedPermissionCode = permissionCode.value.trim()
+  if (!normalizedPermissionCode) {
+    actionError.value = '请选择权限码'
+    return
+  }
+  if (permissionStartAt.value && permissionEndAt.value && permissionEndAt.value <= permissionStartAt.value) {
+    actionError.value = '结束时间必须晚于开始时间'
+    return
+  }
+  savePermissionOverrideMutation.mutate(currentSelectedUserId.value)
 }
 
-function executeRemoveCapabilityBan(capabilityCode: 'CHAT_SEND' | 'CHAT_READ' | 'PRODUCT_PUBLISH' | 'ORDER_CREATE') {
+function executeRemovePermissionOverride(overrideId: number) {
   if (!currentSelectedUserId.value) {
     return
   }
-  removeCapabilityBanMutation.mutate({
+  removePermissionOverrideMutation.mutate({
     userId: currentSelectedUserId.value,
-    capabilityCode,
+    overrideId,
   })
 }
 
@@ -253,11 +290,14 @@ function resolveError(error: unknown): string {
 
 function handleMutationSuccess() {
   actionError.value = ''
+  if (!permissionCode.value) {
+    permissionCode.value = permissionCatalogQuery.data.value?.find((item) => !item.deprecated)?.permissionCode || ''
+  }
   void queryClient.invalidateQueries({ queryKey: ['admin-users'] })
   if (selectedUserId.value != null) {
     void queryClient.invalidateQueries({ queryKey: ['admin-user-detail', selectedUserId.value] })
     void queryClient.invalidateQueries({ queryKey: ['admin-user-audits', selectedUserId.value] })
-    void queryClient.invalidateQueries({ queryKey: ['admin-user-capability-bans', selectedUserId.value] })
+    void queryClient.invalidateQueries({ queryKey: ['admin-user-permission-overrides', selectedUserId.value] })
   }
 }
 </script>
@@ -378,48 +418,55 @@ function handleMutationSuccess() {
           </div>
 
           <div class="mt-4 space-y-2 border-t border-slate-200 pt-3">
-            <label class="block text-xs text-slate-600">能力封禁</label>
-            <select v-model="capability" class="w-full rounded border border-slate-300 px-2 py-1 text-sm">
-              <option value="CHAT_SEND">CHAT_SEND</option>
-              <option value="CHAT_READ">CHAT_READ</option>
-              <option value="PRODUCT_PUBLISH">PRODUCT_PUBLISH</option>
-              <option value="ORDER_CREATE">ORDER_CREATE</option>
+            <label class="block text-xs text-slate-600">权限覆盖（permission-overrides）</label>
+            <select v-model="permissionCode" class="w-full rounded border border-slate-300 px-2 py-1 text-sm">
+              <option value="">请选择权限码</option>
+              <option v-for="item in permissionCatalogQuery.data.value || []" :key="item.permissionCode" :value="item.permissionCode">
+                {{ item.permissionCode }}{{ item.deprecated ? '（deprecated）' : '' }}
+              </option>
+            </select>
+            <select v-model="permissionEffect" class="w-full rounded border border-slate-300 px-2 py-1 text-sm">
+              <option value="DENY">DENY</option>
+              <option value="ALLOW">ALLOW</option>
             </select>
             <input
-              v-model.trim="capabilityReason"
+              v-model.trim="permissionReason"
               type="text"
-              placeholder="封禁/解封原因"
+              placeholder="覆盖原因"
               class="w-full rounded border border-slate-300 px-2 py-1 text-sm"
             />
             <input
-              v-model="capabilityEndAt"
+              v-model="permissionStartAt"
               type="datetime-local"
               class="w-full rounded border border-slate-300 px-2 py-1 text-sm"
             />
-            <button class="w-full rounded bg-indigo-600 px-2 py-1.5 text-xs text-white" @click="executeUpsertCapabilityBan">
-              新增/更新能力封禁
+            <input
+              v-model="permissionEndAt"
+              type="datetime-local"
+              class="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+            />
+            <button class="w-full rounded bg-indigo-600 px-2 py-1.5 text-xs text-white" @click="executeSavePermissionOverride">
+              新增/更新权限覆盖
             </button>
 
             <div class="space-y-1 pt-2">
-              <p class="text-xs text-slate-500">当前能力封禁：</p>
+              <p class="text-xs text-slate-500">当前权限覆盖：</p>
               <div
-                v-for="item in capabilityBansQuery.data.value || []"
-                :key="`${item.userId}-${item.capability}`"
+                v-for="item in permissionOverridesQuery.data.value || []"
+                :key="`${item.userId}-${item.id}`"
                 class="flex items-center justify-between rounded border border-slate-200 px-2 py-1 text-xs"
               >
                 <div>
-                  <p class="font-medium text-slate-700">{{ item.capability }} · {{ item.banned ? 'BANNED' : 'UNBANNED' }}</p>
+                  <p class="font-medium text-slate-700">{{ item.permissionCode }} · {{ item.effect }}</p>
+                  <p class="text-slate-500">start: {{ item.startAt || '-' }}</p>
+                  <p class="text-slate-500">end: {{ item.endAt || '-' }}</p>
                   <p class="text-slate-500">{{ item.reason || '-' }}</p>
                 </div>
-                <button
-                  class="rounded bg-emerald-600 px-2 py-1 text-white"
-                  :disabled="!item.banned"
-                  @click="executeRemoveCapabilityBan(item.capability)"
-                >
-                  解封
+                <button class="rounded bg-rose-600 px-2 py-1 text-white" @click="executeRemovePermissionOverride(item.id)">
+                  删除
                 </button>
               </div>
-              <p v-if="(capabilityBansQuery.data.value || []).length === 0" class="text-xs text-slate-400">暂无能力封禁记录</p>
+              <p v-if="(permissionOverridesQuery.data.value || []).length === 0" class="text-xs text-slate-400">暂无权限覆盖记录</p>
             </div>
           </div>
         </section>

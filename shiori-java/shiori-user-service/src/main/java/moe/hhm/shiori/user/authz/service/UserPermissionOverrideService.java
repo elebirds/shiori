@@ -21,7 +21,9 @@ import moe.hhm.shiori.user.event.EventEnvelope;
 import moe.hhm.shiori.user.event.UserAuthzChangedPayload;
 import moe.hhm.shiori.user.outbox.model.UserOutboxEventEntity;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -40,19 +42,23 @@ public class UserPermissionOverrideService {
     private final ObjectMapper objectMapper;
     private final UserMqProperties userMqProperties;
     private final UserOutboxProperties userOutboxProperties;
+    @Nullable
+    private final AuthzEventPublisher authzEventPublisher;
 
     public UserPermissionOverrideService(UserAuthzMapper userAuthzMapper,
                                          AdminUserMapper adminUserMapper,
                                          AuthzSnapshotService authzSnapshotService,
                                          ObjectMapper objectMapper,
                                          UserMqProperties userMqProperties,
-                                         UserOutboxProperties userOutboxProperties) {
+                                         UserOutboxProperties userOutboxProperties,
+                                         @Nullable AuthzEventPublisher authzEventPublisher) {
         this.userAuthzMapper = userAuthzMapper;
         this.adminUserMapper = adminUserMapper;
         this.authzSnapshotService = authzSnapshotService;
         this.objectMapper = objectMapper;
         this.userMqProperties = userMqProperties;
         this.userOutboxProperties = userOutboxProperties;
+        this.authzEventPublisher = authzEventPublisher;
     }
 
     public List<AdminUserPermissionOverrideResponse> listOverrides(Long userId) {
@@ -71,20 +77,26 @@ public class UserPermissionOverrideService {
         LocalDateTime endAt = request.endAt();
         validateTimeWindow(startAt, endAt);
 
-        int affected = userAuthzMapper.insertOverride(
-                userId,
-                permissionCode,
-                effect.name(),
-                startAt,
-                endAt,
-                normalizeReason(request.reason()),
-                operatorUserId
-        );
+        int affected;
+        try {
+            affected = userAuthzMapper.insertOverride(
+                    userId,
+                    permissionCode,
+                    effect.name(),
+                    startAt,
+                    endAt,
+                    normalizeReason(request.reason()),
+                    operatorUserId
+            );
+        } catch (DuplicateKeyException ex) {
+            throw new BizException(UserErrorCode.PERMISSION_OVERRIDE_ALREADY_EXISTS, HttpStatus.CONFLICT);
+        }
         if (affected <= 0) {
             throw new BizException(CommonErrorCode.INTERNAL_SERVER_ERROR, HttpStatus.INTERNAL_SERVER_ERROR);
         }
         long version = authzSnapshotService.bumpVersion(userId);
         appendPermissionOverrideChangedOutbox(userId, version, operatorUserId, request.reason());
+        publishAuthzChanged(userId, version, request.reason());
 
         AdminUserPermissionOverrideResponse response = userAuthzMapper.listOverridesByUserId(userId).stream()
                 .filter(item -> permissionCode.equalsIgnoreCase(item.permissionCode()))
@@ -110,21 +122,27 @@ public class UserPermissionOverrideService {
         LocalDateTime endAt = request.endAt();
         validateTimeWindow(startAt, endAt);
 
-        int affected = userAuthzMapper.updateOverride(
-                userId,
-                overrideId,
-                permissionCode,
-                effect.name(),
-                startAt,
-                endAt,
-                normalizeReason(request.reason()),
-                operatorUserId
-        );
+        int affected;
+        try {
+            affected = userAuthzMapper.updateOverride(
+                    userId,
+                    overrideId,
+                    permissionCode,
+                    effect.name(),
+                    startAt,
+                    endAt,
+                    normalizeReason(request.reason()),
+                    operatorUserId
+            );
+        } catch (DuplicateKeyException ex) {
+            throw new BizException(UserErrorCode.PERMISSION_OVERRIDE_ALREADY_EXISTS, HttpStatus.CONFLICT);
+        }
         if (affected <= 0) {
             throw new BizException(CommonErrorCode.INTERNAL_SERVER_ERROR, HttpStatus.INTERNAL_SERVER_ERROR);
         }
         long version = authzSnapshotService.bumpVersion(userId);
         appendPermissionOverrideChangedOutbox(userId, version, operatorUserId, request.reason());
+        publishAuthzChanged(userId, version, request.reason());
 
         AdminUserPermissionOverrideResponse response = toResponse(requireOverride(userId, overrideId));
         insertAudit(
@@ -153,6 +171,7 @@ public class UserPermissionOverrideService {
 
         long version = authzSnapshotService.bumpVersion(userId);
         appendPermissionOverrideChangedOutbox(userId, version, operatorUserId, reason);
+        publishAuthzChanged(userId, version, reason);
         insertAudit(
                 operatorUserId,
                 userId,
@@ -293,5 +312,12 @@ public class UserPermissionOverrideService {
         entity.setStatus("PENDING");
         entity.setRetryCount(0);
         adminUserMapper.insertOutboxEvent(entity);
+    }
+
+    private void publishAuthzChanged(Long userId, long version, String reason) {
+        if (authzEventPublisher == null) {
+            return;
+        }
+        authzEventPublisher.publishAfterCommit(userId, version, reason);
     }
 }

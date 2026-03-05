@@ -30,6 +30,10 @@ spring:
               uri: lb://shiori-user-service
               predicates:
                 - Path=/api/v2/admin/users/**
+            - id: admin-permission-service-v2
+              uri: lb://shiori-user-service
+              predicates:
+                - Path=/api/v2/admin/permissions/**
             - id: admin-role-service
               uri: lb://shiori-user-service
               predicates:
@@ -115,8 +119,16 @@ security:
     cache:
       ttl-seconds: ${SECURITY_AUTHZ_CACHE_TTL_SECONDS:30}
       stale-ttl-seconds: ${SECURITY_AUTHZ_CACHE_STALE_TTL_SECONDS:300}
+      redis:
+        enabled: ${SECURITY_AUTHZ_CACHE_REDIS_ENABLED:true}
+        key-prefix: ${SECURITY_AUTHZ_CACHE_REDIS_KEY_PREFIX:authz:snapshot:}
+        ttl-seconds: ${SECURITY_AUTHZ_CACHE_REDIS_TTL_SECONDS:30}
+        stale-ttl-seconds: ${SECURITY_AUTHZ_CACHE_REDIS_STALE_TTL_SECONDS:300}
     degrade:
       allow-without-snapshot: ${SECURITY_AUTHZ_DEGRADE_ALLOW_WITHOUT_SNAPSHOT:true}
+    event:
+      enabled: ${SECURITY_AUTHZ_EVENT_ENABLED:true}
+      redis-channel: ${SECURITY_AUTHZ_EVENT_REDIS_CHANNEL:shiori.authz.user.changed}
     route-rules:
       - method: GET
         path-pattern: /api/chat/**
@@ -231,6 +243,9 @@ security:
         permission-code: product.stock.adjust
       - method: '*'
         path-pattern: /api/v2/admin/users/*/permission-overrides/**
+        permission-code: admin.user.permission_override.manage
+      - method: GET
+        path-pattern: /api/v2/admin/permissions/**
         permission-code: admin.user.permission_override.manage
 
 server:

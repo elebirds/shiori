@@ -37,6 +37,9 @@ export const useChatPopupStore = defineStore('chat-popup', () => {
     )
     if (targetIndex >= 0) {
       const existing = items.value[targetIndex]
+      if (!existing) {
+        return
+      }
       const merged: ChatPopupItem = {
         ...existing,
         senderId: payload.senderId,

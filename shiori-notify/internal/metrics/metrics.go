@@ -30,6 +30,7 @@ var (
 	chatCompensationQueryTotal    *prometheus.CounterVec
 	chatCompensationMessagesTotal prometheus.Counter
 	chatRateLimitHitTotal         *prometheus.CounterVec
+	authzDegradedAllowTotal       *prometheus.CounterVec
 	notifyWSKickTotal             prometheus.Counter
 )
 
@@ -97,6 +98,10 @@ func register() {
 			Name: "shiori_notify_chat_rate_limit_hit_total",
 			Help: "Total chat rate-limit hits grouped by source",
 		}, []string{"source"})
+		authzDegradedAllowTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "authz_degraded_allow_total",
+			Help: "Total degraded authz allow decisions grouped by reason",
+		}, []string{"reason"})
 		notifyWSKickTotal = prometheus.NewCounter(prometheus.CounterOpts{
 			Name: "notify_ws_kick_total",
 			Help: "Total websocket sessions kicked by permission changes",
@@ -118,6 +123,7 @@ func register() {
 			chatCompensationQueryTotal,
 			chatCompensationMessagesTotal,
 			chatRateLimitHitTotal,
+			authzDegradedAllowTotal,
 			notifyWSKickTotal,
 		)
 	})
@@ -228,6 +234,11 @@ func AddChatCompensationMessages(count int) {
 func IncChatRateLimitHit(source string) {
 	register()
 	chatRateLimitHitTotal.WithLabelValues(sanitizeLabel(source)).Inc()
+}
+
+func IncAuthzDegradedAllow(reason string) {
+	register()
+	authzDegradedAllowTotal.WithLabelValues(sanitizeLabel(reason)).Inc()
 }
 
 func AddNotifyWSKick(count int) {

@@ -344,13 +344,13 @@ export const useChatStore = defineStore('chat', () => {
       return
     }
     const current = messagesByConversation.value[conversationId] || []
-    const nextList = current.map((item) =>
+    const nextList: ChatMessageVM[] = current.map((item): ChatMessageVM =>
       item.clientMsgId === clientMsgId
         ? {
             ...item,
             messageId,
             createdAt: String(frame.createdAt || item.createdAt),
-            status: 'sent',
+            status: 'sent' as const,
           }
         : item,
     )
@@ -396,10 +396,14 @@ export const useChatStore = defineStore('chat', () => {
     if (idx < 0) {
       return
     }
+    const existing = conversations.value[idx]
+    if (!existing) {
+      return
+    }
     const next = {
-      ...conversations.value[idx],
+      ...existing,
       updatedAt: message.createdAt,
-      hasUnread: hasUnread ? true : conversations.value[idx].hasUnread,
+      hasUnread: hasUnread ? true : existing.hasUnread,
       lastMessage: message,
     }
     const copied = conversations.value.slice()
@@ -452,10 +456,10 @@ export const useChatStore = defineStore('chat', () => {
       const next = { ...listingCache.value }
       for (let i = 0; i < settled.length; i += 1) {
         const result = settled[i]
-        if (result.status !== 'fulfilled') {
+        const listingId = unknownListingIds[i]
+        if (!result || result.status !== 'fulfilled' || listingId == null) {
           continue
         }
-        const listingId = unknownListingIds[i]
         next[listingId] = {
           title: result.value.title,
           coverImageUrl: result.value.coverImageUrl,
@@ -531,7 +535,8 @@ export const useChatStore = defineStore('chat', () => {
     if (list.length === 0) {
       return 0
     }
-    return list[list.length - 1].messageId
+    const latest = list[list.length - 1]
+    return latest ? latest.messageId : 0
   }
 
   function resolvePeerUserId(conversationId: number): number {

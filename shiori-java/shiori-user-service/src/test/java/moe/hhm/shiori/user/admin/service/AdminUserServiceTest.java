@@ -1,15 +1,13 @@
 package moe.hhm.shiori.user.admin.service;
 
 import java.time.LocalDateTime;
-import java.util.List;
 import moe.hhm.shiori.common.exception.BizException;
-import moe.hhm.shiori.user.admin.dto.AdminUserCapabilityBanUpsertRequest;
-import moe.hhm.shiori.user.admin.model.AdminUserCapabilityBanRecord;
 import moe.hhm.shiori.user.admin.dto.AdminUserAdminRoleUpdateRequest;
 import moe.hhm.shiori.user.admin.dto.AdminUserStatusUpdateRequest;
 import moe.hhm.shiori.user.admin.model.AdminUserRecord;
 import moe.hhm.shiori.user.admin.repository.AdminUserMapper;
 import moe.hhm.shiori.user.auth.config.UserSecurityProperties;
+import moe.hhm.shiori.user.authz.service.AuthzEventPublisher;
 import moe.hhm.shiori.user.authz.service.AuthzSnapshotService;
 import moe.hhm.shiori.user.auth.service.TokenService;
 import moe.hhm.shiori.user.config.UserMqProperties;
@@ -29,7 +27,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -55,6 +52,8 @@ class AdminUserServiceTest {
 
     @Mock
     private AuthzSnapshotService authzSnapshotService;
+    @Mock
+    private AuthzEventPublisher authzEventPublisher;
 
     private AdminUserService adminUserService;
 
@@ -78,7 +77,8 @@ class AdminUserServiceTest {
                 userMqProperties,
                 userOutboxProperties,
                 userSecurityProperties,
-                authzSnapshotService
+                authzSnapshotService,
+                authzEventPublisher
         );
     }
 
@@ -132,43 +132,6 @@ class AdminUserServiceTest {
 
         assertTrue(response.admin());
         verify(adminUserMapper).addUserRole(2L, 11L);
-    }
-
-    @Test
-    void shouldUpsertCapabilityBan() {
-        when(adminUserMapper.findByUserId(2L)).thenReturn(userRecord(2L, 1, "ROLE_USER"));
-        when(adminUserMapper.listCapabilityBansByUserId(2L)).thenReturn(
-                List.of(new AdminUserCapabilityBanRecord(
-                        1L,
-                        2L,
-                        "CHAT_SEND",
-                        1,
-                        "spam",
-                        9L,
-                        LocalDateTime.now(),
-                        LocalDateTime.now().plusDays(1),
-                        LocalDateTime.now(),
-                        LocalDateTime.now()
-                ))
-        );
-
-        var response = adminUserService.upsertCapabilityBan(
-                9L,
-                2L,
-                new AdminUserCapabilityBanUpsertRequest("CHAT_SEND", "spam", null, null)
-        );
-
-        assertEquals("CHAT_SEND", response.capability());
-        assertTrue(response.banned());
-        verify(adminUserMapper).upsertCapabilityBan(
-                org.mockito.ArgumentMatchers.eq(2L),
-                org.mockito.ArgumentMatchers.eq("CHAT_SEND"),
-                org.mockito.ArgumentMatchers.eq(1),
-                org.mockito.ArgumentMatchers.eq("spam"),
-                org.mockito.ArgumentMatchers.eq(9L),
-                org.mockito.ArgumentMatchers.any(LocalDateTime.class),
-                org.mockito.ArgumentMatchers.isNull()
-        );
     }
 
     private AdminUserRecord userRecord(Long userId, Integer status, String roleCodes) {

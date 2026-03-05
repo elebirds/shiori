@@ -12,7 +12,6 @@ public class GatewaySecurityProperties {
     private final GatewaySign gatewaySign = new GatewaySign();
     private final RateLimit rateLimit = new RateLimit();
     private final Authz authz = new Authz();
-    private final CapabilityBan capabilityBan = new CapabilityBan();
 
     public Jwt getJwt() {
         return jwt;
@@ -32,10 +31,6 @@ public class GatewaySecurityProperties {
 
     public Authz getAuthz() {
         return authz;
-    }
-
-    public CapabilityBan getCapabilityBan() {
-        return capabilityBan;
     }
 
     public static class Jwt {
@@ -170,6 +165,7 @@ public class GatewaySecurityProperties {
         private int queryTimeoutMs = 800;
         private final Cache cache = new Cache();
         private final Degrade degrade = new Degrade();
+        private final Event event = new Event();
         private List<RouteRule> routeRules = new ArrayList<>();
 
         public boolean isEnabled() {
@@ -204,6 +200,10 @@ public class GatewaySecurityProperties {
             return degrade;
         }
 
+        public Event getEvent() {
+            return event;
+        }
+
         public List<RouteRule> getRouteRules() {
             return routeRules;
         }
@@ -216,6 +216,7 @@ public class GatewaySecurityProperties {
     public static class Cache {
         private int ttlSeconds = 30;
         private int staleTtlSeconds = 300;
+        private final Redis redis = new Redis();
 
         public int getTtlSeconds() {
             return ttlSeconds;
@@ -232,6 +233,10 @@ public class GatewaySecurityProperties {
         public void setStaleTtlSeconds(int staleTtlSeconds) {
             this.staleTtlSeconds = staleTtlSeconds;
         }
+
+        public Redis getRedis() {
+            return redis;
+        }
     }
 
     public static class Degrade {
@@ -243,6 +248,27 @@ public class GatewaySecurityProperties {
 
         public void setAllowWithoutSnapshot(boolean allowWithoutSnapshot) {
             this.allowWithoutSnapshot = allowWithoutSnapshot;
+        }
+    }
+
+    public static class Event {
+        private boolean enabled = true;
+        private String redisChannel = "shiori.authz.user.changed";
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getRedisChannel() {
+            return redisChannel;
+        }
+
+        public void setRedisChannel(String redisChannel) {
+            this.redisChannel = redisChannel;
         }
     }
 
@@ -276,11 +302,11 @@ public class GatewaySecurityProperties {
         }
     }
 
-    public static class CapabilityBan {
+    public static class Redis {
         private boolean enabled = true;
-        private String userServiceBaseUrl = "http://shiori-user-service:8081";
-        private int queryTimeoutMs = 800;
-        private int cacheTtlSeconds = 15;
+        private String keyPrefix = "authz:snapshot:";
+        private int ttlSeconds = 30;
+        private int staleTtlSeconds = 300;
 
         public boolean isEnabled() {
             return enabled;
@@ -290,28 +316,28 @@ public class GatewaySecurityProperties {
             this.enabled = enabled;
         }
 
-        public String getUserServiceBaseUrl() {
-            return userServiceBaseUrl;
+        public String getKeyPrefix() {
+            return keyPrefix;
         }
 
-        public void setUserServiceBaseUrl(String userServiceBaseUrl) {
-            this.userServiceBaseUrl = userServiceBaseUrl;
+        public void setKeyPrefix(String keyPrefix) {
+            this.keyPrefix = keyPrefix;
         }
 
-        public int getQueryTimeoutMs() {
-            return queryTimeoutMs;
+        public int getTtlSeconds() {
+            return ttlSeconds;
         }
 
-        public void setQueryTimeoutMs(int queryTimeoutMs) {
-            this.queryTimeoutMs = queryTimeoutMs;
+        public void setTtlSeconds(int ttlSeconds) {
+            this.ttlSeconds = ttlSeconds;
         }
 
-        public int getCacheTtlSeconds() {
-            return cacheTtlSeconds;
+        public int getStaleTtlSeconds() {
+            return staleTtlSeconds;
         }
 
-        public void setCacheTtlSeconds(int cacheTtlSeconds) {
-            this.cacheTtlSeconds = cacheTtlSeconds;
+        public void setStaleTtlSeconds(int staleTtlSeconds) {
+            this.staleTtlSeconds = staleTtlSeconds;
         }
     }
 }

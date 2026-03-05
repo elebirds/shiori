@@ -2,7 +2,6 @@ package moe.hhm.shiori.user.admin.repository;
 
 import java.util.List;
 import moe.hhm.shiori.user.admin.model.AdminUserAuditRecord;
-import moe.hhm.shiori.user.admin.model.AdminUserCapabilityBanRecord;
 import moe.hhm.shiori.user.admin.model.AdminRoleRecord;
 import moe.hhm.shiori.user.admin.model.AdminUserRecord;
 import moe.hhm.shiori.user.outbox.model.UserOutboxEventEntity;
@@ -247,87 +246,6 @@ public interface AdminUserMapper {
               AND role_id = #{roleId}
             """)
     int removeUserRole(@Param("userId") Long userId, @Param("roleId") Long roleId);
-
-    @Select("""
-            SELECT id,
-                   user_id AS userId,
-                   capability_code AS capabilityCode,
-                   is_banned AS isBanned,
-                   reason,
-                   operator_user_id AS operatorUserId,
-                   start_at AS startAt,
-                   end_at AS endAt,
-                   created_at AS createdAt,
-                   updated_at AS updatedAt
-            FROM u_user_capability_ban
-            WHERE user_id = #{userId}
-            ORDER BY id DESC
-            """)
-    List<AdminUserCapabilityBanRecord> listCapabilityBansByUserId(@Param("userId") Long userId);
-
-    @Insert("""
-            INSERT INTO u_user_capability_ban (
-                user_id,
-                capability_code,
-                is_banned,
-                reason,
-                operator_user_id,
-                start_at,
-                end_at,
-                created_at,
-                updated_at
-            ) VALUES (
-                #{userId},
-                #{capabilityCode},
-                #{isBanned},
-                #{reason},
-                #{operatorUserId},
-                #{startAt},
-                #{endAt},
-                CURRENT_TIMESTAMP(3),
-                CURRENT_TIMESTAMP(3)
-            )
-            ON DUPLICATE KEY UPDATE
-                is_banned = VALUES(is_banned),
-                reason = VALUES(reason),
-                operator_user_id = VALUES(operator_user_id),
-                start_at = VALUES(start_at),
-                end_at = VALUES(end_at),
-                updated_at = CURRENT_TIMESTAMP(3)
-            """)
-    int upsertCapabilityBan(@Param("userId") Long userId,
-                            @Param("capabilityCode") String capabilityCode,
-                            @Param("isBanned") Integer isBanned,
-                            @Param("reason") String reason,
-                            @Param("operatorUserId") Long operatorUserId,
-                            @Param("startAt") java.time.LocalDateTime startAt,
-                            @Param("endAt") java.time.LocalDateTime endAt);
-
-    @Update("""
-            UPDATE u_user_capability_ban
-            SET is_banned = 0,
-                reason = #{reason},
-                operator_user_id = #{operatorUserId},
-                end_at = COALESCE(end_at, CURRENT_TIMESTAMP(3)),
-                updated_at = CURRENT_TIMESTAMP(3)
-            WHERE user_id = #{userId}
-              AND capability_code = #{capabilityCode}
-            """)
-    int disableCapabilityBan(@Param("userId") Long userId,
-                             @Param("capabilityCode") String capabilityCode,
-                             @Param("reason") String reason,
-                             @Param("operatorUserId") Long operatorUserId);
-
-    @Select("""
-            SELECT capability_code
-            FROM u_user_capability_ban
-            WHERE user_id = #{userId}
-              AND is_banned = 1
-              AND (start_at IS NULL OR start_at <= CURRENT_TIMESTAMP(3))
-              AND (end_at IS NULL OR end_at > CURRENT_TIMESTAMP(3))
-            ORDER BY capability_code ASC
-            """)
-    List<String> listActiveCapabilityCodes(@Param("userId") Long userId);
 
     @Insert("""
             INSERT INTO u_admin_audit_log (

@@ -5,7 +5,7 @@ notify:
     addr: ${NOTIFY_RABBITMQ_ADDR}
     queue: notify.order.event
     exchanges: shiori.order.event,shiori.user.event
-    routing-keys: order.created,order.paid,order.canceled,order.delivered,order.finished,user.status.changed,user.role.changed,user.password.reset
+    routing-keys: order.created,order.paid,order.canceled,order.delivered,order.finished,user.status.changed,user.role.changed,user.password.reset,user.permission-override.changed,user.role-bindings.changed
   log:
     level: info
   ws:
@@ -34,5 +34,3 @@ notify:
     ticket-issuer: ${CHAT_TICKET_ISSUER}
     mq-enabled: ${NOTIFY_CHAT_MQ_ENABLED}
     mq-exchange: ${NOTIFY_CHAT_MQ_EXCHANGE}
-    user-service-base-url: ${NOTIFY_CHAT_USER_SERVICE_BASE_URL}
-    user-service-timeout-ms: ${NOTIFY_CHAT_USER_SERVICE_TIMEOUT_MS}

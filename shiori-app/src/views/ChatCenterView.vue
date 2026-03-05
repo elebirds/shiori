@@ -90,7 +90,10 @@ onMounted(async () => {
   if (queryConversationId > 0) {
     await openConversationAndStickBottom(queryConversationId)
   } else if (chatStore.conversations.length > 0) {
-    await openConversationAndStickBottom(chatStore.conversations[0].conversationId)
+    const firstConversation = chatStore.conversations[0]
+    if (firstConversation) {
+      await openConversationAndStickBottom(firstConversation.conversationId)
+    }
   }
 })
 
