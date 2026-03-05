@@ -4,7 +4,7 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import ResultState from '@/components/ResultState.vue'
-import { cancelOrderV2, confirmReceiptV2, getOrderDetailV2, getOrderTimelineV2, payOrderV2, type OrderStatus } from '@/api/orderV2'
+import { cancelOrderV2, confirmReceiptV2, getOrderDetailV2, getOrderTimelineV2, type OrderStatus } from '@/api/orderV2'
 import { ApiBizError } from '@/types/result'
 import { useChatStore } from '@/stores/chat'
 
@@ -33,15 +33,6 @@ const timelineQuery = useQuery({
   queryKey: computed(() => ['order-timeline-v2', orderNo.value]),
   queryFn: () => getOrderTimelineV2(orderNo.value, { page: 1, size: 50 }),
   enabled: computed(() => orderNo.value.length > 0),
-})
-
-const payMutation = useMutation({
-  mutationFn: () => payOrderV2(orderNo.value),
-  onSuccess: async () => {
-    await query.refetch()
-    await timelineQuery.refetch()
-    await queryClient.invalidateQueries({ queryKey: ['orders-v2'] })
-  },
 })
 
 const cancelMutation = useMutation({
@@ -98,18 +89,12 @@ function statusClass(status: OrderStatus): string {
   return 'bg-stone-200 text-stone-700'
 }
 
-async function handlePay(): Promise<void> {
-  try {
-    await payMutation.mutateAsync()
-    const conversationId = detail.value?.conversationId || routeConversationId.value
-    if (conversationId && conversationId > 0) {
-      await chatStore.sendTradeStatusCard(conversationId, 'ORDER_PAID', orderNo.value)
-    }
-  } catch (error) {
-    if (error instanceof ApiBizError) {
-      return
-    }
-  }
+function handlePay(): void {
+  const conversationId = detail.value?.conversationId || routeConversationId.value
+  void router.push({
+    path: `/checkout/${orderNo.value}`,
+    query: conversationId && conversationId > 0 ? { conversationId: String(conversationId) } : undefined,
+  })
 }
 
 async function handleCancel(): Promise<void> {
@@ -214,11 +199,10 @@ async function handleConfirm(): Promise<void> {
           <button
             v-if="detail.status === 'UNPAID'"
             type="button"
-            class="rounded-xl bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-70"
-            :disabled="payMutation.isPending.value"
+            class="rounded-xl bg-[var(--shiori-pay-blue-700)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--shiori-pay-blue-800)]"
             @click="handlePay"
           >
-            {{ payMutation.isPending.value ? '支付中...' : '立即支付' }}
+            前往收银台
           </button>
           <button
             v-if="detail.status === 'UNPAID'"

@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, reactive } from 'vue'
+import { useRouter } from 'vue-router'
 
 import ResultState from '@/components/ResultState.vue'
-import { cancelOrderV2, confirmReceiptV2, listMyOrdersV2, payOrderV2, type OrderStatus } from '@/api/orderV2'
+import { cancelOrderV2, confirmReceiptV2, listMyOrdersV2, type OrderStatus } from '@/api/orderV2'
 import { ApiBizError } from '@/types/result'
 import { useChatStore } from '@/stores/chat'
 
+const router = useRouter()
 const queryClient = useQueryClient()
 const chatStore = useChatStore()
 
@@ -18,13 +20,6 @@ const pager = reactive({
 const query = useQuery({
   queryKey: computed(() => ['orders-v2', pager.page, pager.size]),
   queryFn: () => listMyOrdersV2({ page: pager.page, size: pager.size }),
-})
-
-const payMutation = useMutation({
-  mutationFn: (orderNo: string) => payOrderV2(orderNo),
-  onSuccess: async () => {
-    await queryClient.invalidateQueries({ queryKey: ['orders-v2'] })
-  },
 })
 
 const cancelMutation = useMutation({
@@ -42,7 +37,7 @@ const confirmMutation = useMutation({
 })
 
 const actionError = computed(() => {
-  const errors = [payMutation.error.value, cancelMutation.error.value, confirmMutation.error.value]
+  const errors = [cancelMutation.error.value, confirmMutation.error.value]
   const matched = errors.find((item) => item instanceof Error)
   return matched instanceof Error ? matched.message : ''
 })
@@ -84,17 +79,11 @@ function statusClass(status: OrderStatus): string {
   return 'bg-stone-200 text-stone-700'
 }
 
-async function handlePay(orderNo: string, conversationId?: number): Promise<void> {
-  try {
-    await payMutation.mutateAsync(orderNo)
-    if (conversationId && conversationId > 0) {
-      await chatStore.sendTradeStatusCard(conversationId, 'ORDER_PAID', orderNo)
-    }
-  } catch (error) {
-    if (error instanceof ApiBizError) {
-      return
-    }
-  }
+function handlePay(orderNo: string, conversationId?: number): void {
+  void router.push({
+    path: `/checkout/${orderNo}`,
+    query: conversationId && conversationId > 0 ? { conversationId: String(conversationId) } : undefined,
+  })
 }
 
 async function handleCancel(orderNo: string): Promise<void> {
@@ -153,11 +142,10 @@ async function handleConfirm(orderNo: string, conversationId?: number): Promise<
               <button
                 v-if="item.status === 'UNPAID'"
                 type="button"
-                class="rounded-lg bg-stone-900 px-3 py-1.5 text-xs text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-70"
-                :disabled="payMutation.isPending.value"
+                class="rounded-lg bg-[var(--shiori-pay-blue-700)] px-3 py-1.5 text-xs text-white transition hover:bg-[var(--shiori-pay-blue-800)]"
                 @click="handlePay(item.orderNo, item.conversationId)"
               >
-                立即支付
+                去支付
               </button>
 
               <button

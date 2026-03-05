@@ -26,6 +26,7 @@ const secureNav = [
   { path: '/sell', label: '发布' },
   { path: '/my-products', label: '我的商品' },
   { path: '/orders', label: '订单' },
+  { path: '/wallet', label: '钱包' },
   { path: '/seller/orders', label: '卖家工作台' },
   { path: '/chat', label: '聊天' },
 ]
@@ -242,6 +243,13 @@ onBeforeUnmount(() => {
               >
                 {{ notifyStore.unreadCount > 99 ? '99+' : notifyStore.unreadCount }}
               </span>
+            </RouterLink>
+            <RouterLink
+              to="/wallet"
+              class="block px-3 py-2 text-sm text-stone-700 transition hover:bg-stone-100"
+              @click="closeDropdown"
+            >
+              钱包与CDK
             </RouterLink>
             <RouterLink
               to="/chat"
