@@ -12,6 +12,8 @@ services:
       PRODUCT_DB_PASSWORD: ${PRODUCT_DB_PASSWORD:?missing}
       ORDER_DB_USERNAME: ${ORDER_DB_USERNAME:?missing}
       ORDER_DB_PASSWORD: ${ORDER_DB_PASSWORD:?missing}
+      PAYMENT_DB_USERNAME: ${PAYMENT_DB_USERNAME:?missing}
+      PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD:?missing}
       NOTIFY_DB_USERNAME: ${NOTIFY_DB_USERNAME:?missing}
       NOTIFY_DB_PASSWORD: ${NOTIFY_DB_PASSWORD:?missing}
     ports:
@@ -108,6 +110,9 @@ services:
       ORDER_DB_URL: ${ORDER_DB_URL_DOCKER:-jdbc:mysql://mysql:3306/shiori_order?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false}
       ORDER_DB_USERNAME: ${ORDER_DB_USERNAME:?missing}
       ORDER_DB_PASSWORD: ${ORDER_DB_PASSWORD:?missing}
+      PAYMENT_DB_URL: ${PAYMENT_DB_URL_DOCKER:-jdbc:mysql://mysql:3306/shiori_payment?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false}
+      PAYMENT_DB_USERNAME: ${PAYMENT_DB_USERNAME:?missing}
+      PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD:?missing}
       REDIS_HOST: ${REDIS_HOST_DOCKER:-redis}
       REDIS_PORT: ${REDIS_PORT_DOCKER:-6379}
       ORDER_RMQ_HOST: ${ORDER_RMQ_HOST_DOCKER:-rabbitmq}
@@ -133,6 +138,7 @@ services:
       NOTIFY_RABBITMQ_ADDR: amqp://${NOTIFY_RMQ_USERNAME:?missing}:${NOTIFY_RMQ_PASSWORD:?missing}@${NOTIFY_RMQ_HOST_DOCKER:-rabbitmq}:${NOTIFY_RMQ_PORT_DOCKER:-5672}/
       PRODUCT_OSS_ENDPOINT: ${PRODUCT_OSS_ENDPOINT_DOCKER:-http://minio:9000}
       ORDER_PRODUCT_SERVICE_BASE_URL: ${ORDER_PRODUCT_SERVICE_BASE_URL_DOCKER:-http://shiori-product-service}
+      ORDER_PAYMENT_SERVICE_BASE_URL: ${ORDER_PAYMENT_SERVICE_BASE_URL_DOCKER:-http://shiori-payment-service}
       MINIO_PRODUCT_BUCKET: ${MINIO_PRODUCT_BUCKET:-shiori-product}
       MINIO_PRODUCT_ACCESS_KEY: ${MINIO_PRODUCT_ACCESS_KEY:?missing}
       MINIO_PRODUCT_SECRET_KEY: ${MINIO_PRODUCT_SECRET_KEY:?missing}
@@ -173,6 +179,9 @@ services:
       ORDER_DB_URL: ${ORDER_DB_URL_LOCAL:-jdbc:mysql://127.0.0.1:3306/shiori_order?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false}
       ORDER_DB_USERNAME: ${ORDER_DB_USERNAME:?missing}
       ORDER_DB_PASSWORD: ${ORDER_DB_PASSWORD:?missing}
+      PAYMENT_DB_URL: ${PAYMENT_DB_URL_LOCAL:-jdbc:mysql://127.0.0.1:3306/shiori_payment?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false}
+      PAYMENT_DB_USERNAME: ${PAYMENT_DB_USERNAME:?missing}
+      PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD:?missing}
       REDIS_HOST: ${REDIS_HOST_LOCAL:-127.0.0.1}
       REDIS_PORT: ${REDIS_PORT_LOCAL:-6379}
       ORDER_RMQ_HOST: ${ORDER_RMQ_HOST_LOCAL:-127.0.0.1}
@@ -198,6 +207,7 @@ services:
       NOTIFY_RABBITMQ_ADDR: amqp://${NOTIFY_RMQ_USERNAME:?missing}:${NOTIFY_RMQ_PASSWORD:?missing}@${NOTIFY_RMQ_HOST_LOCAL:-127.0.0.1}:${NOTIFY_RMQ_PORT_LOCAL:-5672}/
       PRODUCT_OSS_ENDPOINT: ${PRODUCT_OSS_ENDPOINT_LOCAL:-http://127.0.0.1:9000}
       ORDER_PRODUCT_SERVICE_BASE_URL: ${ORDER_PRODUCT_SERVICE_BASE_URL_LOCAL:-http://shiori-product-service}
+      ORDER_PAYMENT_SERVICE_BASE_URL: ${ORDER_PAYMENT_SERVICE_BASE_URL_LOCAL:-http://127.0.0.1:8084}
       MINIO_PRODUCT_BUCKET: ${MINIO_PRODUCT_BUCKET:-shiori-product}
       MINIO_PRODUCT_ACCESS_KEY: ${MINIO_PRODUCT_ACCESS_KEY:?missing}
       MINIO_PRODUCT_SECRET_KEY: ${MINIO_PRODUCT_SECRET_KEY:?missing}
@@ -359,6 +369,7 @@ services:
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
       ORDER_PRODUCT_SERVICE_BASE_URL: http://shiori-product-service
+      ORDER_PAYMENT_SERVICE_BASE_URL: http://shiori-payment-service
     depends_on:
       mysql:
         condition: service_started
@@ -374,8 +385,37 @@ services:
         condition: service_completed_successfully
       shiori-product-service:
         condition: service_started
+      shiori-payment-service:
+        condition: service_started
     ports:
       - "8083:8083"
+    restart: unless-stopped
+    networks:
+      - shiori-net
+
+  shiori-payment-service:
+    profiles: ["app"]
+    build:
+      context: ..
+      dockerfile: shiori-java/shiori-payment-service/Dockerfile
+    container_name: shiori-payment-service
+    environment:
+      NACOS_ADDR: nacos:8848
+      NACOS_USERNAME: ${NACOS_IMPORT_USERNAME:?missing}
+      NACOS_PASSWORD: ${NACOS_IMPORT_PASSWORD:?missing}
+      NACOS_CONFIG_GROUP: ${NACOS_CONFIG_GROUP:-SHIORI_DEV_DOCKER}
+      SHIORI_ENV: ${SHIORI_ENV:-dev}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+    depends_on:
+      mysql:
+        condition: service_started
+      nacos:
+        condition: service_started
+      nacos-config-init:
+        condition: service_completed_successfully
+    ports:
+      - "8084:8084"
     restart: unless-stopped
     networks:
       - shiori-net
@@ -406,6 +446,8 @@ services:
       shiori-product-service:
         condition: service_started
       shiori-order-service:
+        condition: service_started
+      shiori-payment-service:
         condition: service_started
     ports:
       - "8080:8080"
