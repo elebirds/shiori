@@ -358,14 +358,6 @@ async function handleConsultSeller(): Promise<void> {
 
 <template>
   <section class="space-y-4">
-    <button
-      type="button"
-      class="rounded-lg border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
-      @click="router.back()"
-    >
-      返回列表
-    </button>
-
     <ResultState :loading="query.isLoading.value" :error="errorMessage" :empty="!query.isLoading.value && !product" empty-text="商品不存在或已下架">
       <div v-if="product" class="space-y-4">
         <article class="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
@@ -480,14 +472,6 @@ async function handleConsultSeller(): Promise<void> {
               @click="handleConsultSeller"
             >
               {{ creatingChat ? '咨询中...' : '咨询卖家' }}
-            </button>
-
-            <button
-              type="button"
-              class="w-full rounded-xl border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
-              @click="router.push('/cart')"
-            >
-              查看购物车
             </button>
 
             <p v-if="actionError" class="text-sm text-rose-600">{{ actionError }}</p>

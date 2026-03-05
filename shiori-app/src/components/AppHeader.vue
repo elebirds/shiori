@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import { getAccessToken } from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
@@ -8,6 +8,7 @@ import { useChatStore } from '@/stores/chat'
 import { useNotifyStore } from '@/stores/notify'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 const notifyStore = useNotifyStore()
 const chatStore = useChatStore()
@@ -25,7 +26,6 @@ const commonNav = [
 const secureNav = [
   { path: '/sell', label: '发布' },
   { path: '/my-products', label: '我的商品' },
-  { path: '/cart', label: '购物车' },
   { path: '/orders', label: '订单' },
   { path: '/wallet', label: '钱包' },
   { path: '/seller/orders', label: '卖家工作台' },
@@ -41,6 +41,7 @@ const navItems = computed(() => {
 
 const username = computed(() => authStore.user?.username || '游客')
 const profileNickname = computed(() => authStore.profile?.nickname || username.value)
+const showBackButton = computed(() => route.name === 'product-detail')
 
 async function handleLogout(): Promise<void> {
   if (busy.value) {
@@ -151,7 +152,18 @@ onBeforeUnmount(() => {
 <template>
   <header class="sticky top-0 z-20 border-b border-stone-200/70 bg-white/80 backdrop-blur-xl">
     <div class="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-      <RouterLink to="/products" class="font-display text-xl tracking-wide text-stone-900">Shiori</RouterLink>
+      <div class="flex items-center gap-2">
+        <button
+          v-if="showBackButton"
+          type="button"
+          class="flex h-8 w-8 items-center justify-center rounded-lg border border-stone-300 text-sm text-stone-700 transition hover:bg-stone-100"
+          aria-label="返回"
+          @click="router.back()"
+        >
+          <span aria-hidden="true">&lt;</span>
+        </button>
+        <RouterLink to="/products" class="font-display text-xl tracking-wide text-stone-900">Shiori</RouterLink>
+      </div>
 
       <nav class="flex items-center gap-1">
         <RouterLink
@@ -181,12 +193,22 @@ onBeforeUnmount(() => {
         </RouterLink>
 
         <div v-else ref="menuRef" class="relative flex items-center gap-2">
-          <span class="relative h-8 w-8 overflow-hidden rounded-full border border-stone-200 bg-stone-100">
-            <img v-if="avatarPreviewUrl" :src="avatarPreviewUrl" alt="avatar" class="h-full w-full object-cover" />
-            <span v-else class="flex h-full w-full items-center justify-center text-xs text-stone-500">头像</span>
+          <RouterLink
+            to="/cart"
+            class="rounded-lg border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
+            active-class="bg-stone-100 text-stone-900"
+          >
+            购物车
+          </RouterLink>
+
+          <span class="relative h-8 w-8">
+            <span class="flex h-8 w-8 overflow-hidden rounded-full border border-stone-200 bg-stone-100">
+              <img v-if="avatarPreviewUrl" :src="avatarPreviewUrl" alt="avatar" class="h-full w-full object-cover" />
+              <span v-else class="flex h-full w-full items-center justify-center text-xs text-stone-500">头像</span>
+            </span>
             <span
               v-if="notifyStore.unreadCount > 0"
-              class="absolute -right-1 -top-1 rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white"
+              class="absolute -right-1 -top-1 z-10 rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white"
             >
               {{ notifyStore.unreadCount > 99 ? '99+' : notifyStore.unreadCount }}
             </span>
@@ -244,13 +266,6 @@ onBeforeUnmount(() => {
               >
                 {{ notifyStore.unreadCount > 99 ? '99+' : notifyStore.unreadCount }}
               </span>
-            </RouterLink>
-            <RouterLink
-              to="/cart"
-              class="block px-3 py-2 text-sm text-stone-700 transition hover:bg-stone-100"
-              @click="closeDropdown"
-            >
-              购物车
             </RouterLink>
             <RouterLink
               to="/wallet"

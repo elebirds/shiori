@@ -596,8 +596,20 @@ function jumpToLatest(): void {
               :disabled="!activeConversation || !draft.trim()"
               @click="submitMessage"
             >
-              <span aria-hidden="true">-&gt;</span>
-              <span class="sr-only">发送</span>
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="h-4 w-4"
+              >
+                <path d="M22 2L11 13" />
+                <path d="M22 2L15 22L11 13L2 9L22 2Z" />
+              </svg>
+              <span class="sr-only">提交消息</span>
             </button>
           </div>
         </footer>
