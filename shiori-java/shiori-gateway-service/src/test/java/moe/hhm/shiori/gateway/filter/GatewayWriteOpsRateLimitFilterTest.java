@@ -48,15 +48,15 @@ class GatewayWriteOpsRateLimitFilterTest {
         );
         CapturingChain chain = new CapturingChain();
 
-        MockServerWebExchange first = exchange(HttpMethod.POST, "/api/order/orders/O001/pay", "1001", null);
+        MockServerWebExchange first = exchange(HttpMethod.POST, "/api/v2/order/orders/O001/pay", "1001", null);
         filter.filter(first, chain).block();
 
-        MockServerWebExchange second = exchange(HttpMethod.POST, "/api/order/orders/O001/pay", "1001", null);
+        MockServerWebExchange second = exchange(HttpMethod.POST, "/api/v2/order/orders/O001/pay", "1001", null);
         assertThatThrownBy(() -> filter.filter(second, chain).block())
                 .isInstanceOf(BizException.class)
                 .matches(ex -> ((BizException) ex).getErrorCode().code() == 20004);
 
-        MockServerWebExchange third = exchange(HttpMethod.POST, "/api/order/orders/O001/pay", "1002", null);
+        MockServerWebExchange third = exchange(HttpMethod.POST, "/api/v2/order/orders/O001/pay", "1002", null);
         filter.filter(third, chain).block();
         assertThat(chain.called).isTrue();
     }

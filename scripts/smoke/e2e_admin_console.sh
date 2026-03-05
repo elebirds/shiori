@@ -231,16 +231,16 @@ create_product_payload="$(jq -nc \
   }')"
 seller_login_raw="$(login_user "${seller_username}")"
 seller_token="${seller_login_raw%%|*}"
-product_a_resp="$(call_api POST "/api/product/products" "${seller_token}" "${create_product_payload}")"
+product_a_resp="$(call_api POST "/api/v2/product/products" "${seller_token}" "${create_product_payload}")"
 product_a_id="$(extract_required "${product_a_resp}" '.data.productId | tostring' "productA.id")"
-call_api POST "/api/product/products/${product_a_id}/publish" "${seller_token}" "" >/dev/null
+call_api POST "/api/v2/product/products/${product_a_id}/publish" "${seller_token}" "" >/dev/null
 
 log "admin 查询商品并执行强制下架..."
-admin_product_page="$(call_api GET "/api/admin/products?page=1&size=10&ownerUserId=${seller_user_id}" "${admin_token}" "")"
+admin_product_page="$(call_api GET "/api/v2/admin/products?page=1&size=10&ownerUserId=${seller_user_id}" "${admin_token}" "")"
 contains_product_a="$(echo "${admin_product_page}" | jq -r --arg pid "${product_a_id}" '.data.items | map((.productId|tostring)==$pid) | any')"
 [[ "${contains_product_a}" == "true" ]] || fail "管理员商品列表未包含目标商品 productId=${product_a_id}"
-call_api POST "/api/admin/products/${product_a_id}/off-shelf" "${admin_token}" '{"reason":"运营下架烟测"}' >/dev/null
-admin_product_detail="$(call_api GET "/api/admin/products/${product_a_id}" "${admin_token}" "")"
+call_api POST "/api/v2/admin/products/${product_a_id}/off-shelf" "${admin_token}" '{"reason":"运营下架烟测"}' >/dev/null
+admin_product_detail="$(call_api GET "/api/v2/admin/products/${product_a_id}" "${admin_token}" "")"
 product_a_status="$(extract_required "${admin_product_detail}" '.data.status' "productA.status")"
 [[ "${product_a_status}" == "OFF_SHELF" ]] || fail "商品下架状态异常，expect=OFF_SHELF actual=${product_a_status}"
 
@@ -254,10 +254,10 @@ product_b_payload="$(jq -nc \
     coverObjectKey:null,
     skus:[{skuName:"普通版",specJson:"{\"edition\":\"normal\"}",priceCent:1999,stock:15}]
   }')"
-product_b_resp="$(call_api POST "/api/product/products" "${seller_token}" "${product_b_payload}")"
+product_b_resp="$(call_api POST "/api/v2/product/products" "${seller_token}" "${product_b_payload}")"
 product_b_id="$(extract_required "${product_b_resp}" '.data.productId | tostring' "productB.id")"
-call_api POST "/api/product/products/${product_b_id}/publish" "${seller_token}" "" >/dev/null
-product_b_detail="$(call_api GET "/api/product/products/${product_b_id}" "" "")"
+call_api POST "/api/v2/product/products/${product_b_id}/publish" "${seller_token}" "" >/dev/null
+product_b_detail="$(call_api GET "/api/v2/product/products/${product_b_id}" "" "")"
 product_b_sku_id="$(extract_required "${product_b_detail}" '.data.skus[0].skuId | tostring' "productB.skuId")"
 
 log "buyer 下单（UNPAID）并由 admin 取消..."
@@ -266,17 +266,17 @@ buyer_token="${buyer_login_raw%%|*}"
 order_payload="$(jq -nc --argjson productId "${product_b_id}" --argjson skuId "${product_b_sku_id}" \
   '{items:[{productId:$productId,skuId:$skuId,quantity:1}]}')"
 idem_key="admin-smoke-${id_suffix}"
-order_create_resp="$(call_api POST "/api/order/orders" "${buyer_token}" "${order_payload}" -H "Idempotency-Key: ${idem_key}")"
+order_create_resp="$(call_api POST "/api/v2/order/orders" "${buyer_token}" "${order_payload}" -H "Idempotency-Key: ${idem_key}")"
 order_no="$(extract_required "${order_create_resp}" '.data.orderNo' "orderNo")"
 
-admin_order_page="$(call_api GET "/api/admin/orders?page=1&size=10&orderNo=${order_no}" "${admin_token}" "")"
+admin_order_page="$(call_api GET "/api/v2/admin/orders?page=1&size=10&orderNo=${order_no}" "${admin_token}" "")"
 contains_order="$(echo "${admin_order_page}" | jq -r --arg orderNo "${order_no}" '.data.items | map(.orderNo==$orderNo) | any')"
 [[ "${contains_order}" == "true" ]] || fail "管理员订单列表未包含目标订单 orderNo=${order_no}"
 
-admin_cancel_resp="$(call_api POST "/api/admin/orders/${order_no}/cancel" "${admin_token}" '{"reason":"运营取消烟测"}')"
+admin_cancel_resp="$(call_api POST "/api/v2/admin/orders/${order_no}/cancel" "${admin_token}" '{"reason":"运营取消烟测"}')"
 cancel_status="$(extract_required "${admin_cancel_resp}" '.data.status' "order.cancel.status")"
 [[ "${cancel_status}" == "CANCELED" ]] || fail "管理员取消订单状态异常，expect=CANCELED actual=${cancel_status}"
-buyer_order_detail="$(call_api GET "/api/order/orders/${order_no}" "${buyer_token}" "")"
+buyer_order_detail="$(call_api GET "/api/v2/order/orders/${order_no}" "${buyer_token}" "")"
 buyer_order_status="$(extract_required "${buyer_order_detail}" '.data.status' "buyer.order.status")"
 [[ "${buyer_order_status}" == "CANCELED" ]] || fail "买家订单状态异常，expect=CANCELED actual=${buyer_order_status}"
 
@@ -290,32 +290,32 @@ product_c_payload="$(jq -nc \
     coverObjectKey:null,
     skus:[{skuName:"履约版",specJson:"{\"edition\":\"ship\"}",priceCent:1699,stock:12}]
   }')"
-product_c_resp="$(call_api POST "/api/product/products" "${seller_token}" "${product_c_payload}")"
+product_c_resp="$(call_api POST "/api/v2/product/products" "${seller_token}" "${product_c_payload}")"
 product_c_id="$(extract_required "${product_c_resp}" '.data.productId | tostring' "productC.id")"
-call_api POST "/api/product/products/${product_c_id}/publish" "${seller_token}" "" >/dev/null
-product_c_detail="$(call_api GET "/api/product/products/${product_c_id}" "" "")"
+call_api POST "/api/v2/product/products/${product_c_id}/publish" "${seller_token}" "" >/dev/null
+product_c_detail="$(call_api GET "/api/v2/product/products/${product_c_id}" "" "")"
 product_c_sku_id="$(extract_required "${product_c_detail}" '.data.skus[0].skuId | tostring' "productC.skuId")"
 
 ship_order_payload="$(jq -nc --argjson productId "${product_c_id}" --argjson skuId "${product_c_sku_id}" \
   '{items:[{productId:$productId,skuId:$skuId,quantity:1}]}')"
 ship_idem_key="admin-ship-${id_suffix}"
-ship_order_create_resp="$(call_api POST "/api/order/orders" "${buyer_token}" "${ship_order_payload}" -H "Idempotency-Key: ${ship_idem_key}")"
+ship_order_create_resp="$(call_api POST "/api/v2/order/orders" "${buyer_token}" "${ship_order_payload}" -H "Idempotency-Key: ${ship_idem_key}")"
 ship_order_no="$(extract_required "${ship_order_create_resp}" '.data.orderNo' "ship.orderNo")"
 
-pay_resp="$(call_api POST "/api/order/orders/${ship_order_no}/pay" "${buyer_token}" "{\"paymentNo\":\"admin-pay-${id_suffix}\"}" -H "Idempotency-Key: admin-pay-idem-${id_suffix}")"
+pay_resp="$(call_api POST "/api/v2/order/orders/${ship_order_no}/pay" "${buyer_token}" "" -H "Idempotency-Key: admin-pay-idem-${id_suffix}")"
 [[ "$(extract_required "${pay_resp}" '.data.status' "ship.pay.status")" == "PAID" ]] || fail "支付后状态异常"
 
-deliver_resp="$(call_api POST "/api/order/seller/orders/${ship_order_no}/deliver" "${seller_token}" '{"reason":"卖家发货烟测"}')"
+deliver_resp="$(call_api POST "/api/v2/order/seller/orders/${ship_order_no}/deliver" "${seller_token}" '{"reason":"卖家发货烟测"}')"
 [[ "$(extract_required "${deliver_resp}" '.data.status' "ship.deliver.status")" == "DELIVERING" ]] || fail "发货状态异常"
 
-finish_resp="$(call_api POST "/api/order/seller/orders/${ship_order_no}/finish" "${seller_token}" '{"reason":"卖家完成烟测"}')"
+finish_resp="$(call_api POST "/api/v2/order/seller/orders/${ship_order_no}/finish" "${seller_token}" '{"reason":"卖家完成烟测"}')"
 [[ "$(extract_required "${finish_resp}" '.data.status' "ship.finish.status")" == "FINISHED" ]] || fail "完结状态异常"
 
-ship_order_detail="$(call_api GET "/api/order/orders/${ship_order_no}" "${buyer_token}" "")"
+ship_order_detail="$(call_api GET "/api/v2/order/orders/${ship_order_no}" "${buyer_token}" "")"
 ship_order_status="$(extract_required "${ship_order_detail}" '.data.status' "ship.order.status")"
 [[ "${ship_order_status}" == "FINISHED" ]] || fail "订单闭环状态异常，expect=FINISHED actual=${ship_order_status}"
 
-status_audit_resp="$(call_api GET "/api/admin/orders/${ship_order_no}/status-audits?page=1&size=20" "${admin_token}" "")"
+status_audit_resp="$(call_api GET "/api/v2/admin/orders/${ship_order_no}/status-audits?page=1&size=20" "${admin_token}" "")"
 has_paid_to_delivering="$(echo "${status_audit_resp}" | jq -r '.data.items | map((.fromStatus=="PAID") and (.toStatus=="DELIVERING")) | any')"
 has_delivering_to_finished="$(echo "${status_audit_resp}" | jq -r '.data.items | map((.fromStatus=="DELIVERING") and (.toStatus=="FINISHED")) | any')"
 [[ "${has_paid_to_delivering}" == "true" ]] || fail "状态审计缺少 PAID->DELIVERING"

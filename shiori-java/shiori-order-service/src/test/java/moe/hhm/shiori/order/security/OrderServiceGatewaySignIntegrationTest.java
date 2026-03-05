@@ -38,7 +38,7 @@ class OrderServiceGatewaySignIntegrationTest {
 
     @Test
     void shouldReturn401WhenSignHeadersMissing() throws Exception {
-        mockMvc.perform(get("/api/order/demo"))
+        mockMvc.perform(get("/api/v2/order/demo"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value(10003));
     }
@@ -49,10 +49,10 @@ class OrderServiceGatewaySignIntegrationTest {
         String roles = "ROLE_USER";
         String ts = String.valueOf(System.currentTimeMillis() - 600_000);
         String nonce = "nonce-expired";
-        String sign = sign("GET", "/api/order/demo", null, userId, roles, ts, nonce);
+        String sign = sign("GET", "/api/v2/order/demo", null, userId, roles, ts, nonce);
         HttpHeaders headers = signedHeaders(userId, roles, ts, nonce, sign);
 
-        mockMvc.perform(get("/api/order/demo").headers(headers))
+        mockMvc.perform(get("/api/v2/order/demo").headers(headers))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value(10003));
     }
@@ -91,10 +91,10 @@ class OrderServiceGatewaySignIntegrationTest {
         String roles = "ROLE_USER";
         String ts = String.valueOf(System.currentTimeMillis());
         String nonce = "nonce-valid";
-        String sign = sign("GET", "/api/order/demo", null, userId, roles, ts, nonce);
+        String sign = sign("GET", "/api/v2/order/demo", null, userId, roles, ts, nonce);
         HttpHeaders headers = signedHeaders(userId, roles, ts, nonce, sign);
 
-        mockMvc.perform(get("/api/order/demo").headers(headers))
+        mockMvc.perform(get("/api/v2/order/demo").headers(headers))
                 .andExpect(result -> assertThat(result.getResponse().getStatus()).isNotIn(401, 403));
     }
 
@@ -104,12 +104,12 @@ class OrderServiceGatewaySignIntegrationTest {
         String roles = "ROLE_USER";
         String ts = String.valueOf(System.currentTimeMillis());
         String nonce = "nonce-replay";
-        String sign = sign("GET", "/api/order/demo", null, userId, roles, ts, nonce);
+        String sign = sign("GET", "/api/v2/order/demo", null, userId, roles, ts, nonce);
         HttpHeaders headers = signedHeaders(userId, roles, ts, nonce, sign);
 
-        mockMvc.perform(get("/api/order/demo").headers(headers))
+        mockMvc.perform(get("/api/v2/order/demo").headers(headers))
                 .andExpect(result -> assertThat(result.getResponse().getStatus()).isNotIn(401, 403));
-        mockMvc.perform(get("/api/order/demo").headers(headers))
+        mockMvc.perform(get("/api/v2/order/demo").headers(headers))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value(10003));
     }

@@ -49,7 +49,7 @@ k6 run k6-chat-conversation.js
 
 1. `K6_CHAT_WS_URL`：聊天 WS 地址，默认 `ws://localhost:8090/ws`
 2. `K6_CHAT_ACCESS_TOKEN`：登录 access token（必填）
-3. `K6_CHAT_TICKET`：`/api/product/chat/ticket` 签发的 chat ticket（必填）
+3. `K6_CHAT_TICKET`：`/api/v2/product/chat/ticket` 签发的 chat ticket（必填）
 4. `K6_CHAT_CONVERSATION_ID`：可选；不填则使用 `join_ack` 返回值
 5. `K6_CHAT_ITERATIONS`：每个 VU 发送次数，默认 `1`
 

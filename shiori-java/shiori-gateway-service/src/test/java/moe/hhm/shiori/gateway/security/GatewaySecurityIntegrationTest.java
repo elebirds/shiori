@@ -160,7 +160,7 @@ class GatewaySecurityIntegrationTest {
     @Test
     void shouldAllowAnonymousOnProductGetPath() {
         HttpStatusCode status = webTestClient().get()
-                .uri("/api/product/products")
+                .uri("/api/v2/product/products")
                 .exchange()
                 .returnResult(String.class)
                 .getStatus();

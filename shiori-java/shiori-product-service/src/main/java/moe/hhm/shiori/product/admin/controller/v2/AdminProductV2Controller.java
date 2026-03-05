@@ -15,7 +15,6 @@ import moe.hhm.shiori.product.dto.v2.ProductV2DetailResponse;
 import moe.hhm.shiori.product.dto.v2.ProductV2PageResponse;
 import moe.hhm.shiori.product.security.CurrentUserSupport;
 import moe.hhm.shiori.product.service.ProductV2Service;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,7 +27,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Validated
 @RestController
-@ConditionalOnProperty(prefix = "feature.api-v2", name = "enabled", havingValue = "true", matchIfMissing = true)
 @RequestMapping("/api/v2/admin/products")
 public class AdminProductV2Controller {
 

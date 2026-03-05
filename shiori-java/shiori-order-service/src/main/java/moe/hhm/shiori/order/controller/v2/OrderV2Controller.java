@@ -20,7 +20,6 @@ import moe.hhm.shiori.order.dto.v2.OrderTimelineResponse;
 import moe.hhm.shiori.order.security.CurrentUserSupport;
 import moe.hhm.shiori.order.service.OrderCommandService;
 import moe.hhm.shiori.order.service.OrderService;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.util.StringUtils;
@@ -37,7 +36,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Validated
 @RestController
-@ConditionalOnProperty(prefix = "feature.api-v2", name = "enabled", havingValue = "true", matchIfMissing = true)
 @RequestMapping("/api/v2/order/orders")
 public class OrderV2Controller {
 

@@ -65,7 +65,7 @@ export interface ChatSummaryResponse {
 }
 
 export function issueChatTicket(listingId: number): Promise<ChatTicketResponse> {
-  return httpPost<ChatTicketResponse>(`/api/product/chat/ticket?listingId=${encodeURIComponent(String(listingId))}`)
+  return httpPost<ChatTicketResponse>(`/api/v2/product/chat/ticket?listingId=${encodeURIComponent(String(listingId))}`)
 }
 
 export function startConversation(payload: ChatStartConversationRequest): Promise<ChatStartConversationResponse> {

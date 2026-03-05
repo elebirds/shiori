@@ -173,7 +173,7 @@ async function prepareData(request: APIRequestContext): Promise<PreparedData> {
   const orderCreate = await callApi<{ orderNo: string }>(
     request,
     'POST',
-    '/api/order/orders',
+    '/api/v2/order/orders',
     buyerLogin.accessToken,
     {
       items: [{ productId, skuId, quantity: 1 }],
@@ -297,7 +297,7 @@ async function fetchAdminOrderStatus(
   const detail = await callApi<{ status: string }>(
     request,
     'GET',
-    `/api/admin/orders/${orderNo}`,
+    `/api/v2/admin/orders/${orderNo}`,
     admin.accessToken,
     undefined,
   )

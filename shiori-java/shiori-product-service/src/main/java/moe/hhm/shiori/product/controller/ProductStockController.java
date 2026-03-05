@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/product/internal/stock")
+@RequestMapping("/api/v2/product/internal/stock")
 public class ProductStockController {
 
     private final ProductStockService productStockService;

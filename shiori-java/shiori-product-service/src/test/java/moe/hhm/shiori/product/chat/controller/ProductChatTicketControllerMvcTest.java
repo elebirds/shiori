@@ -58,7 +58,7 @@ class ProductChatTicketControllerMvcTest {
                 "jti-1"
         ));
 
-        mockMvc.perform(post("/api/product/chat/ticket")
+        mockMvc.perform(post("/api/v2/product/chat/ticket")
                         .param("listingId", "101")
                         .principal(new UsernamePasswordAuthenticationToken(
                                 "1001", "N/A", List.of(new SimpleGrantedAuthority("ROLE_USER"))
@@ -75,7 +75,7 @@ class ProductChatTicketControllerMvcTest {
         when(chatTicketService.issueTicket(eq(101L), eq(1001L)))
                 .thenThrow(new BizException(ProductErrorCode.PRODUCT_NOT_ON_SALE, HttpStatus.BAD_REQUEST));
 
-        mockMvc.perform(post("/api/product/chat/ticket")
+        mockMvc.perform(post("/api/v2/product/chat/ticket")
                         .param("listingId", "101")
                         .principal(new UsernamePasswordAuthenticationToken(
                                 "1001", "N/A", List.of(new SimpleGrantedAuthority("ROLE_USER"))
@@ -89,7 +89,7 @@ class ProductChatTicketControllerMvcTest {
         when(chatTicketService.issueTicket(eq(101L), eq(1001L)))
                 .thenThrow(new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST));
 
-        mockMvc.perform(post("/api/product/chat/ticket")
+        mockMvc.perform(post("/api/v2/product/chat/ticket")
                         .param("listingId", "101")
                         .principal(new UsernamePasswordAuthenticationToken(
                                 "1001", "N/A", List.of(new SimpleGrantedAuthority("ROLE_USER"))

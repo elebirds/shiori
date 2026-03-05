@@ -55,7 +55,7 @@ class ProductMediaControllerMvcTest {
                         Map.of("Content-Type", "image/jpeg")
                 ));
 
-        mockMvc.perform(post("/api/product/media/presign-upload")
+        mockMvc.perform(post("/api/v2/product/media/presign-upload")
                         .principal(new UsernamePasswordAuthenticationToken(
                                 "1001", "N/A", java.util.List.of(new SimpleGrantedAuthority("ROLE_USER"))
                         ))
@@ -76,7 +76,7 @@ class ProductMediaControllerMvcTest {
         when(ossObjectService.presignUpload(1001L, "cover.exe", "application/octet-stream"))
                 .thenThrow(new BizException(ProductErrorCode.INVALID_MEDIA_OBJECT_KEY, HttpStatus.BAD_REQUEST));
 
-        mockMvc.perform(post("/api/product/media/presign-upload")
+        mockMvc.perform(post("/api/v2/product/media/presign-upload")
                         .principal(new UsernamePasswordAuthenticationToken(
                                 "1001", "N/A", java.util.List.of(new SimpleGrantedAuthority("ROLE_USER"))
                         ))

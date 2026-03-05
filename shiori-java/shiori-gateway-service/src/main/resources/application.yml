@@ -38,34 +38,18 @@ spring:
               uri: lb://shiori-user-service
               predicates:
                 - Path=/api/admin/roles/**
-            - id: product-service
-              uri: lb://shiori-product-service
-              predicates:
-                - Path=/api/product/**
             - id: product-service-v2
               uri: lb://shiori-product-service
               predicates:
                 - Path=/api/v2/product/**
-            - id: admin-product-service
-              uri: lb://shiori-product-service
-              predicates:
-                - Path=/api/admin/products/**
             - id: admin-product-service-v2
               uri: lb://shiori-product-service
               predicates:
                 - Path=/api/v2/admin/products/**
-            - id: order-service
-              uri: lb://shiori-order-service
-              predicates:
-                - Path=/api/order/**
             - id: order-service-v2
               uri: lb://shiori-order-service
               predicates:
                 - Path=/api/v2/order/**
-            - id: admin-order-service
-              uri: lb://shiori-order-service
-              predicates:
-                - Path=/api/admin/orders/**
             - id: admin-order-service-v2
               uri: lb://shiori-order-service
               predicates:
@@ -107,7 +91,6 @@ security:
       - /api/user/auth/refresh
       - /api/user/auth/logout
     anonymous-get-paths:
-      - /api/product/**
       - /api/v2/product/**
       - /api/user/profiles/**
       - /api/user/media/avatar/**
@@ -146,14 +129,8 @@ security:
         path-pattern: /ws
         permission-code: chat.read
       - method: POST
-        path-pattern: /api/order/orders
-        permission-code: order.create
-      - method: POST
         path-pattern: /api/v2/order/orders
         permission-code: order.create
-      - method: POST
-        path-pattern: /api/order/orders/*/pay
-        permission-code: order.pay
       - method: POST
         path-pattern: /api/v2/order/orders/*/pay
         permission-code: order.pay
@@ -167,34 +144,16 @@ security:
         path-pattern: /api/v2/admin/payments/**
         permission-code: payment.cdk.manage
       - method: POST
-        path-pattern: /api/order/orders/*/cancel
-        permission-code: order.cancel
-      - method: POST
         path-pattern: /api/v2/order/orders/*/cancel
         permission-code: order.cancel
       - method: POST
         path-pattern: /api/v2/order/orders/*/confirm-receipt
         permission-code: order.confirm_receipt
       - method: POST
-        path-pattern: /api/order/seller/orders/*/deliver
-        permission-code: order.deliver
-      - method: POST
-        path-pattern: /api/order/seller/orders/*/finish
-        permission-code: order.finish
-      - method: POST
         path-pattern: /api/v2/order/seller/orders/*/deliver
         permission-code: order.deliver
       - method: POST
         path-pattern: /api/v2/order/seller/orders/*/finish
-        permission-code: order.finish
-      - method: POST
-        path-pattern: /api/admin/orders/*/cancel
-        permission-code: order.cancel
-      - method: POST
-        path-pattern: /api/admin/orders/*/deliver
-        permission-code: order.deliver
-      - method: POST
-        path-pattern: /api/admin/orders/*/finish
         permission-code: order.finish
       - method: POST
         path-pattern: /api/v2/admin/orders/*/cancel
@@ -206,31 +165,16 @@ security:
         path-pattern: /api/v2/admin/orders/*/finish
         permission-code: order.finish
       - method: POST
-        path-pattern: /api/product/products
-        permission-code: product.create
-      - method: POST
         path-pattern: /api/v2/product/products
         permission-code: product.create
-      - method: PUT
-        path-pattern: /api/product/products/*
-        permission-code: product.update
       - method: PUT
         path-pattern: /api/v2/product/products/*
         permission-code: product.update
       - method: POST
-        path-pattern: /api/product/products/*/publish
-        permission-code: product.publish
-      - method: POST
         path-pattern: /api/v2/product/products/*/publish
         permission-code: product.publish
       - method: POST
-        path-pattern: /api/product/products/*/off-shelf
-        permission-code: product.off_shelf
-      - method: POST
         path-pattern: /api/v2/product/products/*/off-shelf
-        permission-code: product.off_shelf
-      - method: POST
-        path-pattern: /api/admin/products/*/off-shelf
         permission-code: product.off_shelf
       - method: POST
         path-pattern: /api/v2/admin/products/*/off-shelf
@@ -239,7 +183,7 @@ security:
         path-pattern: /api/v2/admin/products/batch-off-shelf
         permission-code: product.off_shelf
       - method: POST
-        path-pattern: /api/product/internal/stock/**
+        path-pattern: /api/v2/product/internal/stock/**
         permission-code: product.stock.adjust
       - method: '*'
         path-pattern: /api/v2/admin/users/*/permission-overrides/**

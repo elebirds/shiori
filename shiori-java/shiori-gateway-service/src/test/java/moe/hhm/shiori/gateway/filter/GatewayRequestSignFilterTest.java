@@ -21,7 +21,7 @@ class GatewayRequestSignFilterTest {
         properties.getGatewaySign().setInternalSecret("test-internal-sign-secret-32-bytes-0001");
         GatewayRequestSignFilter filter = new GatewayRequestSignFilter(properties);
 
-        MockServerHttpRequest request = MockServerHttpRequest.get("/api/order/detail?id=o1")
+        MockServerHttpRequest request = MockServerHttpRequest.get("/api/v2/order/detail?id=o1")
                 .header(GatewaySignVerifyFilter.HEADER_USER_ID, "u1001")
                 .header(GatewaySignVerifyFilter.HEADER_USER_ROLES, "ROLE_USER")
                 .header(GatewaySignVerifyFilter.HEADER_GATEWAY_TS, "1")
@@ -43,7 +43,7 @@ class GatewayRequestSignFilterTest {
 
         String canonical = GatewaySignUtils.buildCanonicalString(
                 "GET",
-                "/api/order/detail",
+                "/api/v2/order/detail",
                 "id=o1",
                 "u1001",
                 "ROLE_USER",

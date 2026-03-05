@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/product/media")
+@RequestMapping("/api/v2/product/media")
 public class ProductMediaController {
 
     private final OssObjectService ossObjectService;

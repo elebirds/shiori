@@ -257,7 +257,7 @@ export function setup() {
   );
 
   const productCreate = mustOk(
-    apiRequest('POST', '/api/product/products', sellerLogin.accessToken, {
+    apiRequest('POST', '/api/v2/product/products', sellerLogin.accessToken, {
       title: `Perf Chat 商品 ${perfPrefix}`,
       description: 'k6 chat conversation baseline',
       coverObjectKey: null,
@@ -268,12 +268,12 @@ export function setup() {
     'create chat product'
   );
   mustOk(
-    apiRequest('POST', `/api/product/products/${productCreate.productId}/publish`, sellerLogin.accessToken, null),
+    apiRequest('POST', `/api/v2/product/products/${productCreate.productId}/publish`, sellerLogin.accessToken, null),
     'publish chat product'
   );
 
   const ticket = mustOk(
-    apiRequest('POST', `/api/product/chat/ticket?listingId=${productCreate.productId}`, buyerLogin.accessToken, null),
+    apiRequest('POST', `/api/v2/product/chat/ticket?listingId=${productCreate.productId}`, buyerLogin.accessToken, null),
     'issue chat ticket'
   );
 

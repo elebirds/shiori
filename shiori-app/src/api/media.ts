@@ -13,7 +13,7 @@ export interface PresignUploadResponse {
 }
 
 export function presignProductUpload(payload: PresignUploadRequest): Promise<PresignUploadResponse> {
-  return httpPost<PresignUploadResponse>('/api/product/media/presign-upload', payload)
+  return httpPost<PresignUploadResponse>('/api/v2/product/media/presign-upload', payload)
 }
 
 export async function uploadByPresignedUrl(

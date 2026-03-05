@@ -12,7 +12,6 @@ import moe.hhm.shiori.order.dto.v2.SellerOrderPageResponse;
 import moe.hhm.shiori.order.security.CurrentUserSupport;
 import moe.hhm.shiori.order.service.OrderCommandService;
 import moe.hhm.shiori.order.service.OrderService;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,7 +25,6 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.LocalDateTime;
 
 @RestController
-@ConditionalOnProperty(prefix = "feature.api-v2", name = "enabled", havingValue = "true", matchIfMissing = true)
 @RequestMapping("/api/v2/order/seller/orders")
 public class SellerOrderV2Controller {
 

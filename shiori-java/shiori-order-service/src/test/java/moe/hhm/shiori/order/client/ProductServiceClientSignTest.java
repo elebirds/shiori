@@ -28,7 +28,7 @@ class ProductServiceClientSignTest {
         );
 
         HttpHeaders headers = new HttpHeaders();
-        client.fillSignedHeaders(headers, "GET", "/api/product/products/1", "foo=bar", 1001L, List.of("ROLE_USER"));
+        client.fillSignedHeaders(headers, "GET", "/api/v2/product/products/1", "foo=bar", 1001L, List.of("ROLE_USER"));
 
         String ts = headers.getFirst(GatewaySignVerifyFilter.HEADER_GATEWAY_TS);
         String sign = headers.getFirst(GatewaySignVerifyFilter.HEADER_GATEWAY_SIGN);
@@ -40,7 +40,7 @@ class ProductServiceClientSignTest {
         assertThat(nonce).isNotBlank();
 
         String canonical = GatewaySignUtils.buildCanonicalString(
-                "GET", "/api/product/products/1", "foo=bar", "1001", "ROLE_USER", ts, nonce);
+                "GET", "/api/v2/product/products/1", "foo=bar", "1001", "ROLE_USER", ts, nonce);
         String expected = GatewaySignUtils.hmacSha256Hex(gatewaySignProperties.getInternalSecret(), canonical);
         assertThat(sign).isEqualTo(expected);
     }

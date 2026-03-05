@@ -10,7 +10,6 @@ import moe.hhm.shiori.product.dto.v2.ProductV2PageResponse;
 import moe.hhm.shiori.product.dto.v2.UpdateProductV2Request;
 import moe.hhm.shiori.product.security.CurrentUserSupport;
 import moe.hhm.shiori.product.service.ProductV2Service;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -22,7 +21,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@ConditionalOnProperty(prefix = "feature.api-v2", name = "enabled", havingValue = "true", matchIfMissing = true)
 @RequestMapping("/api/v2/product/products")
 public class ProductV2Controller {
 

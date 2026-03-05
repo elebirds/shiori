@@ -53,7 +53,7 @@ public class ProductServiceClient {
     }
 
     public ProductDetailSnapshot getProductDetail(Long productId, Long userId, List<String> roles) {
-        String path = "/api/product/products/" + productId;
+        String path = "/api/v2/product/products/" + productId;
         try {
             Result<ProductDetailSnapshot> result = restClient.get()
                     .uri(path)
@@ -80,12 +80,12 @@ public class ProductServiceClient {
     }
 
     public StockOperateSnapshot deductStock(Long skuId, Integer quantity, String bizNo, Long userId, List<String> roles) {
-        return executeStockOperate("/api/product/internal/stock/deduct",
+        return executeStockOperate("/api/v2/product/internal/stock/deduct",
                 new StockDeductCommand(skuId, quantity, bizNo), userId, roles);
     }
 
     public StockOperateSnapshot releaseStock(Long skuId, Integer quantity, String bizNo, Long userId, List<String> roles) {
-        return executeStockOperate("/api/product/internal/stock/release",
+        return executeStockOperate("/api/v2/product/internal/stock/release",
                 new StockReleaseCommand(skuId, quantity, bizNo), userId, roles);
     }
 

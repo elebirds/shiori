@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Validated
 @RestController
-@RequestMapping("/api/product/chat")
+@RequestMapping("/api/v2/product/chat")
 public class ChatTicketController {
 
     private final ChatTicketService chatTicketService;

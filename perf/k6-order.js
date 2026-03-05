@@ -196,7 +196,7 @@ export default function (data) {
     'POST',
     `/api/v2/order/orders/${orderNo}/pay`,
     data.buyerToken,
-    { paymentNo: `${perfPrefix}-pay-${__VU}-${__ITER}-${Date.now()}` },
+    null,
     { 'Idempotency-Key': `${perfPrefix}-pay-${__VU}-${__ITER}-${Date.now()}` },
   );
   orderPayDuration.add(payOrder.res.timings.duration);
@@ -242,4 +242,3 @@ export default function (data) {
 
   sleep(0.2);
 }
-

@@ -131,7 +131,7 @@ export function setup() {
   );
 
   const productCreate = mustOk(
-    apiRequest('POST', '/api/product/products', sellerLogin.accessToken, {
+    apiRequest('POST', '/api/v2/product/products', sellerLogin.accessToken, {
       title: `Perf WS 商品 ${perfPrefix}`,
       description: 'k6 ws baseline',
       coverObjectKey: null,
@@ -144,12 +144,12 @@ export function setup() {
   );
 
   mustOk(
-    apiRequest('POST', `/api/product/products/${productCreate.productId}/publish`, sellerLogin.accessToken, null),
+    apiRequest('POST', `/api/v2/product/products/${productCreate.productId}/publish`, sellerLogin.accessToken, null),
     'publish ws product'
   );
 
   const detail = mustOk(
-    apiRequest('GET', `/api/product/products/${productCreate.productId}`, '', null),
+    apiRequest('GET', `/api/v2/product/products/${productCreate.productId}`, '', null),
     'get ws product detail'
   );
 
@@ -166,7 +166,7 @@ export default function (data) {
   const idemKey = `${perfPrefix}-ws-idem-${__VU}-${__ITER}-${Date.now()}`;
   const createOrder = apiRequest(
     'POST',
-    '/api/order/orders',
+    '/api/v2/order/orders',
     data.buyerToken,
     {
       items: [
@@ -182,9 +182,6 @@ export default function (data) {
   }
   const orderNo = createOrder.parsed.data.orderNo;
   const payIdemKey = `${perfPrefix}-ws-pay-idem-${__VU}-${__ITER}-${Date.now()}`;
-  const payPayload = {
-    paymentNo: `${perfPrefix}-ws-pay-${__VU}-${__ITER}-${Date.now()}`,
-  };
 
   let paySucceeded = false;
   let notified = false;
@@ -198,9 +195,9 @@ export default function (data) {
         payAt = Date.now();
         const payOrder = apiRequest(
           'POST',
-          `/api/order/orders/${orderNo}/pay`,
+          `/api/v2/order/orders/${orderNo}/pay`,
           data.buyerToken,
-          payPayload,
+          null,
           { 'Idempotency-Key': payIdemKey }
         );
         paySucceeded = payOrder.ok;

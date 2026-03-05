@@ -160,14 +160,14 @@ create_product_payload="$(jq -nc \
       {skuName:"豪华版",specJson:"{\"edition\":\"pro\"}",priceCent:2999,stock:50}
     ]
   }')"
-product_create_resp="$(call_api POST "/api/product/products" "${seller_access_token}" "${create_product_payload}")"
+product_create_resp="$(call_api POST "/api/v2/product/products" "${seller_access_token}" "${create_product_payload}")"
 product_id="$(extract_required "${product_create_resp}" '.data.productId | tostring' "productId")"
 
 log "seller 发布商品: productId=${product_id}"
-call_api POST "/api/product/products/${product_id}/publish" "${seller_access_token}" ""
+call_api POST "/api/v2/product/products/${product_id}/publish" "${seller_access_token}" ""
 
 log "读取商品详情，提取 SKU..."
-product_detail_resp="$(call_api GET "/api/product/products/${product_id}" "" "")"
+product_detail_resp="$(call_api GET "/api/v2/product/products/${product_id}" "" "")"
 sku_id_1="$(extract_required "${product_detail_resp}" '.data.skus[0].skuId | tostring' "sku_id_1")"
 sku_id_2="$(extract_required "${product_detail_resp}" '.data.skus[1].skuId | tostring' "sku_id_2")"
 
@@ -176,11 +176,11 @@ create_order_payload="$(jq -nc --argjson productId "${product_id}" --argjson sku
   '{items:[{productId:$productId,skuId:$sku1,quantity:1},{productId:$productId,skuId:$sku2,quantity:1}]}')"
 
 log "buyer 创建订单（第一次）..."
-order_create_resp_1="$(call_api POST "/api/order/orders" "${buyer_access_token}" "${create_order_payload}" -H "Idempotency-Key: ${idempotency_key}")"
+order_create_resp_1="$(call_api POST "/api/v2/order/orders" "${buyer_access_token}" "${create_order_payload}" -H "Idempotency-Key: ${idempotency_key}")"
 order_no_1="$(extract_required "${order_create_resp_1}" '.data.orderNo' "orderNo_1")"
 
 log "buyer 创建订单（重复请求，验证幂等）..."
-order_create_resp_2="$(call_api POST "/api/order/orders" "${buyer_access_token}" "${create_order_payload}" -H "Idempotency-Key: ${idempotency_key}")"
+order_create_resp_2="$(call_api POST "/api/v2/order/orders" "${buyer_access_token}" "${create_order_payload}" -H "Idempotency-Key: ${idempotency_key}")"
 order_no_2="$(extract_required "${order_create_resp_2}" '.data.orderNo' "orderNo_2")"
 [[ "${order_no_1}" == "${order_no_2}" ]] || fail "幂等失败，两次 orderNo 不一致: ${order_no_1} vs ${order_no_2}"
 
@@ -212,11 +212,9 @@ SELLER_WS_PID=$!
 
 sleep 1
 
-payment_no="${SMOKE_PREFIX}-pay-${run_id}"
-pay_order_payload="$(jq -nc --arg paymentNo "${payment_no}" '{paymentNo:$paymentNo}')"
 pay_idempotency_key="${SMOKE_PREFIX}-pay-idem-${run_id}"
 log "buyer 支付订单: orderNo=${order_no_1}"
-call_api POST "/api/order/orders/${order_no_1}/pay" "${buyer_access_token}" "${pay_order_payload}" \
+call_api POST "/api/v2/order/orders/${order_no_1}/pay" "${buyer_access_token}" "" \
   -H "Idempotency-Key: ${pay_idempotency_key}" >/dev/null
 
 if ! wait "${BUYER_WS_PID}"; then
@@ -230,7 +228,7 @@ fi
 BUYER_WS_PID=""
 SELLER_WS_PID=""
 
-order_detail_resp="$(call_api GET "/api/order/orders/${order_no_1}" "${buyer_access_token}" "")"
+order_detail_resp="$(call_api GET "/api/v2/order/orders/${order_no_1}" "${buyer_access_token}" "")"
 order_status="$(extract_required "${order_detail_resp}" '.data.status' "order.status")"
 [[ "${order_status}" == "PAID" ]] || fail "订单状态异常，预期 PAID，实际 ${order_status}"
 

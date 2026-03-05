@@ -157,12 +157,12 @@ product_payload="$(jq -nc \
       {skuName:"咨询版",specJson:"{\"edition\":\"chat\"}",priceCent:1099,stock:20}
     ]
   }')"
-product_resp="$(call_api POST "/api/product/products" "${seller_access_token}" "${product_payload}")"
+product_resp="$(call_api POST "/api/v2/product/products" "${seller_access_token}" "${product_payload}")"
 product_id="$(extract_required "${product_resp}" '.data.productId | tostring' "product.id")"
-call_api POST "/api/product/products/${product_id}/publish" "${seller_access_token}" "" >/dev/null
+call_api POST "/api/v2/product/products/${product_id}/publish" "${seller_access_token}" "" >/dev/null
 
 log "buyer 签发 Chat Ticket..."
-ticket_resp="$(call_api POST "/api/product/chat/ticket?listingId=${product_id}" "${buyer_access_token}" "")"
+ticket_resp="$(call_api POST "/api/v2/product/chat/ticket?listingId=${product_id}" "${buyer_access_token}" "")"
 chat_ticket="$(extract_required "${ticket_resp}" '.data.ticket' "chat.ticket")"
 ticket_buyer_id="$(extract_required "${ticket_resp}" '.data.buyerId | tostring' "chat.ticket.buyerId")"
 ticket_seller_id="$(extract_required "${ticket_resp}" '.data.sellerId | tostring' "chat.ticket.sellerId")"

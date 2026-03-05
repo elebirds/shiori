@@ -23,7 +23,6 @@ public class GatewaySignProperties {
             "/api/user/auth/logout"
     ));
     private List<String> anonymousGetPaths = new ArrayList<>(List.of(
-            "/api/product/**",
             "/api/v2/product/**",
             "/api/user/profiles/**",
             "/api/user/media/avatar/**",

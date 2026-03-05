@@ -52,7 +52,7 @@ class ProductStockControllerMvcTest {
         when(productStockService.deduct(any(StockDeductRequest.class)))
                 .thenReturn(new StockOperateResponse(true, false, "BIZ-1", 10L, 2, 8));
 
-        mockMvc.perform(post("/api/product/internal/stock/deduct")
+        mockMvc.perform(post("/api/v2/product/internal/stock/deduct")
                         .principal(new UsernamePasswordAuthenticationToken(
                                 "1001", "N/A", List.of(new SimpleGrantedAuthority("ROLE_USER"))
                         ))
@@ -72,7 +72,7 @@ class ProductStockControllerMvcTest {
         when(productStockService.release(any(StockReleaseRequest.class)))
                 .thenReturn(new StockOperateResponse(true, false, "BIZ-2", 10L, 2, 12));
 
-        mockMvc.perform(post("/api/product/internal/stock/release")
+        mockMvc.perform(post("/api/v2/product/internal/stock/release")
                         .principal(new UsernamePasswordAuthenticationToken(
                                 "1001", "N/A", List.of(new SimpleGrantedAuthority("ROLE_USER"))
                         ))
