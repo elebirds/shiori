@@ -55,16 +55,19 @@ func (c *HTTPUserCapabilityChecker) IsBanned(userID int64, capability string) (b
 	}
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return false, fmt.Errorf("query capability bans failed: %w", err)
+		// Dependency outage should not block chat send path.
+		return false, nil
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return false, fmt.Errorf("query capability bans failed with status=%d", resp.StatusCode)
+		// Keep chat path available when capability service is unstable or temporarily unavailable.
+		return false, nil
 	}
 
 	var payload activeCapabilityResponse
 	if decodeErr := json.NewDecoder(resp.Body).Decode(&payload); decodeErr != nil {
-		return false, fmt.Errorf("decode capability bans response failed: %w", decodeErr)
+		// Invalid payload from dependency should not fail chat sending.
+		return false, nil
 	}
 
 	for _, item := range payload.Capabilities {
