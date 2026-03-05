@@ -74,10 +74,6 @@ export interface OrderPageResponse {
   items: OrderSummaryResponse[]
 }
 
-export interface PayOrderRequest {
-  paymentNo: string
-}
-
 export interface CancelOrderRequest {
   reason?: string
 }
@@ -172,9 +168,9 @@ export function getOrderDetailV2(orderNo: string): Promise<OrderDetailResponse> 
   return httpGet<OrderDetailResponse>(`/api/v2/order/orders/${orderNo}`)
 }
 
-export function payOrderV2(orderNo: string, payload: PayOrderRequest, idempotencyKey?: string): Promise<OrderOperateResponse> {
+export function payOrderV2(orderNo: string, idempotencyKey?: string): Promise<OrderOperateResponse> {
   const key = idempotencyKey || buildOperateIdempotencyKey('pay', orderNo)
-  return httpPost<OrderOperateResponse>(`/api/v2/order/orders/${orderNo}/pay`, payload, {
+  return httpPost<OrderOperateResponse>(`/api/v2/order/orders/${orderNo}/pay`, undefined, {
     headers: {
       'Idempotency-Key': key,
     },

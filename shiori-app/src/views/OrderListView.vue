@@ -21,7 +21,7 @@ const query = useQuery({
 })
 
 const payMutation = useMutation({
-  mutationFn: (orderNo: string) => payOrderV2(orderNo, { paymentNo: `web-pay-${Date.now()}` }),
+  mutationFn: (orderNo: string) => payOrderV2(orderNo),
   onSuccess: async () => {
     await queryClient.invalidateQueries({ queryKey: ['orders-v2'] })
   },
@@ -210,4 +210,3 @@ async function handleConfirm(orderNo: string, conversationId?: number): Promise<
     <p v-if="actionError" class="text-sm text-rose-600">{{ actionError }}</p>
   </section>
 </template>
-

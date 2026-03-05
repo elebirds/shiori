@@ -36,7 +36,7 @@ const timelineQuery = useQuery({
 })
 
 const payMutation = useMutation({
-  mutationFn: () => payOrderV2(orderNo.value, { paymentNo: `web-pay-${Date.now()}` }),
+  mutationFn: () => payOrderV2(orderNo.value),
   onSuccess: async () => {
     await query.refetch()
     await timelineQuery.refetch()
@@ -243,4 +243,3 @@ async function handleConfirm(): Promise<void> {
     </ResultState>
   </section>
 </template>
-
