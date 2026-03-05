@@ -90,11 +90,20 @@ export interface AdminUserPasswordResetPayload {
   reason?: string
 }
 
-export interface AdminUserCapabilityBan {
+export interface AdminPermissionCatalogItem {
+  permissionCode: string
+  domain: string
+  action: string
+  displayName: string
+  description?: string
+  deprecated: boolean
+}
+
+export interface AdminUserPermissionOverride {
   id: number
   userId: number
-  capability: 'CHAT_SEND' | 'CHAT_READ' | 'PRODUCT_PUBLISH' | 'ORDER_CREATE'
-  banned: boolean
+  permissionCode: string
+  effect: 'ALLOW' | 'DENY'
   reason?: string
   operatorUserId: number
   startAt: string
@@ -103,8 +112,9 @@ export interface AdminUserCapabilityBan {
   updatedAt: string
 }
 
-export interface AdminUserCapabilityBanPayload {
-  capability: 'CHAT_SEND' | 'CHAT_READ' | 'PRODUCT_PUBLISH' | 'ORDER_CREATE'
+export interface AdminUserPermissionOverridePayload {
+  permissionCode: string
+  effect: 'ALLOW' | 'DENY'
   reason?: string
   startAt?: string
   endAt?: string
@@ -162,23 +172,35 @@ export function resetAdminUserPassword(
   return httpPost(`/api/admin/users/${userId}/password/reset`, payload)
 }
 
-export function listAdminUserCapabilityBans(userId: number): Promise<AdminUserCapabilityBan[]> {
-  return httpGet(`/api/v2/admin/users/${userId}/capability-bans`)
+export function listAdminPermissionCatalog(): Promise<AdminPermissionCatalogItem[]> {
+  return httpGet('/api/v2/admin/permissions/catalog')
 }
 
-export function upsertAdminUserCapabilityBan(
-  userId: number,
-  payload: AdminUserCapabilityBanPayload,
-): Promise<AdminUserCapabilityBan> {
-  return httpPost(`/api/v2/admin/users/${userId}/capability-bans`, payload)
+export function listAdminUserPermissionOverrides(userId: number): Promise<AdminUserPermissionOverride[]> {
+  return httpGet(`/api/v2/admin/users/${userId}/permission-overrides`)
 }
 
-export function removeAdminUserCapabilityBan(
+export function createAdminUserPermissionOverride(
   userId: number,
-  capability: 'CHAT_SEND' | 'CHAT_READ' | 'PRODUCT_PUBLISH' | 'ORDER_CREATE',
+  payload: AdminUserPermissionOverridePayload,
+): Promise<AdminUserPermissionOverride> {
+  return httpPost(`/api/v2/admin/users/${userId}/permission-overrides`, payload)
+}
+
+export function updateAdminUserPermissionOverride(
+  userId: number,
+  overrideId: number,
+  payload: AdminUserPermissionOverridePayload,
+): Promise<AdminUserPermissionOverride> {
+  return httpPut(`/api/v2/admin/users/${userId}/permission-overrides/${overrideId}`, payload)
+}
+
+export function removeAdminUserPermissionOverride(
+  userId: number,
+  overrideId: number,
   reason?: string,
-): Promise<AdminUserCapabilityBan> {
-  return httpDelete(`/api/v2/admin/users/${userId}/capability-bans/${capability}`, {
+): Promise<void> {
+  return httpDelete(`/api/v2/admin/users/${userId}/permission-overrides/${overrideId}`, {
     params: {
       reason,
     },

@@ -2,6 +2,7 @@ package moe.hhm.shiori.user.authz.repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import moe.hhm.shiori.user.authz.model.PermissionCatalogRecord;
 import moe.hhm.shiori.user.authz.model.UserAuthzVersionRecord;
 import moe.hhm.shiori.user.authz.model.UserPermissionOverrideRecord;
 import org.apache.ibatis.annotations.Delete;
@@ -36,6 +37,19 @@ public interface UserAuthzMapper {
             ORDER BY p.id ASC
             """)
     List<String> listRolePermissionCodes(@Param("userId") Long userId);
+
+    @Select("""
+            SELECT perm_code AS permissionCode,
+                   domain,
+                   SUBSTRING_INDEX(perm_code, '.', -1) AS action,
+                   perm_name AS displayName,
+                   description,
+                   CASE WHEN status = 1 AND is_deleted = 0 THEN FALSE ELSE TRUE END AS deprecated
+            FROM u_permission
+            WHERE is_deleted = 0
+            ORDER BY domain ASC, perm_code ASC
+            """)
+    List<PermissionCatalogRecord> listPermissionCatalog();
 
     @Select("""
             SELECT id,

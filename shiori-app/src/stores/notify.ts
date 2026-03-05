@@ -32,7 +32,7 @@ export interface NotifyMessage {
 export type WSFramePayload = Record<string, unknown>
 export type WSFrameListener = (frame: WSFramePayload) => void
 
-const WS_BASE_URL = import.meta.env.VITE_NOTIFY_WS_BASE_URL || 'ws://localhost:8090/ws'
+const WS_BASE_URL = (import.meta.env.VITE_NOTIFY_WS_BASE_URL || '').trim()
 const MAX_RECONNECT_DELAY_MS = 15000
 const DEFAULT_SYNC_LIMIT = 100
 
@@ -50,6 +50,10 @@ export const useNotifyStore = defineStore('notify', () => {
   const frameListeners = new Set<WSFrameListener>()
 
   function connect(accessToken?: string): void {
+    if (!WS_BASE_URL) {
+      lastError.value = '缺少通知 WebSocket 地址配置'
+      return
+    }
     const token = (accessToken || getAccessToken() || '').trim()
     if (!token) {
       return

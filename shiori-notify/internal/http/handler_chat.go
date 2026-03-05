@@ -958,8 +958,6 @@ func parseBoolQuery(raw string) bool {
 
 func (s *Server) writeChatError(c *gin.Context, err error, fallbackMessage string) {
 	var rateLimited *chat.ErrRateLimited
-	var capabilityBanned *chat.ErrCapabilityBanned
-	var capabilityCheckFailed *chat.ErrCapabilityCheckFailed
 	switch {
 	case errors.Is(err, chat.ErrForbidden):
 		s.writeJSON(c, http.StatusForbidden, gin.H{
@@ -1004,30 +1002,6 @@ func (s *Server) writeChatError(c *gin.Context, err error, fallbackMessage strin
 			"data": gin.H{
 				"retryAfterSeconds": rateLimited.RetryAfterSeconds,
 			},
-		})
-	case errors.As(err, &capabilityBanned):
-		s.writeJSON(c, http.StatusForbidden, gin.H{
-			"code":    40304,
-			"message": "chat capability banned",
-			"data": gin.H{
-				"capability": strings.TrimSpace(strings.ToUpper(capabilityBanned.Capability)),
-			},
-		})
-	case errors.As(err, &capabilityCheckFailed):
-		reason := strings.TrimSpace(strings.ToLower(capabilityCheckFailed.Reason))
-		if reason == "" {
-			reason = "unknown"
-		}
-		payload := gin.H{
-			"reason": reason,
-		}
-		if capabilityCheckFailed.StatusCode > 0 {
-			payload["statusCode"] = capabilityCheckFailed.StatusCode
-		}
-		s.writeJSON(c, http.StatusServiceUnavailable, gin.H{
-			"code":    50302,
-			"message": "chat capability check failed",
-			"data":    payload,
 		})
 	default:
 		s.logger.Warn().Err(err).Msg(fallbackMessage)
