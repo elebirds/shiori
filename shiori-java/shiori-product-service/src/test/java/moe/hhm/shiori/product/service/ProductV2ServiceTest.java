@@ -2,6 +2,7 @@ package moe.hhm.shiori.product.service;
 
 import java.util.List;
 import moe.hhm.shiori.product.domain.ProductStatus;
+import moe.hhm.shiori.product.dto.SpecItemInput;
 import moe.hhm.shiori.product.dto.SkuInput;
 import moe.hhm.shiori.product.dto.v2.CreateProductV2Request;
 import moe.hhm.shiori.product.dto.v2.ProductV2PageResponse;
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import tools.jackson.databind.ObjectMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -42,7 +44,13 @@ class ProductV2ServiceTest {
 
     @BeforeEach
     void setUp() {
-        productV2Service = new ProductV2Service(productMapper, ossObjectService, productService, productMetrics);
+        productV2Service = new ProductV2Service(
+                productMapper,
+                ossObjectService,
+                productService,
+                productMetrics,
+                new SkuSpecCodec(new ObjectMapper())
+        );
     }
 
     @Test
@@ -108,7 +116,7 @@ class ProductV2ServiceTest {
                 "GOOD",
                 "MEETUP",
                 "main_campus",
-                List.of(new SkuInput(null, "标准版", "{}", 3900L, 8))
+                List.of(skuInput(null, "版本", "标准版", 3900L, 8))
         );
 
         productV2Service.createProduct(1001L, request);
@@ -182,7 +190,7 @@ class ProductV2ServiceTest {
                 "GOOD",
                 "MEETUP",
                 "main_campus",
-                List.of(new SkuInput(null, "标准版", "{}", 3900L, 8))
+                List.of(skuInput(null, "版本", "标准版", 3900L, 8))
         );
 
         productV2Service.createProduct(1001L, request);
@@ -240,7 +248,7 @@ class ProductV2ServiceTest {
                 "GOOD",
                 "MEETUP",
                 "main_campus",
-                List.of(new SkuInput(null, "标准版", "{}", 3900L, 8))
+                List.of(skuInput(null, "版本", "标准版", 3900L, 8))
         );
 
         productV2Service.createProduct(1001L, request);
@@ -248,5 +256,9 @@ class ProductV2ServiceTest {
         ArgumentCaptor<ProductEntity> productCaptor = ArgumentCaptor.forClass(ProductEntity.class);
         verify(productMapper).insertProduct(productCaptor.capture());
         assertThat(productCaptor.getValue().getDetailHtml()).isNull();
+    }
+
+    private SkuInput skuInput(Long id, String specName, String specValue, long priceCent, int stock) {
+        return new SkuInput(id, List.of(new SpecItemInput(specName, specValue)), priceCent, stock);
     }
 }

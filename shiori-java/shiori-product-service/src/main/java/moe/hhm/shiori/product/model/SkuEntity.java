@@ -4,6 +4,9 @@ public class SkuEntity {
     private Long id;
     private Long productId;
     private String skuNo;
+    private String displayName;
+    private String specItemsJson;
+    private String specSignature;
     private String skuName;
     private String specJson;
     private Long priceCent;
@@ -31,6 +34,30 @@ public class SkuEntity {
 
     public void setSkuNo(String skuNo) {
         this.skuNo = skuNo;
+    }
+
+    public String getDisplayName() {
+        return displayName;
+    }
+
+    public void setDisplayName(String displayName) {
+        this.displayName = displayName;
+    }
+
+    public String getSpecItemsJson() {
+        return specItemsJson;
+    }
+
+    public void setSpecItemsJson(String specItemsJson) {
+        this.specItemsJson = specItemsJson;
+    }
+
+    public String getSpecSignature() {
+        return specSignature;
+    }
+
+    public void setSpecSignature(String specSignature) {
+        this.specSignature = specSignature;
     }
 
     public String getSkuName() {

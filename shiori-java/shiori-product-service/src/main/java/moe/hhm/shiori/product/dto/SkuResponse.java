@@ -1,10 +1,12 @@
 package moe.hhm.shiori.product.dto;
 
+import java.util.List;
+
 public record SkuResponse(
         Long skuId,
         String skuNo,
-        String skuName,
-        String specJson,
+        String displayName,
+        List<SpecItemResponse> specItems,
         Long priceCent,
         Integer stock
 ) {

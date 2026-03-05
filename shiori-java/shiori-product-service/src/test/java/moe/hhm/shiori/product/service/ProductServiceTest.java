@@ -6,6 +6,7 @@ import moe.hhm.shiori.product.domain.ProductStatus;
 import moe.hhm.shiori.product.dto.CreateProductRequest;
 import moe.hhm.shiori.product.dto.ProductPageResponse;
 import moe.hhm.shiori.product.dto.ProductWriteResponse;
+import moe.hhm.shiori.product.dto.SpecItemInput;
 import moe.hhm.shiori.product.dto.SkuInput;
 import moe.hhm.shiori.product.dto.UpdateProductRequest;
 import moe.hhm.shiori.product.model.ProductEntity;
@@ -16,9 +17,9 @@ import moe.hhm.shiori.product.storage.OssObjectService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import tools.jackson.databind.ObjectMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -40,8 +41,12 @@ class ProductServiceTest {
     @Mock
     private OssObjectService ossObjectService;
 
-    @InjectMocks
     private ProductService productService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void setUp() {
+        productService = new ProductService(productMapper, ossObjectService, new SkuSpecCodec(new ObjectMapper()));
+    }
 
     @Test
     void shouldCreateProductWithMultipleSkus() {
@@ -50,8 +55,8 @@ class ProductServiceTest {
                 "good condition",
                 "product/1001/202603/cover.jpg",
                 List.of(
-                        new SkuInput(null, "标准版", "{\"binding\":\"paper\"}", 3900L, 12),
-                        new SkuInput(null, "含习题", "{\"binding\":\"paper\"}", 4500L, 5)
+                        skuInput(null, "版本", "标准版", 3900L, 12),
+                        skuInput(null, "版本", "含习题", 4500L, 5)
                 )
         );
         doAnswer(invocation -> {
@@ -78,7 +83,7 @@ class ProductServiceTest {
                 "New title",
                 "new desc",
                 "product/2002/202603/a.jpg",
-                List.of(new SkuInput(10L, "标准版", "{}", 3900L, 10))
+                List.of(skuInput(10L, "版本", "标准版", 3900L, 10))
         );
 
         assertThatThrownBy(() -> productService.updateProduct(1L, 1001L, false, request))
@@ -93,7 +98,8 @@ class ProductServiceTest {
                 1L, "P001", 1001L, "Java Book", "desc", null, 1, 0
         ));
         when(productMapper.listActiveSkusByProductId(1L)).thenReturn(List.of(
-                new SkuRecord(10L, 1L, "S001", "标准版", "{}", 3900L, 12, 0)
+                new SkuRecord(10L, 1L, "S001", "版本:标准版", "[{\"name\":\"版本\",\"value\":\"标准版\"}]",
+                        "sig-a", "版本:标准版", "{\"版本\":\"标准版\"}", 3900L, 12, 0)
         ));
 
         ProductWriteResponse response = productService.publishProduct(1L, 1001L, false);
@@ -118,15 +124,17 @@ class ProductServiceTest {
                 .thenReturn(new ProductRecord(1L, "P001", 1001L, "Old", "Old", null, 1, 0))
                 .thenReturn(new ProductRecord(1L, "P001", 1001L, "New", "New", null, 1, 0));
         when(productMapper.listActiveSkusByProductId(1L)).thenReturn(List.of(
-                new SkuRecord(10L, 1L, "S001", "旧SKU", "{}", 3900L, 12, 0),
-                new SkuRecord(11L, 1L, "S002", "待删除SKU", "{}", 4500L, 5, 0)
+                new SkuRecord(10L, 1L, "S001", "版本:旧SKU", "[{\"name\":\"版本\",\"value\":\"旧SKU\"}]",
+                        "sig-old", "版本:旧SKU", "{\"版本\":\"旧SKU\"}", 3900L, 12, 0),
+                new SkuRecord(11L, 1L, "S002", "版本:待删除SKU", "[{\"name\":\"版本\",\"value\":\"待删除SKU\"}]",
+                        "sig-del", "版本:待删除SKU", "{\"版本\":\"待删除SKU\"}", 4500L, 5, 0)
         ));
 
         UpdateProductRequest request = new UpdateProductRequest(
                 "New",
                 "New",
                 null,
-                List.of(new SkuInput(10L, "新SKU", "{\"k\":\"v\"}", 5000L, 3))
+                List.of(skuInput(10L, "版本", "新SKU", 5000L, 3))
         );
 
         ProductWriteResponse response = productService.updateProduct(1L, 1001L, false, request);
@@ -155,5 +163,50 @@ class ProductServiceTest {
     void shouldRejectUnknownStatusWhenListMyProducts() {
         assertThatThrownBy(() -> productService.listMyProducts(1001L, null, "UNKNOWN", 1, 10))
                 .isInstanceOf(BizException.class);
+    }
+
+    @Test
+    void shouldRejectDuplicateSpecCombinationWhenCreateProduct() {
+        CreateProductRequest request = new CreateProductRequest(
+                "Java Book",
+                "good condition",
+                "product/1001/202603/cover.jpg",
+                List.of(
+                        new SkuInput(null, List.of(
+                                new SpecItemInput("版本", "标准版"),
+                                new SpecItemInput("品相", "良好")
+                        ), 3900L, 12),
+                        new SkuInput(null, List.of(
+                                new SpecItemInput("品相", "良好"),
+                                new SpecItemInput("版本", "标准版")
+                        ), 3900L, 8)
+                )
+        );
+        doAnswer(invocation -> {
+            ProductEntity entity = invocation.getArgument(0);
+            entity.setId(1L);
+            return 1;
+        }).when(productMapper).insertProduct(any(ProductEntity.class));
+
+        assertThatThrownBy(() -> productService.createProduct(1001L, request))
+                .isInstanceOf(BizException.class);
+    }
+
+    @Test
+    void shouldRejectPublishWhenAllSkuOutOfStock() {
+        when(productMapper.findProductById(1L)).thenReturn(new ProductRecord(
+                1L, "P001", 1001L, "Java Book", "desc", null, 1, 0
+        ));
+        when(productMapper.listActiveSkusByProductId(1L)).thenReturn(List.of(
+                new SkuRecord(10L, 1L, "S001", "版本:标准版", "[{\"name\":\"版本\",\"value\":\"标准版\"}]",
+                        "sig-a", "版本:标准版", "{\"版本\":\"标准版\"}", 3900L, 0, 0)
+        ));
+
+        assertThatThrownBy(() -> productService.publishProduct(1L, 1001L, false))
+                .isInstanceOf(BizException.class);
+    }
+
+    private SkuInput skuInput(Long id, String specName, String specValue, long priceCent, int stock) {
+        return new SkuInput(id, List.of(new SpecItemInput(specName, specValue)), priceCent, stock);
     }
 }

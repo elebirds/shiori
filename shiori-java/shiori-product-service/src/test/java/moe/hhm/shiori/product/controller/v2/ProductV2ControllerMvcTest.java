@@ -5,6 +5,7 @@ import moe.hhm.shiori.common.mvc.GlobalExceptionHandler;
 import moe.hhm.shiori.common.mvc.ResultResponseBodyAdvice;
 import moe.hhm.shiori.common.security.authz.PermissionGuard;
 import moe.hhm.shiori.product.dto.ProductWriteResponse;
+import moe.hhm.shiori.product.dto.SpecItemResponse;
 import moe.hhm.shiori.product.dto.SkuResponse;
 import moe.hhm.shiori.product.dto.v2.ProductV2DetailResponse;
 import moe.hhm.shiori.product.service.ProductV2Service;
@@ -70,7 +71,7 @@ class ProductV2ControllerMvcTest {
                                   "conditionLevel":"GOOD",
                                   "tradeMode":"MEETUP",
                                   "campusCode":"main_campus",
-                                  "skus":[{"skuName":"标准版","specJson":"{}","priceCent":3900,"stock":10}]
+                                  "skus":[{"specItems":[{"name":"版本","value":"标准版"}],"priceCent":3900,"stock":10}]
                                 }
                                 """))
                 .andExpect(status().isOk())
@@ -98,7 +99,7 @@ class ProductV2ControllerMvcTest {
                                   "conditionLevel":"GOOD",
                                   "tradeMode":"MEETUP",
                                   "campusCode":"main_campus",
-                                  "skus":[{"id":10,"skuName":"标准版","specJson":"{}","priceCent":3900,"stock":8}]
+                                  "skus":[{"id":10,"specItems":[{"name":"版本","value":"标准版"}],"priceCent":3900,"stock":8}]
                                 }
                                 """))
                 .andExpect(status().isOk())
@@ -126,7 +127,14 @@ class ProductV2ControllerMvcTest {
                 3900L,
                 3900L,
                 8,
-                List.of(new SkuResponse(10L, "S001", "标准版", "{}", 3900L, 8))
+                List.of(new SkuResponse(
+                        10L,
+                        "S001",
+                        "版本:标准版",
+                        List.of(new SpecItemResponse("版本", "标准版")),
+                        3900L,
+                        8
+                ))
         ));
 
         mockMvc.perform(get("/api/v2/product/products/1"))

@@ -673,6 +673,9 @@ public interface ProductMapper {
             INSERT INTO p_sku (
                 product_id,
                 sku_no,
+                display_name,
+                spec_items_json,
+                spec_signature,
                 sku_name,
                 spec_json,
                 price_cent,
@@ -683,6 +686,9 @@ public interface ProductMapper {
             ) VALUES (
                 #{productId},
                 #{skuNo},
+                #{displayName},
+                #{specItemsJson},
+                #{specSignature},
                 #{skuName},
                 #{specJson},
                 #{priceCent},
@@ -697,7 +703,10 @@ public interface ProductMapper {
 
     @Update("""
             UPDATE p_sku
-            SET sku_name = #{skuName},
+            SET display_name = #{displayName},
+                spec_items_json = #{specItemsJson},
+                spec_signature = #{specSignature},
+                sku_name = #{skuName},
                 spec_json = #{specJson},
                 price_cent = #{priceCent},
                 stock = #{stock},
@@ -713,6 +722,9 @@ public interface ProductMapper {
             SELECT id,
                    product_id AS productId,
                    sku_no AS skuNo,
+                   display_name AS displayName,
+                   spec_items_json AS specItemsJson,
+                   spec_signature AS specSignature,
                    sku_name AS skuName,
                    spec_json AS specJson,
                    price_cent AS priceCent,
@@ -729,6 +741,9 @@ public interface ProductMapper {
             SELECT id,
                    product_id AS productId,
                    sku_no AS skuNo,
+                   display_name AS displayName,
+                   spec_items_json AS specItemsJson,
+                   spec_signature AS specSignature,
                    sku_name AS skuName,
                    spec_json AS specJson,
                    price_cent AS priceCent,

@@ -20,6 +20,7 @@ import moe.hhm.shiori.product.domain.ProductConditionLevel;
 import moe.hhm.shiori.product.domain.ProductStatus;
 import moe.hhm.shiori.product.domain.ProductTradeMode;
 import moe.hhm.shiori.product.dto.ProductWriteResponse;
+import moe.hhm.shiori.product.dto.SpecItemResponse;
 import moe.hhm.shiori.product.dto.SkuInput;
 import moe.hhm.shiori.product.dto.SkuResponse;
 import moe.hhm.shiori.product.dto.v2.CreateProductV2Request;
@@ -72,15 +73,18 @@ public class ProductV2Service {
     private final OssObjectService ossObjectService;
     private final ProductService productService;
     private final ProductMetrics productMetrics;
+    private final SkuSpecCodec skuSpecCodec;
 
     public ProductV2Service(ProductMapper productMapper,
                             OssObjectService ossObjectService,
                             ProductService productService,
-                            ProductMetrics productMetrics) {
+                            ProductMetrics productMetrics,
+                            SkuSpecCodec skuSpecCodec) {
         this.productMapper = productMapper;
         this.ossObjectService = ossObjectService;
         this.productService = productService;
         this.productMetrics = productMetrics;
+        this.skuSpecCodec = skuSpecCodec;
     }
 
     public ProductV2PageResponse listOnSaleProducts(String keyword,
@@ -277,8 +281,14 @@ public class ProductV2Service {
         if (entity.getId() == null) {
             throw new IllegalStateException("创建商品后未返回主键");
         }
+        Set<String> signatures = new HashSet<>();
         for (SkuInput input : request.skus()) {
-            productMapper.insertSku(toNewSkuEntity(entity.getId(), input));
+            List<SpecItemResponse> specItems = skuSpecCodec.normalizeInput(input.specItems());
+            String signature = skuSpecCodec.toSpecSignature(specItems);
+            if (!signatures.add(signature)) {
+                throw new BizException(ProductErrorCode.DUPLICATE_SKU_SPEC_COMBINATION, HttpStatus.BAD_REQUEST);
+            }
+            productMapper.insertSku(toNewSkuEntity(entity.getId(), input, specItems, signature));
         }
         return new ProductWriteResponse(entity.getId(), entity.getProductNo(), ProductStatus.DRAFT.name());
     }
@@ -314,9 +324,15 @@ public class ProductV2Service {
         }
 
         Set<Long> keepSkuIds = new HashSet<>();
+        Set<String> requestSignatures = new HashSet<>();
         for (SkuInput input : request.skus()) {
+            List<SpecItemResponse> specItems = skuSpecCodec.normalizeInput(input.specItems());
+            String signature = skuSpecCodec.toSpecSignature(specItems);
+            if (!requestSignatures.add(signature)) {
+                throw new BizException(ProductErrorCode.DUPLICATE_SKU_SPEC_COMBINATION, HttpStatus.BAD_REQUEST);
+            }
             if (input.id() == null) {
-                productMapper.insertSku(toNewSkuEntity(productId, input));
+                productMapper.insertSku(toNewSkuEntity(productId, input, specItems, signature));
                 continue;
             }
             SkuRecord existing = existingMap.get(input.id());
@@ -326,8 +342,12 @@ public class ProductV2Service {
             SkuEntity updateEntity = new SkuEntity();
             updateEntity.setId(input.id());
             updateEntity.setProductId(productId);
-            updateEntity.setSkuName(input.skuName().trim());
-            updateEntity.setSpecJson(input.specJson());
+            String displayName = skuSpecCodec.toDisplayName(specItems);
+            updateEntity.setDisplayName(displayName);
+            updateEntity.setSpecItemsJson(skuSpecCodec.toSpecItemsJson(specItems));
+            updateEntity.setSpecSignature(signature);
+            updateEntity.setSkuName(displayName);
+            updateEntity.setSpecJson(skuSpecCodec.toLegacySpecJson(specItems));
             updateEntity.setPriceCent(input.priceCent());
             updateEntity.setStock(input.stock());
             productMapper.updateSku(updateEntity);
@@ -394,11 +414,12 @@ public class ProductV2Service {
     private ProductV2DetailResponse toDetailResponse(ProductV2Record product, List<SkuRecord> skus) {
         List<SkuResponse> skuResponses = new ArrayList<>(skus.size());
         for (SkuRecord sku : skus) {
+            List<SpecItemResponse> specItems = skuSpecCodec.fromSkuRecord(sku);
             skuResponses.add(new SkuResponse(
                     sku.id(),
                     sku.skuNo(),
-                    sku.skuName(),
-                    sku.specJson(),
+                    StringUtils.hasText(sku.displayName()) ? sku.displayName() : skuSpecCodec.toDisplayName(specItems),
+                    specItems,
                     sku.priceCent(),
                     sku.stock()
             ));
@@ -424,12 +445,19 @@ public class ProductV2Service {
         );
     }
 
-    private SkuEntity toNewSkuEntity(Long productId, SkuInput input) {
+    private SkuEntity toNewSkuEntity(Long productId,
+                                     SkuInput input,
+                                     List<SpecItemResponse> specItems,
+                                     String signature) {
         SkuEntity entity = new SkuEntity();
         entity.setProductId(productId);
         entity.setSkuNo(generateSkuNo());
-        entity.setSkuName(input.skuName().trim());
-        entity.setSpecJson(input.specJson());
+        String displayName = skuSpecCodec.toDisplayName(specItems);
+        entity.setDisplayName(displayName);
+        entity.setSpecItemsJson(skuSpecCodec.toSpecItemsJson(specItems));
+        entity.setSpecSignature(signature);
+        entity.setSkuName(displayName);
+        entity.setSpecJson(skuSpecCodec.toLegacySpecJson(specItems));
         entity.setPriceCent(input.priceCent());
         entity.setStock(input.stock());
         return entity;

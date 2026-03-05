@@ -12,7 +12,9 @@ public enum ProductErrorCode implements ErrorCode {
     INVALID_PRODUCT_CONDITION(40008, "商品成色非法"),
     INVALID_PRODUCT_TRADE_MODE(40009, "商品交易方式非法"),
     INVALID_PRODUCT_CAMPUS_CODE(40010, "商品校区编码非法"),
-    INVALID_PRODUCT_SORT(40011, "商品排序参数非法");
+    INVALID_PRODUCT_SORT(40011, "商品排序参数非法"),
+    INVALID_SKU_SPEC_ITEMS(40012, "SKU规格项非法"),
+    DUPLICATE_SKU_SPEC_COMBINATION(40013, "SKU规格组合重复");
 
     private final int code;
     private final String message;
