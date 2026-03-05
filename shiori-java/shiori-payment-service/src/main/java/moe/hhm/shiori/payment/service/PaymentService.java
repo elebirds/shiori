@@ -157,6 +157,7 @@ public class PaymentService {
         if (existed != null) {
             TradePaymentStatus status = TradePaymentStatus.fromCode(existed.status());
             if (status == TradePaymentStatus.RESERVED) {
+                ensureReserveRequestMatchesTrade(orderNo.trim(), buyerUserId, sellerUserId, amountCent, existed);
                 return new ReserveOrderPaymentResponse(orderNo.trim(), existed.paymentNo(), status.name(), true);
             }
             throw new BizException(PaymentErrorCode.PAYMENT_TRADE_STATUS_INVALID, HttpStatus.CONFLICT);
@@ -167,6 +168,7 @@ public class PaymentService {
         if (latest != null) {
             TradePaymentStatus latestStatus = TradePaymentStatus.fromCode(latest.status());
             if (latestStatus == TradePaymentStatus.RESERVED) {
+                ensureReserveRequestMatchesTrade(orderNo.trim(), buyerUserId, sellerUserId, amountCent, latest);
                 return new ReserveOrderPaymentResponse(orderNo.trim(), latest.paymentNo(), latestStatus.name(), true);
             }
             throw new BizException(PaymentErrorCode.PAYMENT_TRADE_STATUS_INVALID, HttpStatus.CONFLICT);
@@ -200,6 +202,7 @@ public class PaymentService {
             TradePaymentRecord duplicated = paymentMapper.findTradeByOrderNo(orderNo.trim());
             if (duplicated != null
                     && TradePaymentStatus.fromCode(duplicated.status()) == TradePaymentStatus.RESERVED) {
+                ensureReserveRequestMatchesTrade(orderNo.trim(), buyerUserId, sellerUserId, amountCent, duplicated);
                 return new ReserveOrderPaymentResponse(orderNo.trim(), duplicated.paymentNo(),
                         TradePaymentStatus.fromCode(duplicated.status()).name(), true);
             }
@@ -405,6 +408,20 @@ public class PaymentService {
             return Math.addExact(left, right);
         } catch (ArithmeticException ex) {
             throw new BizException(PaymentErrorCode.PAYMENT_BALANCE_INVALID, HttpStatus.CONFLICT);
+        }
+    }
+
+    private void ensureReserveRequestMatchesTrade(String orderNo,
+                                                  Long buyerUserId,
+                                                  Long sellerUserId,
+                                                  Long amountCent,
+                                                  TradePaymentRecord trade) {
+        if (trade == null
+                || !Objects.equals(orderNo, trade.orderNo())
+                || !Objects.equals(buyerUserId, trade.buyerUserId())
+                || !Objects.equals(sellerUserId, trade.sellerUserId())
+                || !Objects.equals(amountCent, trade.amountCent())) {
+            throw new BizException(PaymentErrorCode.PAYMENT_TRADE_STATUS_INVALID, HttpStatus.CONFLICT);
         }
     }
 }

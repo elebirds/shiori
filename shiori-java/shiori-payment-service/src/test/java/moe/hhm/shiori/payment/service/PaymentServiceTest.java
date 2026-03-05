@@ -151,6 +151,17 @@ class PaymentServiceTest {
     }
 
     @Test
+    void shouldRejectIdempotentReserveWhenRequestMismatch() {
+        when(paymentMapper.findTradeByOrderNoForUpdate("O1003"))
+                .thenReturn(trade("O1003", "P-1003", 1001L, 2001L, 100L, TradePaymentStatus.RESERVED.code()));
+
+        assertThatThrownBy(() -> paymentService.reserveOrderPayment("O1003", 1001L, 2001L, 101L))
+                .isInstanceOf(BizException.class)
+                .matches(ex -> ((BizException) ex).getErrorCode().code() == 60003);
+        verify(paymentMapper, never()).updateWalletBalance(anyLong(), anyLong(), anyLong());
+    }
+
+    @Test
     void shouldReturnIdempotentWhenTradeAppearsAfterWalletLocked() {
         when(paymentMapper.findTradeByOrderNoForUpdate("O1004"))
                 .thenReturn(null, trade("O1004", "P-1004", 1001L, 2001L, 100L, TradePaymentStatus.RESERVED.code()));
@@ -174,6 +185,21 @@ class PaymentServiceTest {
                 .thenReturn(trade("O1005", "P-1005", 1001L, 2001L, 100L, TradePaymentStatus.SETTLED.code()));
 
         assertThatThrownBy(() -> paymentService.reserveOrderPayment("O1005", 1001L, 2001L, 100L))
+                .isInstanceOf(BizException.class)
+                .matches(ex -> ((BizException) ex).getErrorCode().code() == 60003);
+    }
+
+    @Test
+    void shouldRejectReserveWhenDuplicateTradeReservedButRequestMismatch() {
+        when(paymentMapper.findTradeByOrderNoForUpdate("O1006")).thenReturn(null).thenReturn(null);
+        when(paymentMapper.findWalletByUserIdForUpdate(1001L)).thenReturn(wallet(1001L, 500L, 0L));
+        when(paymentMapper.insertTradePayment(eq("O1006"), anyString(), eq(1001L), eq(2001L), eq(100L),
+                eq(TradePaymentStatus.RESERVED.code()), any()))
+                .thenThrow(new DuplicateKeyException("duplicate"));
+        when(paymentMapper.findTradeByOrderNo("O1006"))
+                .thenReturn(trade("O1006", "P-1006", 1001L, 2001L, 101L, TradePaymentStatus.RESERVED.code()));
+
+        assertThatThrownBy(() -> paymentService.reserveOrderPayment("O1006", 1001L, 2001L, 100L))
                 .isInstanceOf(BizException.class)
                 .matches(ex -> ((BizException) ex).getErrorCode().code() == 60003);
     }
@@ -207,6 +233,16 @@ class PaymentServiceTest {
     }
 
     @Test
+    void shouldRejectSettleWhenTradeStatusInvalid() {
+        when(paymentMapper.findTradeByOrderNoForUpdate("O2003"))
+                .thenReturn(trade("O2003", "P-2003", 1001L, 2001L, 150L, TradePaymentStatus.RELEASED.code()));
+
+        assertThatThrownBy(() -> paymentService.settleOrderPayment("O2003", "BUYER", 1001L))
+                .isInstanceOf(BizException.class)
+                .matches(ex -> ((BizException) ex).getErrorCode().code() == 60003);
+    }
+
+    @Test
     void shouldReleaseOrderPaymentSuccessfully() {
         when(paymentMapper.findTradeByOrderNoForUpdate("O3001"))
                 .thenReturn(trade("O3001", "P-3001", 1001L, 2001L, 120L, TradePaymentStatus.RESERVED.code()));
@@ -219,6 +255,28 @@ class PaymentServiceTest {
         assertThat(response.idempotent()).isFalse();
         assertThat(response.status()).isEqualTo("RELEASED");
         verify(paymentMapper).updateWalletBalance(1001L, 420L, 80L);
+    }
+
+    @Test
+    void shouldReturnIdempotentWhenAlreadyReleased() {
+        when(paymentMapper.findTradeByOrderNoForUpdate("O3002"))
+                .thenReturn(trade("O3002", "P-3002", 1001L, 2001L, 120L, TradePaymentStatus.RELEASED.code()));
+
+        ReleaseOrderPaymentResponse response = paymentService.releaseOrderPayment("O3002", "manual");
+
+        assertThat(response.idempotent()).isTrue();
+        assertThat(response.status()).isEqualTo("RELEASED");
+        verify(paymentMapper, never()).updateWalletBalance(anyLong(), anyLong(), anyLong());
+    }
+
+    @Test
+    void shouldRejectReleaseWhenTradeStatusInvalid() {
+        when(paymentMapper.findTradeByOrderNoForUpdate("O3003"))
+                .thenReturn(trade("O3003", "P-3003", 1001L, 2001L, 120L, TradePaymentStatus.SETTLED.code()));
+
+        assertThatThrownBy(() -> paymentService.releaseOrderPayment("O3003", "manual"))
+                .isInstanceOf(BizException.class)
+                .matches(ex -> ((BizException) ex).getErrorCode().code() == 60003);
     }
 
     private WalletAccountRecord wallet(Long userId, Long available, Long frozen) {
