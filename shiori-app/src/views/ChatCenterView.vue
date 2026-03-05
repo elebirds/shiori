@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
-import { useChatStore, type ChatMessageVM } from '@/stores/chat'
+import { useChatStore, type ChatIncomingMessageEvent, type ChatMessageVM } from '@/stores/chat'
 
 const route = useRoute()
 const router = useRouter()
@@ -13,8 +13,13 @@ const chatStore = useChatStore()
 const draft = ref('')
 const messageViewportRef = ref<HTMLElement | null>(null)
 const loadingOlderMessages = ref(false)
+const isAtBottom = ref(true)
+const newIncomingCount = ref(0)
+const isSwitchingConversation = ref(false)
 const TIME_GROUP_GAP_MS = 5 * 60 * 1000
+const BOTTOM_THRESHOLD_PX = 48
 const WEEKDAY_LABELS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
+let unlistenIncomingMessage: (() => void) | null = null
 
 interface ChatTimelineEntry {
   key: string
@@ -77,12 +82,20 @@ const timelineEntries = computed<ChatTimelineEntry[]>(() => {
 })
 
 onMounted(async () => {
+  unlistenIncomingMessage = chatStore.registerIncomingMessageListener(handleIncomingMessage)
   await chatStore.bootstrap()
   const queryConversationId = Number(route.query.conversationId || 0)
   if (queryConversationId > 0) {
-    await chatStore.openConversation(queryConversationId)
+    await openConversationAndStickBottom(queryConversationId)
   } else if (chatStore.conversations.length > 0) {
-    await chatStore.openConversation(chatStore.conversations[0].conversationId)
+    await openConversationAndStickBottom(chatStore.conversations[0].conversationId)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (unlistenIncomingMessage) {
+    unlistenIncomingMessage()
+    unlistenIncomingMessage = null
   }
 })
 
@@ -91,7 +104,7 @@ watch(
   async (raw) => {
     const conversationId = Number(raw || 0)
     if (conversationId > 0 && conversationId !== chatStore.activeConversationId) {
-      await chatStore.openConversation(conversationId)
+      await openConversationAndStickBottom(conversationId)
     }
   },
 )
@@ -174,6 +187,10 @@ async function submitMessage(): Promise<void> {
   }
   await chatStore.sendMessage(content)
   draft.value = ''
+  await nextTick()
+  if (isAtBottom.value || computeIsAtBottom()) {
+    scrollToBottom('smooth')
+  }
 }
 
 async function loadOlderByScrollTop(): Promise<void> {
@@ -192,11 +209,73 @@ async function loadOlderByScrollTop(): Promise<void> {
   await nextTick()
   const increased = viewport.scrollHeight - prevHeight
   viewport.scrollTop = prevTop + increased
+  updateBottomState()
   loadingOlderMessages.value = false
 }
 
 function handleMessageScroll(): void {
+  updateBottomState()
   void loadOlderByScrollTop()
+}
+
+function computeIsAtBottom(): boolean {
+  const viewport = messageViewportRef.value
+  if (!viewport) {
+    return true
+  }
+  const distance = viewport.scrollHeight - (viewport.scrollTop + viewport.clientHeight)
+  return distance <= BOTTOM_THRESHOLD_PX
+}
+
+function updateBottomState(): void {
+  isAtBottom.value = computeIsAtBottom()
+  if (isAtBottom.value && newIncomingCount.value > 0) {
+    newIncomingCount.value = 0
+  }
+}
+
+function scrollToBottom(behavior: ScrollBehavior): void {
+  const viewport = messageViewportRef.value
+  if (!viewport) {
+    return
+  }
+  viewport.scrollTo({
+    top: viewport.scrollHeight,
+    behavior,
+  })
+  isAtBottom.value = true
+}
+
+async function openConversationAndStickBottom(conversationId: number): Promise<void> {
+  isSwitchingConversation.value = true
+  newIncomingCount.value = 0
+  await chatStore.openConversation(conversationId)
+  await nextTick()
+  scrollToBottom('auto')
+  updateBottomState()
+  isSwitchingConversation.value = false
+}
+
+function handleIncomingMessage(event: ChatIncomingMessageEvent): void {
+  if (event.conversationId !== activeConversationId.value) {
+    return
+  }
+  if (isSwitchingConversation.value) {
+    return
+  }
+  nextTick(() => {
+    if (isAtBottom.value || computeIsAtBottom()) {
+      scrollToBottom('smooth')
+      newIncomingCount.value = 0
+      return
+    }
+    newIncomingCount.value += 1
+  })
+}
+
+function jumpToLatest(): void {
+  newIncomingCount.value = 0
+  scrollToBottom('smooth')
 }
 </script>
 
@@ -314,7 +393,20 @@ function handleMessageScroll(): void {
           </div>
         </div>
 
-        <footer class="border-t border-stone-100 p-3">
+        <div
+          v-if="activeConversation && newIncomingCount > 0"
+          class="flex items-center justify-center border-t border-stone-200/80 bg-white/95 px-3 py-2"
+        >
+          <button
+            type="button"
+            class="rounded-full bg-stone-900 px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-stone-700"
+            @click="jumpToLatest"
+          >
+            新消息 {{ newIncomingCount }}
+          </button>
+        </div>
+
+        <footer class="p-3" :class="activeConversation && newIncomingCount > 0 ? '' : 'border-t border-stone-100'">
           <div class="flex items-end gap-2">
             <textarea
               v-model="draft"

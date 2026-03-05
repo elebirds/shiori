@@ -27,6 +27,16 @@ export interface ChatMessageVM {
   status?: 'pending' | 'sent' | 'failed'
 }
 
+export interface ChatIncomingMessageEvent {
+  conversationId: number
+  messageId: number
+  senderId: number
+  receiverId: number
+  clientMsgId: string
+  content: string
+  createdAt: string
+}
+
 export interface ChatConversationVM {
   conversationId: number
   listingId: number
@@ -40,6 +50,8 @@ export interface ChatConversationVM {
   listingTitle?: string
   listingCoverImageUrl?: string
 }
+
+type ChatIncomingMessageListener = (event: ChatIncomingMessageEvent) => void
 
 interface ConversationCursorState {
   before: number
@@ -67,6 +79,7 @@ export const useChatStore = defineStore('chat', () => {
   const notifyStore = useNotifyStore()
 
   let unlistenFrame: (() => void) | null = null
+  const incomingMessageListeners = new Set<ChatIncomingMessageListener>()
 
   const activeMessages = computed(() => {
     if (!activeConversationId.value) {
@@ -295,6 +308,9 @@ export const useChatStore = defineStore('chat', () => {
         chatUnreadConversationCount.value += 1
       }
     }
+    if (incomingForMe) {
+      notifyIncomingMessageListeners(message)
+    }
   }
 
   function handleSendAck(frame: WSFramePayload): void {
@@ -500,6 +516,32 @@ export const useChatStore = defineStore('chat', () => {
     return target?.peerUserId || 0
   }
 
+  function registerIncomingMessageListener(listener: ChatIncomingMessageListener): () => void {
+    incomingMessageListeners.add(listener)
+    return () => {
+      incomingMessageListeners.delete(listener)
+    }
+  }
+
+  function notifyIncomingMessageListeners(message: ChatMessageVM): void {
+    const event: ChatIncomingMessageEvent = {
+      conversationId: message.conversationId,
+      messageId: message.messageId,
+      senderId: message.senderId,
+      receiverId: message.receiverId,
+      clientMsgId: message.clientMsgId,
+      content: message.content,
+      createdAt: message.createdAt,
+    }
+    for (const listener of incomingMessageListeners) {
+      try {
+        listener(event)
+      } catch {
+        // ignore listener failures to avoid blocking other subscribers
+      }
+    }
+  }
+
   function reset(): void {
     conversations.value = []
     messagesByConversation.value = {}
@@ -527,6 +569,7 @@ export const useChatStore = defineStore('chat', () => {
     openConversation,
     loadOlderMessages,
     hasOlderMessages,
+    registerIncomingMessageListener,
     sendMessage,
     refreshSummary,
     initialize,

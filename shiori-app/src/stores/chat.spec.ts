@@ -153,4 +153,64 @@ describe('chat store', () => {
 
     expect(chatStore.activeMessages.map((item) => item.content)).toEqual(['第一条', '第二条'])
   })
+
+  it('should dispatch incoming listener only for peer chat_message', async () => {
+    const authStore = useAuthStore()
+    authStore.setSession({
+      accessToken: 'token',
+      refreshToken: 'refresh',
+      user: { userId: 1001, userNo: 'U1', username: 'buyer', roles: ['USER'] },
+    })
+    const notifyStore = useNotifyStore()
+    let frameListener: ((frame: Record<string, unknown>) => void) | null = null
+    notifyStore.registerFrameListener = vi.fn((listener) => {
+      frameListener = listener
+      return () => {}
+    })
+    notifyStore.sendFrame = vi.fn(() => true)
+
+    const chatStore = useChatStore()
+    await chatStore.bootstrap()
+    await chatStore.openConversation(11)
+    await chatStore.sendMessage('hello')
+    const incomingListener = vi.fn()
+    chatStore.registerIncomingMessageListener(incomingListener)
+
+    frameListener?.({
+      type: 'send_ack',
+      conversationId: 11,
+      clientMsgId: chatStore.activeMessages[0].clientMsgId,
+      messageId: 101,
+      createdAt: new Date().toISOString(),
+    })
+    frameListener?.({
+      type: 'chat_message',
+      conversationId: 11,
+      messageId: 102,
+      senderId: 1001,
+      receiverId: 2002,
+      clientMsgId: 'self-1',
+      content: 'self message',
+      createdAt: new Date().toISOString(),
+    })
+    frameListener?.({
+      type: 'chat_message',
+      conversationId: 11,
+      messageId: 103,
+      senderId: 2002,
+      receiverId: 1001,
+      clientMsgId: 'peer-1',
+      content: 'peer message',
+      createdAt: new Date().toISOString(),
+    })
+
+    expect(incomingListener).toHaveBeenCalledTimes(1)
+    expect(incomingListener.mock.calls[0][0]).toMatchObject({
+      conversationId: 11,
+      messageId: 103,
+      senderId: 2002,
+      receiverId: 1001,
+      content: 'peer message',
+    })
+  })
 })

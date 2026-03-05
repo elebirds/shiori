@@ -1,12 +1,83 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 
 import AppHeader from '@/components/AppHeader.vue'
+import ChatPopupStack from '@/components/ChatPopupStack.vue'
+import { useAuthStore } from '@/stores/auth'
+import { useChatPopupStore } from '@/stores/chatPopup'
+import { useChatStore, type ChatIncomingMessageEvent } from '@/stores/chat'
 import { useNotifyStore } from '@/stores/notify'
 
+const router = useRouter()
+const authStore = useAuthStore()
+const chatStore = useChatStore()
+const chatPopupStore = useChatPopupStore()
 const notifyStore = useNotifyStore()
+let unlistenIncoming: (() => void) | null = null
 
 const latestMessages = computed(() => notifyStore.messages.slice(0, 3))
+
+function shouldShowChatPopup(event: ChatIncomingMessageEvent): boolean {
+  const route = router.currentRoute.value
+  if (route.path !== '/chat') {
+    return true
+  }
+  const routeConversationId = Number(route.query.conversationId || 0)
+  const currentConversationId = chatStore.activeConversationId || (routeConversationId > 0 ? routeConversationId : 0)
+  return currentConversationId !== event.conversationId
+}
+
+function resolveConversationMeta(conversationId: number): { peerNickname: string; peerAvatarUrl: string } {
+  const target = chatStore.conversations.find((item) => item.conversationId === conversationId)
+  if (!target) {
+    return {
+      peerNickname: `会话 ${conversationId}`,
+      peerAvatarUrl: '',
+    }
+  }
+  return {
+    peerNickname: target.peerProfile?.nickname || `用户 ${target.peerUserId}`,
+    peerAvatarUrl: target.peerProfile?.avatarUrl || '',
+  }
+}
+
+function handleIncomingMessage(event: ChatIncomingMessageEvent): void {
+  if (!shouldShowChatPopup(event)) {
+    return
+  }
+  const meta = resolveConversationMeta(event.conversationId)
+  chatPopupStore.enqueue({
+    conversationId: event.conversationId,
+    senderId: event.senderId,
+    content: event.content,
+    createdAt: event.createdAt,
+    peerNickname: meta.peerNickname,
+    peerAvatarUrl: meta.peerAvatarUrl,
+  })
+}
+
+onMounted(() => {
+  unlistenIncoming = chatStore.registerIncomingMessageListener(handleIncomingMessage)
+})
+
+watch(
+  () => authStore.isAuthenticated,
+  (authed) => {
+    if (!authed) {
+      chatPopupStore.clearAll()
+    }
+  },
+  { immediate: true },
+)
+
+onBeforeUnmount(() => {
+  if (unlistenIncoming) {
+    unlistenIncoming()
+    unlistenIncoming = null
+  }
+  chatPopupStore.clearAll()
+})
 </script>
 
 <template>
@@ -17,6 +88,8 @@ const latestMessages = computed(() => notifyStore.messages.slice(0, 3))
     </div>
 
     <AppHeader />
+
+    <ChatPopupStack />
 
     <main class="mx-auto max-w-6xl px-4 py-8 sm:px-6">
       <RouterView />
