@@ -26,7 +26,12 @@ public enum OrderErrorCode implements ErrorCode {
     ORDER_CART_EMPTY(50022, "购物车为空"),
     ORDER_CART_ITEM_NOT_FOUND(50023, "购物车商品不存在"),
     ORDER_CART_CROSS_SELLER_NOT_ALLOWED(50024, "购物车暂不支持跨卖家"),
-    ORDER_CART_ITEM_INVALID(50025, "购物车商品信息非法");
+    ORDER_CART_ITEM_INVALID(50025, "购物车商品信息非法"),
+    ORDER_REFUND_NOT_ALLOWED(50026, "当前订单状态不允许退款"),
+    ORDER_REFUND_ALREADY_EXISTS(50027, "订单退款已存在"),
+    ORDER_REFUND_NOT_FOUND(50028, "退款单不存在"),
+    ORDER_REFUND_STATUS_INVALID(50029, "退款单状态非法"),
+    ORDER_REFUND_PENDING_FUNDS(50030, "退款挂起，等待卖家余额补足");
 
     private final int code;
     private final String message;

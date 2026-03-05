@@ -7,7 +7,10 @@ public enum PaymentErrorCode implements ErrorCode {
     PAYMENT_TRADE_STATUS_INVALID(60003, "支付交易状态非法"),
     PAYMENT_CDK_INVALID(60004, "CDK无效"),
     PAYMENT_CDK_ALREADY_REDEEMED(60005, "CDK已兑换"),
-    PAYMENT_CDK_EXPIRED(60006, "CDK已过期");
+    PAYMENT_CDK_EXPIRED(60006, "CDK已过期"),
+    PAYMENT_REFUND_NOT_FOUND(60007, "退款记录不存在"),
+    PAYMENT_REFUND_STATUS_INVALID(60008, "退款状态非法"),
+    PAYMENT_REFUND_PENDING_FUNDS(60009, "退款挂起，卖家可用余额不足");
 
     private final int code;
     private final String message;
