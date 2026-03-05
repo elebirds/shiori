@@ -467,7 +467,7 @@ RabbitMQ 与 MinIO 也会通过一次性容器完成最小权限初始化：
 | `NACOS_CONFIG_NAMESPACE` | 否 | public 或指定 namespace | 指定 namespace | 指定 namespace | Compose/启动环境 |
 | `JWT_HMAC_SECRET` | 是 | `.env` 本地密钥 | CI 运行时生成/Secret | Secret 管理系统 | `nacos-config-init` 模板渲染 |
 | `GATEWAY_SIGN_SECRET` | 是 | `.env` 本地密钥 | CI 运行时生成/Secret | Secret 管理系统 | `nacos-config-init` 模板渲染 |
-| `ORDER_PAYMENT_INTERNAL_TOKEN` | 是 | `.env` 本地密钥 | CI Secret | Secret 管理系统 | `shiori-order-service-base.yml` / `shiori-payment-service-base.yml` |
+| `ORDER_PAYMENT_INTERNAL_TOKEN` | 是 | `.env` 本地密钥 | CI Secret | Secret 管理系统 | `shiori-order-service-secret.yml` / `shiori-payment-service-secret.yml` |
 | `USER_DB_USERNAME` | 否（建议最小权限） | `.env` | CI Secret/变量 | Secret 管理系统 | `shiori-user-service-secret.yml` |
 | `USER_DB_PASSWORD` | 是 | `.env` | CI Secret | Secret 管理系统 | `shiori-user-service-secret.yml` |
 | `PRODUCT_DB_USERNAME` | 否（建议最小权限） | `.env` | CI Secret/变量 | Secret 管理系统 | `shiori-product-service-secret.yml` |
