@@ -13,6 +13,10 @@ public record SellerOrderSummaryResponse(
         Long listingId,
         LocalDateTime createdAt,
         LocalDateTime paidAt,
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+        String refundStatus,
+        String refundNo,
+        Long refundAmountCent,
+        LocalDateTime refundUpdatedAt
 ) {
 }

@@ -65,6 +65,10 @@ public class OrderService {
                 order.createdAt(),
                 order.paidAt(),
                 order.timeoutAt(),
+                order.refundStatus(),
+                order.refundNo(),
+                order.refundAmountCent(),
+                order.refundUpdatedAt(),
                 items
         );
     }
@@ -86,7 +90,11 @@ public class OrderService {
                         record.chatConversationId(),
                         record.chatListingId(),
                         record.createdAt(),
-                        record.paidAt()))
+                        record.paidAt(),
+                        record.refundStatus(),
+                        record.refundNo(),
+                        record.refundAmountCent(),
+                        record.refundUpdatedAt()))
                 .toList();
         return new OrderPageResponse(total, normalizedPage, normalizedSize, items);
     }
@@ -126,7 +134,11 @@ public class OrderService {
                         record.chatConversationId(),
                         record.chatListingId(),
                         record.createdAt(),
-                        record.paidAt()))
+                        record.paidAt(),
+                        record.refundStatus(),
+                        record.refundNo(),
+                        record.refundAmountCent(),
+                        record.refundUpdatedAt()))
                 .toList();
         return new OrderPageResponse(total, normalizedPage, normalizedSize, items);
     }
@@ -188,7 +200,11 @@ public class OrderService {
                         record.chatListingId(),
                         record.createdAt(),
                         record.paidAt(),
-                        record.updatedAt()))
+                        record.updatedAt(),
+                        record.refundStatus(),
+                        record.refundNo(),
+                        record.refundAmountCent(),
+                        record.refundUpdatedAt()))
                 .toList();
         return new SellerOrderPageResponse(total, normalizedPage, normalizedSize, items);
     }
@@ -226,6 +242,10 @@ public class OrderService {
                 order.createdAt(),
                 order.paidAt(),
                 order.timeoutAt(),
+                order.refundStatus(),
+                order.refundNo(),
+                order.refundAmountCent(),
+                order.refundUpdatedAt(),
                 items
         );
     }

@@ -2,6 +2,7 @@ package moe.hhm.shiori.order;
 
 import moe.hhm.shiori.order.service.OrderCommandService;
 import moe.hhm.shiori.order.service.OrderCartService;
+import moe.hhm.shiori.order.service.OrderRefundService;
 import moe.hhm.shiori.order.service.OrderService;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -21,6 +22,9 @@ class ShioriOrderServiceApplicationTests {
 
     @MockitoBean
     private OrderCartService orderCartService;
+
+    @MockitoBean
+    private OrderRefundService orderRefundService;
 
     @Test
     void contextLoads() {

@@ -54,5 +54,14 @@ public class OrderMqTopology {
                 .with(properties.getDelayRoutingKey());
         amqpAdmin.declareBinding(delayBinding);
         amqpAdmin.declareBinding(consumeBinding);
+
+        TopicExchange paymentEventExchange = new TopicExchange(properties.getPaymentEventExchange(), true, false);
+        amqpAdmin.declareExchange(paymentEventExchange);
+        Queue walletBalanceChangedQueue = new Queue(properties.getWalletBalanceChangedQueue(), true);
+        amqpAdmin.declareQueue(walletBalanceChangedQueue);
+        Binding walletChangedBinding = BindingBuilder.bind(walletBalanceChangedQueue)
+                .to(paymentEventExchange)
+                .with(properties.getWalletBalanceChangedRoutingKey());
+        amqpAdmin.declareBinding(walletChangedBinding);
     }
 }

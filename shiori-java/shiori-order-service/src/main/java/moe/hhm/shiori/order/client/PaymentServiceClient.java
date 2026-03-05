@@ -42,6 +42,9 @@ public class PaymentServiceClient {
     private static final ParameterizedTypeReference<Result<ReleaseBalancePaymentSnapshot>> RELEASE_TYPE =
             new ParameterizedTypeReference<>() {
             };
+    private static final ParameterizedTypeReference<Result<RefundBalancePaymentSnapshot>> REFUND_TYPE =
+            new ParameterizedTypeReference<>() {
+            };
 
     private final RestClient restClient;
     private final GatewaySignProperties gatewaySignProperties;
@@ -141,6 +144,35 @@ public class PaymentServiceClient {
         }
     }
 
+    public RefundBalancePaymentSnapshot refundOrderPayment(String orderNo,
+                                                           String refundNo,
+                                                           String operatorType,
+                                                           Long operatorUserId,
+                                                           String reason,
+                                                           Long userId,
+                                                           List<String> roles) {
+        String path = "/api/payment/internal/orders/" + orderNo + "/refund";
+        RefundBalancePaymentCommand command = new RefundBalancePaymentCommand(refundNo, operatorType, operatorUserId, reason);
+        try {
+            Result<RefundBalancePaymentSnapshot> result = restClient.post()
+                    .uri(path)
+                    .headers(headers -> fillSignedHeaders(headers, "POST", path, null, userId, roles))
+                    .body(command)
+                    .retrieve()
+                    .body(REFUND_TYPE);
+            if (result == null || result.code() != Result.SUCCESS_CODE || result.data() == null) {
+                throw mapRemoteFailure(HttpStatus.BAD_REQUEST.value(), result);
+            }
+            return result.data();
+        } catch (RestClientResponseException ex) {
+            throw mapRemoteException(ex);
+        } catch (BizException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            throw mapRuntimeException(ex);
+        }
+    }
+
     void fillSignedHeaders(HttpHeaders headers,
                            String method,
                            String path,
@@ -198,6 +230,9 @@ public class PaymentServiceClient {
         if (failure != null) {
             if (failure.code() == PaymentErrorCode.PAYMENT_BALANCE_NOT_ENOUGH.code()) {
                 return new BizException(OrderErrorCode.ORDER_BALANCE_NOT_ENOUGH, HttpStatus.CONFLICT);
+            }
+            if (failure.code() == PaymentErrorCode.PAYMENT_REFUND_PENDING_FUNDS.code()) {
+                return new BizException(OrderErrorCode.ORDER_REFUND_PENDING_FUNDS, HttpStatus.CONFLICT);
             }
             if (failure.code() == CommonErrorCode.UNAUTHORIZED.code()
                     || failure.code() == CommonErrorCode.FORBIDDEN.code()) {

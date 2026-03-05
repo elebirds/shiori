@@ -5,6 +5,7 @@ import moe.hhm.shiori.common.security.GatewaySignVerifyFilter;
 import moe.hhm.shiori.order.dto.OrderOperateResponse;
 import moe.hhm.shiori.order.service.OrderCommandService;
 import moe.hhm.shiori.order.service.OrderCartService;
+import moe.hhm.shiori.order.service.OrderRefundService;
 import moe.hhm.shiori.order.service.OrderService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +42,9 @@ class OrderV2ControllerMvcTest {
 
     @MockitoBean
     private OrderCartService orderCartService;
+
+    @MockitoBean
+    private OrderRefundService orderRefundService;
 
     @Test
     void shouldPayByBalanceWhenBodyAbsent() throws Exception {

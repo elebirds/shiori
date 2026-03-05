@@ -15,6 +15,10 @@ public record OrderDetailResponse(
         LocalDateTime createdAt,
         LocalDateTime paidAt,
         LocalDateTime timeoutAt,
+        String refundStatus,
+        String refundNo,
+        Long refundAmountCent,
+        LocalDateTime refundUpdatedAt,
         List<OrderItemResponse> items
 ) {
 }

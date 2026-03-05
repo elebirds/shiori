@@ -11,6 +11,10 @@ public record OrderSummaryResponse(
         Long conversationId,
         Long listingId,
         LocalDateTime createdAt,
-        LocalDateTime paidAt
+        LocalDateTime paidAt,
+        String refundStatus,
+        String refundNo,
+        Long refundAmountCent,
+        LocalDateTime refundUpdatedAt
 ) {
 }

@@ -20,6 +20,9 @@ public class OrderMqProperties {
     private String timeoutDelayQueue = "q.order.timeout.delay";
     private String timeoutConsumeQueue = "q.order.timeout.consume";
     private long timeoutTtlMs = 900000;
+    private String paymentEventExchange = "shiori.payment.event";
+    private String walletBalanceChangedRoutingKey = "wallet.balance.changed";
+    private String walletBalanceChangedQueue = "q.order.wallet.balance.changed";
 
     public boolean isEnabled() {
         return enabled;
@@ -123,5 +126,29 @@ public class OrderMqProperties {
 
     public void setTimeoutTtlMs(long timeoutTtlMs) {
         this.timeoutTtlMs = timeoutTtlMs;
+    }
+
+    public String getPaymentEventExchange() {
+        return paymentEventExchange;
+    }
+
+    public void setPaymentEventExchange(String paymentEventExchange) {
+        this.paymentEventExchange = paymentEventExchange;
+    }
+
+    public String getWalletBalanceChangedRoutingKey() {
+        return walletBalanceChangedRoutingKey;
+    }
+
+    public void setWalletBalanceChangedRoutingKey(String walletBalanceChangedRoutingKey) {
+        this.walletBalanceChangedRoutingKey = walletBalanceChangedRoutingKey;
+    }
+
+    public String getWalletBalanceChangedQueue() {
+        return walletBalanceChangedQueue;
+    }
+
+    public void setWalletBalanceChangedQueue(String walletBalanceChangedQueue) {
+        this.walletBalanceChangedQueue = walletBalanceChangedQueue;
     }
 }
