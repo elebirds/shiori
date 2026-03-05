@@ -31,6 +31,7 @@ security:
     order-create-per-second: 10
     order-pay-per-second: 15
   authz:
+    user-service-base-url: ${SECURITY_AUTHZ_USER_SERVICE_BASE_URL}
     cache:
       redis:
         enabled: ${SECURITY_AUTHZ_CACHE_REDIS_ENABLED:true}
