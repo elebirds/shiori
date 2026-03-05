@@ -15,6 +15,10 @@ const chatStore = useChatStore()
 const chatPopupStore = useChatPopupStore()
 const notifyStore = useNotifyStore()
 let unlistenIncoming: (() => void) | null = null
+let audioContext: AudioContext | null = null
+let lastSoundAt = 0
+
+const CHAT_SOUND_MIN_INTERVAL_MS = 2_000
 
 const latestMessages = computed(() => notifyStore.messages.slice(0, 3))
 
@@ -55,6 +59,44 @@ function handleIncomingMessage(event: ChatIncomingMessageEvent): void {
     peerNickname: meta.peerNickname,
     peerAvatarUrl: meta.peerAvatarUrl,
   })
+  playChatPopupSound()
+}
+
+function playChatPopupSound(): void {
+  const now = Date.now()
+  if (now - lastSoundAt < CHAT_SOUND_MIN_INTERVAL_MS) {
+    return
+  }
+  lastSoundAt = now
+
+  const AudioConstructor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+  if (!AudioConstructor) {
+    return
+  }
+
+  try {
+    if (!audioContext) {
+      audioContext = new AudioConstructor()
+    }
+    if (audioContext.state === 'suspended') {
+      void audioContext.resume()
+    }
+    const startAt = audioContext.currentTime
+    const oscillator = audioContext.createOscillator()
+    const gain = audioContext.createGain()
+    oscillator.type = 'triangle'
+    oscillator.frequency.setValueAtTime(740, startAt)
+    oscillator.frequency.exponentialRampToValueAtTime(980, startAt + 0.11)
+    gain.gain.setValueAtTime(0.0001, startAt)
+    gain.gain.exponentialRampToValueAtTime(0.08, startAt + 0.015)
+    gain.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.2)
+    oscillator.connect(gain)
+    gain.connect(audioContext.destination)
+    oscillator.start(startAt)
+    oscillator.stop(startAt + 0.22)
+  } catch {
+    // ignore audio failures to avoid breaking message flow
+  }
 }
 
 onMounted(() => {
@@ -75,6 +117,10 @@ onBeforeUnmount(() => {
   if (unlistenIncoming) {
     unlistenIncoming()
     unlistenIncoming = null
+  }
+  if (audioContext) {
+    void audioContext.close()
+    audioContext = null
   }
   chatPopupStore.clearAll()
 })
