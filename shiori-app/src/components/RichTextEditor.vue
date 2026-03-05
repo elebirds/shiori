@@ -126,7 +126,7 @@ function handleCreated(editor: IDomEditor): void {
 onBeforeUnmount(() => {
   const editor = editorRef.value
   if (editor) {
-    editor.destroy()
+    editor.destroy?.()
     editorRef.value = undefined
   }
   objectUrls.forEach((url) => URL.revokeObjectURL(url))

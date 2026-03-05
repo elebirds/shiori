@@ -10,7 +10,7 @@ import {
   type NotifyEventItem,
 } from '@/api/notify'
 
-export interface NotifyEnvelope {
+export interface NotifyEnvelope extends Record<string, unknown> {
   eventId: string
   type: string
   aggregateId: string
