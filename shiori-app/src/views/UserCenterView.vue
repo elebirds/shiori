@@ -3,7 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { followUser, getUserProfileByUserNo, unfollowUser } from '@/api/auth'
+import { followUser, getUserProfileByUserNo, getUserProfilesByUserIds, unfollowUser } from '@/api/auth'
+import { getUserCreditProfileV2, listUserPraiseWallV2 } from '@/api/orderV2'
 import {
   listUserProductsV2,
   type ProductCategoryCode,
@@ -23,11 +24,14 @@ const queryClient = useQueryClient()
 const activeTab = ref<CenterTab>('products')
 const page = ref(1)
 const size = 12
+const reviewPage = ref(1)
+const reviewSize = 10
 const routeUserNo = computed(() => String(route.params.userNo || '').trim())
 
 watch(routeUserNo, () => {
   activeTab.value = 'products'
   page.value = 1
+  reviewPage.value = 1
 })
 
 const profileQuery = useQuery({
@@ -51,12 +55,56 @@ const productsQuery = useQuery({
   enabled: computed(() => activeTab.value === 'products' && Boolean(ownerUserId.value)),
 })
 
+const creditQuery = useQuery({
+  queryKey: computed(() => ['user-credit-profile-v2', ownerUserId.value]),
+  queryFn: () => getUserCreditProfileV2(ownerUserId.value as number),
+  enabled: computed(() => Boolean(ownerUserId.value)),
+})
+
+const praiseWallQuery = useQuery({
+  queryKey: computed(() => ['user-praise-wall-v2', ownerUserId.value, reviewPage.value, reviewSize]),
+  queryFn: () =>
+    listUserPraiseWallV2(ownerUserId.value as number, {
+      page: reviewPage.value,
+      size: reviewSize,
+    }),
+  enabled: computed(() => Boolean(ownerUserId.value)),
+})
+
+const praiseReviewerIds = computed(() => {
+  const values = (praiseWallQuery.data.value?.items || []).map((item) => item.reviewerUserId).filter((item) => item > 0)
+  return Array.from(new Set(values))
+})
+
+const praiseReviewerProfilesQuery = useQuery({
+  queryKey: computed(() => ['user-praise-reviewer-profiles', praiseReviewerIds.value.join(',')]),
+  queryFn: () => getUserProfilesByUserIds(praiseReviewerIds.value),
+  enabled: computed(() => praiseReviewerIds.value.length > 0),
+})
+
 const profile = computed(() => profileQuery.data.value)
 const profileErrorMessage = computed(() => (profileQuery.error.value instanceof Error ? profileQuery.error.value.message : ''))
 const productsErrorMessage = computed(() => (productsQuery.error.value instanceof Error ? productsQuery.error.value.message : ''))
+const creditErrorMessage = computed(() => (creditQuery.error.value instanceof Error ? creditQuery.error.value.message : ''))
+const praiseWallErrorMessage = computed(() => (praiseWallQuery.error.value instanceof Error ? praiseWallQuery.error.value.message : ''))
 const items = computed(() => productsQuery.data.value?.items || [])
 const total = computed(() => productsQuery.data.value?.total || 0)
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / size)))
+const creditProfile = computed(() => creditQuery.data.value)
+const praiseItems = computed(() => praiseWallQuery.data.value?.items || [])
+const praiseTotal = computed(() => praiseWallQuery.data.value?.total || 0)
+const praiseTotalPages = computed(() => Math.max(1, Math.ceil(praiseTotal.value / reviewSize)))
+const praiseReviewerProfileMap = computed(() => {
+  const map = new Map<number, { nickname: string; avatarUrl?: string; userNo: string }>()
+  for (const item of praiseReviewerProfilesQuery.data.value || []) {
+    map.set(item.userId, {
+      nickname: item.nickname || item.username || item.userNo,
+      avatarUrl: item.avatarUrl,
+      userNo: item.userNo,
+    })
+  }
+  return map
+})
 
 const displayNickname = computed(() => profile.value?.nickname || profile.value?.username || '未知用户')
 const displayUsername = computed(() => profile.value?.username || 'unknown')
@@ -73,6 +121,14 @@ const tags = computed(() => {
   values.push('校园用户')
   return values.filter((value) => value.length > 0)
 })
+const compositeScoreText = computed(() => {
+  const score = creditProfile.value?.composite?.compositeScore100
+  return score == null ? '--' : String(score)
+})
+const compositeGradeText = computed(() => creditProfile.value?.composite?.creditGrade || 'NEW')
+const sellerAvgStarText = computed(() => Number(creditProfile.value?.sellerProfile?.avgStar || 0).toFixed(1))
+const buyerAvgStarText = computed(() => Number(creditProfile.value?.buyerProfile?.avgStar || 0).toFixed(1))
+const praisePreviewComment = computed(() => praiseItems.value[0]?.comment || '暂无上墙评价')
 
 const isSelf = computed(() => {
   if (!authStore.isAuthenticated) {
@@ -130,10 +186,21 @@ function goDetail(productId: number): void {
   void router.push(`/products/${productId}`)
 }
 
+function goUser(userNo: string): void {
+  if (!userNo) {
+    return
+  }
+  void router.push(`/u/${encodeURIComponent(userNo)}`)
+}
+
 function switchTab(tab: CenterTab): void {
   activeTab.value = tab
   if (tab === 'products') {
     page.value = 1
+    return
+  }
+  if (tab === 'reviews') {
+    reviewPage.value = 1
   }
 }
 
@@ -201,6 +268,39 @@ function formatTradeMode(code: ProductTradeMode): string {
     return '邮寄'
   }
   return '均可'
+}
+
+function formatPositiveRate(rate?: number): string {
+  if (rate == null) {
+    return '--'
+  }
+  return `${(Number(rate) * 100).toFixed(1)}%`
+}
+
+function formatReviewRole(role?: string): string {
+  return role === 'BUYER' ? '来自买家' : '来自卖家'
+}
+
+function formatReviewTime(raw?: string): string {
+  if (!raw) {
+    return '-'
+  }
+  const parsed = new Date(raw)
+  if (Number.isNaN(parsed.getTime())) {
+    return raw
+  }
+  return parsed.toLocaleString('zh-CN')
+}
+
+function reviewerMeta(userId: number): { nickname: string; avatarUrl?: string; userNo: string } {
+  const profile = praiseReviewerProfileMap.value.get(userId)
+  if (profile) {
+    return profile
+  }
+  return {
+    nickname: `用户${userId}`,
+    userNo: String(userId),
+  }
 }
 </script>
 
@@ -285,7 +385,14 @@ function formatTradeMode(code: ProductTradeMode): string {
         <section class="grid grid-cols-3 gap-3">
           <article class="rounded-2xl border border-stone-200 bg-white/95 p-4">
             <h2 class="text-sm font-semibold text-stone-900">信用档案</h2>
-            <p class="mt-2 text-xs text-stone-600">交易信用能力正在完善中，后续会展示买卖双方评价与信用分。</p>
+            <p v-if="creditErrorMessage" class="mt-2 text-xs text-rose-600">{{ creditErrorMessage }}</p>
+            <template v-else>
+              <p class="mt-2 text-2xl font-semibold text-stone-900">{{ compositeScoreText }}</p>
+              <p class="mt-1 text-xs text-stone-600">综合分 / 等级 {{ compositeGradeText }}</p>
+              <p class="mt-2 text-xs text-stone-600">
+                卖家 {{ sellerAvgStarText }} 星 · 买家 {{ buyerAvgStarText }} 星
+              </p>
+            </template>
           </article>
           <article class="rounded-2xl border border-stone-200 bg-white/95 p-4">
             <h2 class="text-sm font-semibold text-stone-900">我的帖子</h2>
@@ -293,7 +400,8 @@ function formatTradeMode(code: ProductTradeMode): string {
           </article>
           <article class="rounded-2xl border border-stone-200 bg-white/95 p-4">
             <h2 class="text-sm font-semibold text-stone-900">夸夸墙</h2>
-            <p class="mt-2 text-xs text-stone-600">收到的好评会在这里展示，帮助更多人认识你。</p>
+            <p class="mt-2 text-xs text-stone-600 line-clamp-3">{{ praisePreviewComment }}</p>
+            <p class="mt-2 text-xs text-stone-500">共 {{ praiseTotal }} 条上墙好评</p>
           </article>
         </section>
 
@@ -382,6 +490,88 @@ function formatTradeMode(code: ProductTradeMode): string {
                     class="rounded-lg border border-stone-300 px-3 py-1.5 text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60"
                     :disabled="page >= totalPages || productsQuery.isFetching.value"
                     @click="page += 1"
+                  >
+                    下一页
+                  </button>
+                </div>
+              </div>
+            </ResultState>
+
+            <ResultState
+              v-else-if="activeTab === 'reviews'"
+              :loading="praiseWallQuery.isLoading.value || praiseWallQuery.isFetching.value"
+              :error="praiseWallErrorMessage"
+              :empty="!praiseWallQuery.isLoading.value && praiseItems.length === 0"
+              empty-text="还没有公开评价"
+            >
+              <div class="space-y-3">
+                <article
+                  v-for="item in praiseItems"
+                  :key="item.reviewId"
+                  class="rounded-2xl border border-stone-200 bg-white p-4"
+                >
+                  <div class="flex items-start justify-between gap-3">
+                    <button type="button" class="flex min-w-0 items-center gap-3 text-left" @click="goUser(reviewerMeta(item.reviewerUserId).userNo)">
+                      <div class="h-11 w-11 overflow-hidden rounded-full border border-stone-200 bg-stone-100">
+                        <img
+                          v-if="reviewerMeta(item.reviewerUserId).avatarUrl"
+                          :src="reviewerMeta(item.reviewerUserId).avatarUrl"
+                          alt="avatar"
+                          class="h-full w-full object-cover"
+                        />
+                        <div v-else class="flex h-full w-full items-center justify-center text-xs text-stone-500">暂无头像</div>
+                      </div>
+                      <div class="min-w-0">
+                        <p class="line-clamp-1 text-sm font-semibold text-stone-900">{{ reviewerMeta(item.reviewerUserId).nickname }}</p>
+                        <p class="mt-0.5 text-xs text-stone-500">{{ formatReviewRole(item.reviewerRole) }} · {{ formatReviewTime(item.createdAt) }}</p>
+                      </div>
+                    </button>
+                    <span class="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700">{{ Number(item.overallStar).toFixed(1) }} 星</span>
+                  </div>
+
+                  <p class="mt-3 text-sm text-stone-700">{{ item.comment }}</p>
+                  <div class="mt-2 flex flex-wrap gap-2 text-xs text-stone-600">
+                    <span class="rounded-full bg-stone-100 px-2 py-1">沟通 {{ item.communicationStar }}</span>
+                    <span class="rounded-full bg-stone-100 px-2 py-1">及时 {{ item.timelinessStar }}</span>
+                    <span class="rounded-full bg-stone-100 px-2 py-1">可信 {{ item.credibilityStar }}</span>
+                  </div>
+                </article>
+              </div>
+
+              <div class="mt-4 grid gap-3 sm:grid-cols-3">
+                <article class="rounded-xl border border-stone-200 bg-white p-3 text-sm">
+                  <p class="text-xs text-stone-500">卖家档案</p>
+                  <p class="mt-1 font-semibold text-stone-900">{{ sellerAvgStarText }} 星</p>
+                  <p class="mt-1 text-xs text-stone-600">好评率 {{ formatPositiveRate(creditProfile?.sellerProfile?.positiveRate) }}</p>
+                </article>
+                <article class="rounded-xl border border-stone-200 bg-white p-3 text-sm">
+                  <p class="text-xs text-stone-500">买家档案</p>
+                  <p class="mt-1 font-semibold text-stone-900">{{ buyerAvgStarText }} 星</p>
+                  <p class="mt-1 text-xs text-stone-600">好评率 {{ formatPositiveRate(creditProfile?.buyerProfile?.positiveRate) }}</p>
+                </article>
+                <article class="rounded-xl border border-stone-200 bg-white p-3 text-sm">
+                  <p class="text-xs text-stone-500">综合信用</p>
+                  <p class="mt-1 font-semibold text-stone-900">{{ compositeScoreText }} 分</p>
+                  <p class="mt-1 text-xs text-stone-600">等级 {{ compositeGradeText }}</p>
+                </article>
+              </div>
+
+              <div class="mt-4 flex items-center justify-between rounded-2xl border border-stone-200 bg-white/90 px-4 py-3 text-sm">
+                <span class="text-stone-600">第 {{ reviewPage }} / {{ praiseTotalPages }} 页，共 {{ praiseTotal }} 条</span>
+                <div class="flex gap-2">
+                  <button
+                    type="button"
+                    class="rounded-lg border border-stone-300 px-3 py-1.5 text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    :disabled="reviewPage <= 1 || praiseWallQuery.isFetching.value"
+                    @click="reviewPage -= 1"
+                  >
+                    上一页
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-lg border border-stone-300 px-3 py-1.5 text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    :disabled="reviewPage >= praiseTotalPages || praiseWallQuery.isFetching.value"
+                    @click="reviewPage += 1"
                   >
                     下一页
                   </button>

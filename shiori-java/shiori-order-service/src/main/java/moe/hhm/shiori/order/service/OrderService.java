@@ -27,9 +27,12 @@ import org.springframework.util.StringUtils;
 public class OrderService {
 
     private final OrderMapper orderMapper;
+    private final OrderReviewService orderReviewService;
 
-    public OrderService(OrderMapper orderMapper) {
+    public OrderService(OrderMapper orderMapper,
+                        OrderReviewService orderReviewService) {
         this.orderMapper = orderMapper;
+        this.orderReviewService = orderReviewService;
     }
 
     public OrderDetailResponse getOrderDetail(Long currentUserId, boolean admin, String orderNo) {
@@ -53,6 +56,7 @@ public class OrderService {
                         item.quantity(),
                         item.subtotalCent()))
                 .toList();
+        OrderReviewAccessState reviewState = orderReviewService.resolveReviewAccessState(order, currentUserId);
         return new OrderDetailResponse(
                 order.orderNo(),
                 order.buyerUserId(),
@@ -64,8 +68,14 @@ public class OrderService {
                 order.chatListingId(),
                 order.createdAt(),
                 order.paidAt(),
+                order.finishedAt(),
                 order.timeoutAt(),
-                items
+                items,
+                reviewState.myReviewSubmitted(),
+                reviewState.counterpartyReviewSubmitted(),
+                reviewState.canCreateReview(),
+                reviewState.canEditReview(),
+                reviewState.reviewDeadlineAt()
         );
     }
 
@@ -214,6 +224,7 @@ public class OrderService {
                         item.quantity(),
                         item.subtotalCent()))
                 .toList();
+        OrderReviewAccessState reviewState = orderReviewService.resolveReviewAccessState(order, sellerUserId);
         return new OrderDetailResponse(
                 order.orderNo(),
                 order.buyerUserId(),
@@ -225,8 +236,14 @@ public class OrderService {
                 order.chatListingId(),
                 order.createdAt(),
                 order.paidAt(),
+                order.finishedAt(),
                 order.timeoutAt(),
-                items
+                items,
+                reviewState.myReviewSubmitted(),
+                reviewState.counterpartyReviewSubmitted(),
+                reviewState.canCreateReview(),
+                reviewState.canEditReview(),
+                reviewState.reviewDeadlineAt()
         );
     }
 

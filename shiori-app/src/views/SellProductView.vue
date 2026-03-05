@@ -157,6 +157,9 @@ function buildSpecCombinations(): SpecItemInput[][] {
       return
     }
     const dimension = normalizedDimensions[depth]
+    if (!dimension) {
+      return
+    }
     dimension.values.forEach((value) => {
       walk(depth + 1, [...current, { name: dimension.name, value }])
     })

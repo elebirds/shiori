@@ -21,6 +21,10 @@ server:
 
 order:
   timeout-minutes: ${ORDER_TIMEOUT_MINUTES:15}
+  review:
+    window-days: ${ORDER_REVIEW_WINDOW_DAYS:15}
+    edit-hours: ${ORDER_REVIEW_EDIT_HOURS:24}
+    comment-max-length: ${ORDER_REVIEW_COMMENT_MAX_LENGTH:280}
   product-client:
     service-base-url: ${ORDER_PRODUCT_SERVICE_BASE_URL:http://shiori-product-service}
   payment-client:

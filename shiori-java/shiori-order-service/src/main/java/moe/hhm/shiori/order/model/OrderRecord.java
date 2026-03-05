@@ -14,6 +14,7 @@ public record OrderRecord(
         String cancelReason,
         LocalDateTime timeoutAt,
         LocalDateTime paidAt,
+        LocalDateTime finishedAt,
         String bizSource,
         Long chatConversationId,
         Long chatListingId,

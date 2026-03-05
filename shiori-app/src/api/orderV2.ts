@@ -51,8 +51,14 @@ export interface OrderDetailResponse {
   listingId?: number
   createdAt: string
   paidAt?: string
+  finishedAt?: string
   timeoutAt?: string
   items: OrderItemResponse[]
+  myReviewSubmitted: boolean
+  counterpartyReviewSubmitted: boolean
+  canCreateReview: boolean
+  canEditReview: boolean
+  reviewDeadlineAt?: string
 }
 
 export interface OrderSummaryResponse {
@@ -141,6 +147,86 @@ export interface OrderTimelineResponse {
   page: number
   size: number
   items: OrderTimelineItemResponse[]
+}
+
+export interface OrderReviewUpsertRequest {
+  communicationStar: number
+  timelinessStar: number
+  credibilityStar: number
+  comment?: string
+}
+
+export interface OrderReviewItemResponse {
+  reviewId: number
+  orderNo: string
+  reviewerUserId: number
+  reviewedUserId: number
+  reviewerRole: 'BUYER' | 'SELLER'
+  communicationStar: number
+  timelinessStar: number
+  credibilityStar: number
+  overallStar: number
+  comment?: string
+  visibilityStatus: 'VISIBLE' | 'HIDDEN_BY_ADMIN'
+  visibilityReason?: string
+  visibilityOperatorUserId?: number
+  visibilityUpdatedAt?: string
+  editCount: number
+  lastEditedAt?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface OrderReviewContextResponse {
+  orderNo: string
+  myReviewSubmitted: boolean
+  counterpartyReviewSubmitted: boolean
+  canCreateReview: boolean
+  canEditReview: boolean
+  reviewDeadlineAt?: string
+  myReview?: OrderReviewItemResponse
+  counterpartyReview?: OrderReviewItemResponse
+}
+
+export interface UserCreditRoleProfileResponse {
+  role: 'buyer' | 'seller'
+  reviewCount: number
+  avgStar: number
+  positiveRate: number
+}
+
+export interface UserCreditCompositeResponse {
+  totalReviewCount: number
+  compositeAvgStar: number
+  compositeScore100: number
+  creditGrade: 'NEW' | 'S' | 'A' | 'B' | 'C' | 'D'
+}
+
+export interface UserCreditProfileResponse {
+  userId: number
+  buyerProfile: UserCreditRoleProfileResponse
+  sellerProfile: UserCreditRoleProfileResponse
+  composite: UserCreditCompositeResponse
+}
+
+export interface PraiseWallItemResponse {
+  reviewId: number
+  orderNo: string
+  reviewerUserId: number
+  reviewerRole: 'BUYER' | 'SELLER'
+  communicationStar: number
+  timelinessStar: number
+  credibilityStar: number
+  overallStar: number
+  comment?: string
+  createdAt: string
+}
+
+export interface PraiseWallPageResponse {
+  total: number
+  page: number
+  size: number
+  items: PraiseWallItemResponse[]
 }
 
 export interface CartSpecItemResponse {
@@ -237,6 +323,29 @@ export function confirmReceiptV2(orderNo: string, payload?: ConfirmReceiptReques
 
 export function getOrderTimelineV2(orderNo: string, query?: OrderQuery): Promise<OrderTimelineResponse> {
   return httpGet<OrderTimelineResponse>(`/api/v2/order/orders/${orderNo}/timeline`, { params: query })
+}
+
+export function createOrderReviewV2(orderNo: string, payload: OrderReviewUpsertRequest): Promise<OrderReviewItemResponse> {
+  return httpPost<OrderReviewItemResponse>(`/api/v2/order/orders/${orderNo}/reviews`, payload)
+}
+
+export function updateMyOrderReviewV2(orderNo: string, payload: OrderReviewUpsertRequest): Promise<OrderReviewItemResponse> {
+  return httpPut<OrderReviewItemResponse>(`/api/v2/order/orders/${orderNo}/reviews/me`, payload)
+}
+
+export function getOrderReviewContextV2(orderNo: string): Promise<OrderReviewContextResponse> {
+  return httpGet<OrderReviewContextResponse>(`/api/v2/order/orders/${orderNo}/reviews`)
+}
+
+export function getUserCreditProfileV2(userId: number): Promise<UserCreditProfileResponse> {
+  return httpGet<UserCreditProfileResponse>(`/api/v2/order/reviews/users/${userId}/credit-profile`)
+}
+
+export function listUserPraiseWallV2(
+  userId: number,
+  query?: { page?: number; size?: number },
+): Promise<PraiseWallPageResponse> {
+  return httpGet<PraiseWallPageResponse>(`/api/v2/order/reviews/users/${userId}/praise-wall`, { params: query })
 }
 
 export function listSellerOrdersV2(query: SellerOrderQuery): Promise<SellerOrderPageResponse> {

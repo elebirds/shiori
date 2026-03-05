@@ -14,6 +14,7 @@ public class OrderEntity {
     private String cancelReason;
     private LocalDateTime timeoutAt;
     private LocalDateTime paidAt;
+    private LocalDateTime finishedAt;
     private String bizSource;
     private Long chatConversationId;
     private Long chatListingId;
@@ -104,6 +105,14 @@ public class OrderEntity {
 
     public void setPaidAt(LocalDateTime paidAt) {
         this.paidAt = paidAt;
+    }
+
+    public LocalDateTime getFinishedAt() {
+        return finishedAt;
+    }
+
+    public void setFinishedAt(LocalDateTime finishedAt) {
+        this.finishedAt = finishedAt;
     }
 
     public String getBizSource() {

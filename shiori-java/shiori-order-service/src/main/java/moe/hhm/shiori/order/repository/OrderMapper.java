@@ -195,6 +195,7 @@ public interface OrderMapper {
                 cancel_reason,
                 timeout_at,
                 paid_at,
+                finished_at,
                 biz_source,
                 chat_conversation_id,
                 chat_listing_id,
@@ -213,6 +214,7 @@ public interface OrderMapper {
                 #{cancelReason},
                 #{timeoutAt},
                 #{paidAt},
+                #{finishedAt},
                 #{bizSource},
                 #{chatConversationId},
                 #{chatListingId},
@@ -337,6 +339,7 @@ public interface OrderMapper {
                    cancel_reason AS cancelReason,
                    timeout_at AS timeoutAt,
                    paid_at AS paidAt,
+                   finished_at AS finishedAt,
                    biz_source AS bizSource,
                    chat_conversation_id AS chatConversationId,
                    chat_listing_id AS chatListingId,
@@ -369,6 +372,7 @@ public interface OrderMapper {
                    cancel_reason AS cancelReason,
                    timeout_at AS timeoutAt,
                    paid_at AS paidAt,
+                   finished_at AS finishedAt,
                    biz_source AS bizSource,
                    chat_conversation_id AS chatConversationId,
                    chat_listing_id AS chatListingId,
@@ -421,6 +425,7 @@ public interface OrderMapper {
                    cancel_reason AS cancelReason,
                    timeout_at AS timeoutAt,
                    paid_at AS paidAt,
+                   finished_at AS finishedAt,
                    biz_source AS bizSource,
                    chat_conversation_id AS chatConversationId,
                    chat_listing_id AS chatListingId,
@@ -476,6 +481,7 @@ public interface OrderMapper {
                    cancel_reason AS cancelReason,
                    timeout_at AS timeoutAt,
                    paid_at AS paidAt,
+                   finished_at AS finishedAt,
                    biz_source AS bizSource,
                    chat_conversation_id AS chatConversationId,
                    chat_listing_id AS chatListingId,
@@ -546,6 +552,7 @@ public interface OrderMapper {
                    cancel_reason AS cancelReason,
                    timeout_at AS timeoutAt,
                    paid_at AS paidAt,
+                   finished_at AS finishedAt,
                    biz_source AS bizSource,
                    chat_conversation_id AS chatConversationId,
                    chat_listing_id AS chatListingId,
@@ -679,6 +686,7 @@ public interface OrderMapper {
     @Update("""
             UPDATE o_order
             SET status = #{finishedStatus},
+                finished_at = CURRENT_TIMESTAMP(3),
                 updated_at = CURRENT_TIMESTAMP(3),
                 version = version + 1
             WHERE order_no = #{orderNo}
@@ -694,6 +702,7 @@ public interface OrderMapper {
     @Update("""
             UPDATE o_order
             SET status = #{finishedStatus},
+                finished_at = CURRENT_TIMESTAMP(3),
                 updated_at = CURRENT_TIMESTAMP(3),
                 version = version + 1
             WHERE order_no = #{orderNo}
@@ -707,6 +716,7 @@ public interface OrderMapper {
     @Update("""
             UPDATE o_order
             SET status = #{finishedStatus},
+                finished_at = CURRENT_TIMESTAMP(3),
                 updated_at = CURRENT_TIMESTAMP(3),
                 version = version + 1
             WHERE order_no = #{orderNo}

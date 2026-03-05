@@ -95,6 +95,7 @@ security:
       - /api/user/profiles/**
       - /api/user/media/avatar/**
       - /api/v2/product/users/**
+      - /api/v2/order/reviews/users/**
   authz:
     enabled: ${SECURITY_AUTHZ_ENABLED:true}
     user-service-base-url: ${SECURITY_AUTHZ_USER_SERVICE_BASE_URL:http://shiori-user-service}
@@ -150,6 +151,12 @@ security:
         path-pattern: /api/v2/order/orders/*/confirm-receipt
         permission-code: order.confirm_receipt
       - method: POST
+        path-pattern: /api/v2/order/orders/*/reviews
+        permission-code: order.review.create
+      - method: PUT
+        path-pattern: /api/v2/order/orders/*/reviews/me
+        permission-code: order.review.update
+      - method: POST
         path-pattern: /api/v2/order/seller/orders/*/deliver
         permission-code: order.deliver
       - method: POST
@@ -164,6 +171,12 @@ security:
       - method: POST
         path-pattern: /api/v2/admin/orders/*/finish
         permission-code: order.finish
+      - method: GET
+        path-pattern: /api/v2/admin/orders/reviews
+        permission-code: order.review.moderate
+      - method: POST
+        path-pattern: /api/v2/admin/orders/reviews/*/visibility
+        permission-code: order.review.moderate
       - method: POST
         path-pattern: /api/v2/product/products
         permission-code: product.create

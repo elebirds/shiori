@@ -15,6 +15,10 @@ public class OrderMetrics {
     private static final String CHAT_TO_ORDER_CLICK_TOTAL = "chat_to_order_click_total";
     private static final String CHAT_TO_ORDER_SUBMIT_TOTAL = "chat_to_order_submit_total";
     private static final String CHAT_TRADE_STATUS_CARD_SENT_TOTAL = "chat_trade_status_card_sent_total";
+    private static final String ORDER_REVIEW_SUBMIT_TOTAL = "shiori_order_review_submit_total";
+    private static final String ORDER_REVIEW_UPDATE_TOTAL = "shiori_order_review_update_total";
+    private static final String ORDER_REVIEW_MODERATION_TOTAL = "shiori_order_review_moderation_total";
+    private static final String ORDER_CREDIT_QUERY_TOTAL = "shiori_order_credit_query_total";
 
     private final MeterRegistry meterRegistry;
 
@@ -91,6 +95,36 @@ public class OrderMetrics {
         meterRegistry.counter(
                 CHAT_TRADE_STATUS_CARD_SENT_TOTAL,
                 "status", sanitize(status)
+        ).increment();
+    }
+
+    public void incOrderReviewSubmit(String role, String result) {
+        meterRegistry.counter(
+                ORDER_REVIEW_SUBMIT_TOTAL,
+                "role", sanitize(role),
+                "result", sanitize(result)
+        ).increment();
+    }
+
+    public void incOrderReviewUpdate(String role, String result) {
+        meterRegistry.counter(
+                ORDER_REVIEW_UPDATE_TOTAL,
+                "role", sanitize(role),
+                "result", sanitize(result)
+        ).increment();
+    }
+
+    public void incOrderReviewModeration(String action) {
+        meterRegistry.counter(
+                ORDER_REVIEW_MODERATION_TOTAL,
+                "action", sanitize(action)
+        ).increment();
+    }
+
+    public void incOrderCreditQuery(String endpoint) {
+        meterRegistry.counter(
+                ORDER_CREDIT_QUERY_TOTAL,
+                "endpoint", sanitize(endpoint)
         ).increment();
     }
 

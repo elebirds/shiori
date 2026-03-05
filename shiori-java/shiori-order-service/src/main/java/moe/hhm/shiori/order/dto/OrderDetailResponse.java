@@ -14,7 +14,13 @@ public record OrderDetailResponse(
         Long listingId,
         LocalDateTime createdAt,
         LocalDateTime paidAt,
+        LocalDateTime finishedAt,
         LocalDateTime timeoutAt,
-        List<OrderItemResponse> items
+        List<OrderItemResponse> items,
+        boolean myReviewSubmitted,
+        boolean counterpartyReviewSubmitted,
+        boolean canCreateReview,
+        boolean canEditReview,
+        LocalDateTime reviewDeadlineAt
 ) {
 }

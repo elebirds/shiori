@@ -1,17 +1,22 @@
 <script setup lang="ts">
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import OrderStageTimeline from '@/components/OrderStageTimeline.vue'
+import OrderReviewDialog from '@/components/OrderReviewDialog.vue'
 import ResultState from '@/components/ResultState.vue'
 import {
+  createOrderReviewV2,
   deliverSellerOrderV2,
   finishSellerOrderV2,
   getOrderTimelineV2,
+  getOrderReviewContextV2,
   getSellerOrderDetailV2,
   type OrderStatus,
+  type OrderReviewUpsertRequest,
   type OrderTimelineItemResponse,
+  updateMyOrderReviewV2,
 } from '@/api/orderV2'
 import { ApiBizError } from '@/types/result'
 import { useChatStore } from '@/stores/chat'
@@ -35,6 +40,12 @@ const timelineQuery = useQuery({
   enabled: computed(() => orderNo.value.length > 0),
 })
 
+const reviewContextQuery = useQuery({
+  queryKey: computed(() => ['seller-order-review-context-v2', orderNo.value]),
+  queryFn: () => getOrderReviewContextV2(orderNo.value),
+  enabled: computed(() => orderNo.value.length > 0),
+})
+
 const deliverMutation = useMutation({
   mutationFn: () => deliverSellerOrderV2(orderNo.value, { reason: '卖家发货' }),
   onSuccess: async () => {
@@ -49,13 +60,32 @@ const finishMutation = useMutation({
   onSuccess: async () => {
     await detailQuery.refetch()
     await timelineQuery.refetch()
+    await reviewContextQuery.refetch()
     await queryClient.invalidateQueries({ queryKey: ['seller-orders-v2'] })
+  },
+})
+
+const createReviewMutation = useMutation({
+  mutationFn: (payload: OrderReviewUpsertRequest) => createOrderReviewV2(orderNo.value, payload),
+  onSuccess: async () => {
+    await Promise.all([detailQuery.refetch(), reviewContextQuery.refetch()])
+  },
+})
+
+const updateReviewMutation = useMutation({
+  mutationFn: (payload: OrderReviewUpsertRequest) => updateMyOrderReviewV2(orderNo.value, payload),
+  onSuccess: async () => {
+    await Promise.all([detailQuery.refetch(), reviewContextQuery.refetch()])
   },
 })
 
 const detail = computed(() => detailQuery.data.value)
 const timelineItems = computed(() => timelineQuery.data.value?.items || [])
+const reviewContext = computed(() => reviewContextQuery.data.value)
 const errorMessage = computed(() => (detailQuery.error.value instanceof Error ? detailQuery.error.value.message : ''))
+const reviewErrorMessage = computed(() => (reviewContextQuery.error.value instanceof Error ? reviewContextQuery.error.value.message : ''))
+const reviewModalOpen = ref(false)
+const reviewMode = ref<'create' | 'edit'>('create')
 
 const ORDER_STATUS_TEXT: Record<OrderStatus, string> = {
   UNPAID: '待支付',
@@ -105,6 +135,31 @@ async function handleDeliver(): Promise<void> {
 async function handleFinish(): Promise<void> {
   try {
     await finishMutation.mutateAsync()
+  } catch (error) {
+    if (error instanceof ApiBizError) {
+      return
+    }
+  }
+}
+
+function openCreateReviewModal(): void {
+  reviewMode.value = 'create'
+  reviewModalOpen.value = true
+}
+
+function openEditReviewModal(): void {
+  reviewMode.value = 'edit'
+  reviewModalOpen.value = true
+}
+
+async function submitReview(payload: OrderReviewUpsertRequest): Promise<void> {
+  try {
+    if (reviewMode.value === 'edit') {
+      await updateReviewMutation.mutateAsync(payload)
+    } else {
+      await createReviewMutation.mutateAsync(payload)
+    }
+    reviewModalOpen.value = false
   } catch (error) {
     if (error instanceof ApiBizError) {
       return
@@ -175,6 +230,8 @@ async function handleFinish(): Promise<void> {
           :created-at="detail.createdAt"
           :paid-at="detail.paidAt"
           :timeline-items="timelineItems"
+          :my-review-submitted="detail.myReviewSubmitted"
+          :counterparty-review-submitted="detail.counterpartyReviewSubmitted"
         />
 
         <section class="space-y-2">
@@ -190,6 +247,58 @@ async function handleFinish(): Promise<void> {
               <p class="mt-1 text-xs text-stone-600">备注：{{ item.reason || '-' }}</p>
             </article>
             <p v-if="timelineItems.length === 0" class="text-sm text-stone-500">暂无履约记录</p>
+          </div>
+        </section>
+
+        <section v-if="detail.status === 'FINISHED'" class="space-y-3 rounded-xl border border-stone-200 bg-stone-50 p-4">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h2 class="text-base font-semibold text-stone-900">交易互评</h2>
+            <span class="text-xs text-stone-600">评价截止：{{ formatTime(reviewContext?.reviewDeadlineAt) }}</span>
+          </div>
+
+          <p v-if="reviewErrorMessage" class="text-xs text-rose-600">{{ reviewErrorMessage }}</p>
+
+          <div class="grid gap-3 sm:grid-cols-2">
+            <article class="rounded-lg bg-white p-3 text-sm">
+              <p class="font-medium text-stone-800">我的评价</p>
+              <p v-if="reviewContext?.myReview" class="mt-1 text-stone-700">
+                综合 {{ reviewContext.myReview.overallStar }} 星
+              </p>
+              <p v-else class="mt-1 text-stone-500">尚未提交</p>
+              <p class="mt-1 text-xs text-stone-600">
+                {{ reviewContext?.myReview?.comment || '暂无补充评论' }}
+              </p>
+            </article>
+
+            <article class="rounded-lg bg-white p-3 text-sm">
+              <p class="font-medium text-stone-800">对方评价</p>
+              <p v-if="reviewContext?.counterpartyReview" class="mt-1 text-stone-700">
+                综合 {{ reviewContext.counterpartyReview.overallStar }} 星
+              </p>
+              <p v-else class="mt-1 text-stone-500">对方尚未提交</p>
+              <p class="mt-1 text-xs text-stone-600">
+                {{ reviewContext?.counterpartyReview?.comment || '暂无补充评论' }}
+              </p>
+            </article>
+          </div>
+
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-if="reviewContext?.canCreateReview"
+              type="button"
+              class="rounded-lg bg-stone-900 px-3 py-1.5 text-xs text-white transition hover:bg-stone-700"
+              @click="openCreateReviewModal"
+            >
+              去评价
+            </button>
+            <button
+              v-if="reviewContext?.canEditReview"
+              type="button"
+              class="rounded-lg border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
+              @click="openEditReviewModal"
+            >
+              修改评价
+            </button>
           </div>
         </section>
 
@@ -214,6 +323,16 @@ async function handleFinish(): Promise<void> {
           </button>
         </div>
       </article>
+
+      <OrderReviewDialog
+        :open="reviewModalOpen"
+        :reviewer-role="'SELLER'"
+        :mode="reviewMode"
+        :submitting="createReviewMutation.isPending.value || updateReviewMutation.isPending.value"
+        :initial-review="reviewContext?.myReview"
+        @close="reviewModalOpen = false"
+        @submit="submitReview"
+      />
     </ResultState>
   </section>
 </template>

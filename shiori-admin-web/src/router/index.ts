@@ -34,6 +34,12 @@ const router = createRouter({
       meta: { requiresAdmin: true },
     },
     {
+      path: '/order-reviews',
+      name: 'order-reviews',
+      component: () => import('@/views/OrderReviewManageView.vue'),
+      meta: { requiresAdmin: true },
+    },
+    {
       path: '/chat-governance',
       name: 'chat-governance',
       component: () => import('@/views/ChatGovernanceView.vue'),

@@ -9,6 +9,7 @@ public class OrderProperties {
 
     private long timeoutMinutes = 15;
     private final Outbox outbox = new Outbox();
+    private final Review review = new Review();
 
     public long getTimeoutMinutes() {
         return timeoutMinutes;
@@ -20,6 +21,10 @@ public class OrderProperties {
 
     public Outbox getOutbox() {
         return outbox;
+    }
+
+    public Review getReview() {
+        return review;
     }
 
     public static class Outbox {
@@ -58,6 +63,36 @@ public class OrderProperties {
 
         public void setMaxBackoffSeconds(int maxBackoffSeconds) {
             this.maxBackoffSeconds = maxBackoffSeconds;
+        }
+    }
+
+    public static class Review {
+        private int windowDays = 15;
+        private int editHours = 24;
+        private int commentMaxLength = 280;
+
+        public int getWindowDays() {
+            return windowDays;
+        }
+
+        public void setWindowDays(int windowDays) {
+            this.windowDays = windowDays;
+        }
+
+        public int getEditHours() {
+            return editHours;
+        }
+
+        public void setEditHours(int editHours) {
+            this.editHours = editHours;
+        }
+
+        public int getCommentMaxLength() {
+            return commentMaxLength;
+        }
+
+        public void setCommentMaxLength(int commentMaxLength) {
+            this.commentMaxLength = commentMaxLength;
         }
     }
 }

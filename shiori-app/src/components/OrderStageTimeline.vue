@@ -19,9 +19,13 @@ const props = withDefaults(
     createdAt?: string
     paidAt?: string
     timelineItems?: OrderTimelineItemResponse[]
+    myReviewSubmitted?: boolean
+    counterpartyReviewSubmitted?: boolean
   }>(),
   {
     timelineItems: () => [],
+    myReviewSubmitted: false,
+    counterpartyReviewSubmitted: false,
   },
 )
 
@@ -90,7 +94,7 @@ const stages = computed<StageViewItem[]>(() => {
 
     if (!isCanceled.value) {
       if (props.status === 'FINISHED' && index === 4) {
-        state = 'current'
+        state = props.myReviewSubmitted ? 'done' : 'current'
       } else if (props.status !== 'FINISHED' && index === progressIndex.value + 1) {
         state = 'current'
       }
@@ -111,7 +115,15 @@ const stages = computed<StageViewItem[]>(() => {
     if (timeValue) {
       timeText = formatTime(timeValue)
     } else if (meta.key === 'REVIEW') {
-      timeText = props.status === 'FINISHED' ? '敬请期待' : '功能开发中'
+      if (props.myReviewSubmitted && props.counterpartyReviewSubmitted) {
+        timeText = '双方已评价'
+      } else if (props.myReviewSubmitted) {
+        timeText = '你已评价'
+      } else if (props.status === 'FINISHED') {
+        timeText = '待你评价'
+      } else {
+        timeText = '待完成'
+      }
     } else if (isCanceled.value && index > progressIndex.value) {
       timeText = '订单已取消'
     }
