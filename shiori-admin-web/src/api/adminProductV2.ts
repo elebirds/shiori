@@ -7,11 +7,16 @@ export type ProductTradeMode = 'MEETUP' | 'DELIVERY' | 'BOTH'
 export type ProductSortBy = 'CREATED_AT' | 'MIN_PRICE' | 'MAX_PRICE'
 export type ProductSortDir = 'ASC' | 'DESC'
 
+export interface SpecItemResponse {
+  name: string
+  value: string
+}
+
 export interface SkuResponse {
   skuId: number
   skuNo: string
-  skuName: string
-  specJson?: string
+  displayName: string
+  specItems: SpecItemResponse[]
   priceCent: number
   stock: number
 }

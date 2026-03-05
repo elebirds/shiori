@@ -146,13 +146,20 @@ function formatMoney(priceCent?: number): string {
   }
   return `¥${(priceCent / 100).toFixed(2)}`
 }
+
+function formatSkuSpecs(sku: { displayName: string; specItems: Array<{ name: string; value: string }> }): string {
+  if (!sku.specItems || sku.specItems.length === 0) {
+    return sku.displayName
+  }
+  return sku.specItems.map((item) => `${item.name}:${item.value}`).join(' / ')
+}
 </script>
 
 <template>
   <section class="space-y-6">
     <div>
       <h1 class="text-2xl font-semibold text-slate-900">商品管理</h1>
-      <p class="mt-1 text-sm text-slate-500">v2 筛选 + 强制下架 + 批量下架。</p>
+      <p class="mt-1 text-sm text-slate-500">筛选商品并执行强制下架、批量下架等管理操作。</p>
     </div>
 
     <div class="rounded-xl border border-slate-200 bg-white p-4">
@@ -278,6 +285,16 @@ function formatMoney(priceCent?: number): string {
           <p>价格区间：{{ formatMoney(detailQuery.data.value.minPriceCent) }} ~ {{ formatMoney(detailQuery.data.value.maxPriceCent) }}</p>
           <p>总库存：{{ detailQuery.data.value.totalStock ?? 0 }}</p>
           <p>SKU 数：{{ detailQuery.data.value.skus.length }}</p>
+          <div v-if="detailQuery.data.value.skus.length > 0" class="rounded-md border border-slate-200 bg-slate-50 p-2">
+            <p class="mb-1 font-medium text-slate-800">SKU 明细</p>
+            <ul class="space-y-1 text-xs text-slate-600">
+              <li v-for="sku in detailQuery.data.value.skus" :key="sku.skuId" class="rounded border border-slate-200 bg-white px-2 py-1">
+                <p class="font-medium text-slate-700">{{ sku.displayName }}</p>
+                <p>{{ formatSkuSpecs(sku) }}</p>
+                <p>价格 {{ formatMoney(sku.priceCent) }} · 库存 {{ sku.stock }}</p>
+              </li>
+            </ul>
+          </div>
           <div class="space-y-1">
             <p class="font-medium text-slate-800">详情：</p>
             <div v-if="detailQuery.data.value.detailHtml" class="rich-content rounded-md border border-slate-200 bg-slate-50 p-2" v-html="detailQuery.data.value.detailHtml" />
