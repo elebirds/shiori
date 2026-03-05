@@ -11,6 +11,11 @@ mybatis:
   configuration:
     map-underscore-to-camel-case: true
 
+payment:
+  internal-api:
+    token: ${ORDER_PAYMENT_INTERNAL_TOKEN}
+    require-token: true
+
 management:
   endpoints:
     web:
