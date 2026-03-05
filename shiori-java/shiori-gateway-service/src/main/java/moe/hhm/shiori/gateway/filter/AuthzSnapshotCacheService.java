@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import moe.hhm.shiori.gateway.config.GatewaySecurityProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.lang.Nullable;
@@ -36,11 +37,12 @@ public class AuthzSnapshotCacheService {
     public AuthzSnapshotCacheService(GatewaySecurityProperties properties,
                                      GatewayGovernanceMetrics governanceMetrics,
                                      ObjectMapper objectMapper,
+                                     @Qualifier("loadBalancedWebClientBuilder") WebClient.Builder loadBalancedWebClientBuilder,
                                      ObjectProvider<ReactiveStringRedisTemplate> redisTemplateProvider) {
         this.properties = properties;
         this.governanceMetrics = governanceMetrics;
         this.objectMapper = objectMapper;
-        this.webClient = WebClient.builder()
+        this.webClient = loadBalancedWebClientBuilder
                 .baseUrl(properties.getAuthz().getUserServiceBaseUrl())
                 .build();
         this.redisTemplate = redisTemplateProvider.getIfAvailable();

@@ -161,7 +161,7 @@ public class GatewaySecurityProperties {
 
     public static class Authz {
         private boolean enabled = true;
-        private String userServiceBaseUrl = "http://shiori-user-service:8081";
+        private String userServiceBaseUrl = "http://shiori-user-service";
         private int queryTimeoutMs = 800;
         private final Cache cache = new Cache();
         private final Degrade degrade = new Degrade();

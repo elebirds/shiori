@@ -26,11 +26,11 @@ feature:
 order:
   timeout-minutes: 15
   product-client:
-    service-base-url: ${ORDER_PRODUCT_SERVICE_BASE_URL}
+    service-base-url: http://shiori-product-service
   payment-client:
-    service-base-url: ${ORDER_PAYMENT_SERVICE_BASE_URL}
+    service-base-url: http://shiori-payment-service
   notify-client:
-    service-base-url: ${ORDER_NOTIFY_SERVICE_BASE_URL}
+    service-base-url: http://shiori-notify-service
   outbox:
     enabled: true
     relay-fixed-delay-ms: 3000

@@ -27,7 +27,7 @@ order:
     service-base-url: ${ORDER_PAYMENT_SERVICE_BASE_URL:http://shiori-payment-service}
     internal-token: ${ORDER_PAYMENT_INTERNAL_TOKEN:}
   notify-client:
-    service-base-url: ${ORDER_NOTIFY_SERVICE_BASE_URL:http://shiori-notify}
+    service-base-url: ${ORDER_NOTIFY_SERVICE_BASE_URL:http://shiori-notify-service}
   outbox:
     enabled: ${ORDER_OUTBOX_ENABLED:true}
     relay-fixed-delay-ms: ${ORDER_OUTBOX_RELAY_FIXED_DELAY_MS:3000}

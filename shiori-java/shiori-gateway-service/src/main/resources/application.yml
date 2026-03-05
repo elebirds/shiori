@@ -114,7 +114,7 @@ security:
       - /api/v2/product/users/**
   authz:
     enabled: ${SECURITY_AUTHZ_ENABLED:true}
-    user-service-base-url: ${SECURITY_AUTHZ_USER_SERVICE_BASE_URL:http://shiori-user-service:8081}
+    user-service-base-url: ${SECURITY_AUTHZ_USER_SERVICE_BASE_URL:http://shiori-user-service}
     query-timeout-ms: ${SECURITY_AUTHZ_QUERY_TIMEOUT_MS:800}
     cache:
       ttl-seconds: ${SECURITY_AUTHZ_CACHE_TTL_SECONDS:30}
