@@ -27,6 +27,9 @@ server:
 user:
   authz:
     snapshot-ttl-seconds: ${USER_AUTHZ_SNAPSHOT_TTL_SECONDS:30}
+    event:
+      enabled: ${USER_AUTHZ_EVENT_ENABLED:true}
+      redis-channel: ${USER_AUTHZ_EVENT_REDIS_CHANNEL:shiori.authz.user.changed}
   security:
     login-fail-lock-threshold: ${USER_LOGIN_FAIL_LOCK_THRESHOLD:5}
     lock-minutes: ${USER_LOCK_MINUTES:15}

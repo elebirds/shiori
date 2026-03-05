@@ -48,6 +48,9 @@ func (s *Server) handleListConversations(c *gin.Context) {
 		})
 		return
 	}
+	if !s.requireChatPermission(c, "chat.read") {
+		return
+	}
 	userID, ok := s.resolveChatUserID(c)
 	if !ok {
 		return
@@ -117,6 +120,9 @@ func (s *Server) handleListMessages(c *gin.Context) {
 			"code":    50301,
 			"message": "chat service unavailable",
 		})
+		return
+	}
+	if !s.requireChatPermission(c, "chat.read") {
 		return
 	}
 	userID, ok := s.resolveChatUserID(c)
@@ -249,6 +255,9 @@ func (s *Server) handleGetConversation(c *gin.Context) {
 		})
 		return
 	}
+	if !s.requireChatPermission(c, "chat.read") {
+		return
+	}
 	userID, ok := s.resolveChatUserID(c)
 	if !ok {
 		return
@@ -284,6 +293,9 @@ func (s *Server) handleReadConversation(c *gin.Context) {
 			"code":    50301,
 			"message": "chat service unavailable",
 		})
+		return
+	}
+	if !s.requireChatPermission(c, "chat.read") {
 		return
 	}
 	userID, ok := s.resolveChatUserID(c)
@@ -330,6 +342,9 @@ func (s *Server) handleStartConversation(c *gin.Context) {
 		})
 		return
 	}
+	if !s.requireChatPermission(c, "chat.send") {
+		return
+	}
 	userID, ok := s.resolveChatUserID(c)
 	if !ok {
 		return
@@ -371,6 +386,9 @@ func (s *Server) handleChatSummary(c *gin.Context) {
 		})
 		return
 	}
+	if !s.requireChatPermission(c, "chat.read") {
+		return
+	}
 	userID, ok := s.resolveChatUserID(c)
 	if !ok {
 		return
@@ -396,6 +414,9 @@ func (s *Server) handleBlockUser(c *gin.Context) {
 			"code":    50301,
 			"message": "chat service unavailable",
 		})
+		return
+	}
+	if !s.requireChatPermission(c, "chat.send") {
 		return
 	}
 	userID, ok := s.resolveChatUserID(c)
@@ -432,6 +453,9 @@ func (s *Server) handleUnblockUser(c *gin.Context) {
 		})
 		return
 	}
+	if !s.requireChatPermission(c, "chat.send") {
+		return
+	}
 	userID, ok := s.resolveChatUserID(c)
 	if !ok {
 		return
@@ -464,6 +488,9 @@ func (s *Server) handleListBlocks(c *gin.Context) {
 			"code":    50301,
 			"message": "chat service unavailable",
 		})
+		return
+	}
+	if !s.requireChatPermission(c, "chat.read") {
 		return
 	}
 	userID, ok := s.resolveChatUserID(c)
@@ -499,6 +526,9 @@ func (s *Server) handleCreateReport(c *gin.Context) {
 			"code":    50301,
 			"message": "chat service unavailable",
 		})
+		return
+	}
+	if !s.requireChatPermission(c, "chat.send") {
 		return
 	}
 	userID, ok := s.resolveChatUserID(c)
@@ -925,6 +955,39 @@ func (s *Server) resolveChatUserID(c *gin.Context) (int64, bool) {
 		return 0, false
 	}
 	return userID, true
+}
+
+func (s *Server) requireChatPermission(c *gin.Context, permissionCode string) bool {
+	normalized := normalizePermissionCode(permissionCode)
+	if normalized == "" {
+		s.writeJSON(c, http.StatusForbidden, gin.H{
+			"code":    "CHAT_PERMISSION_DENIED",
+			"message": "chat permission denied",
+		})
+		return false
+	}
+
+	authzSnapshot := parseWSAuthzSnapshot(c)
+	if !authzSnapshot.provided {
+		metrics.IncAuthzDegradedAllow("notify_missing_authz_header")
+		s.logger.Warn().
+			Str("permission", normalized).
+			Str("method", strings.ToUpper(strings.TrimSpace(c.Request.Method))).
+			Str("path", c.Request.URL.Path).
+			Msg("chat authz headers missing, degraded allow")
+		return true
+	}
+
+	if authzSnapshot.allowed(normalized) {
+		return true
+	}
+
+	s.writeJSON(c, http.StatusForbidden, gin.H{
+		"code":       "CHAT_PERMISSION_DENIED",
+		"message":    "chat permission denied",
+		"permission": normalized,
+	})
+	return false
 }
 
 func parseInt64Query(raw string) (int64, bool) {

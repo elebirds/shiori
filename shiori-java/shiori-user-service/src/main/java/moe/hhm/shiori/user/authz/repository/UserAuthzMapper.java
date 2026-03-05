@@ -167,17 +167,6 @@ public interface UserAuthzMapper {
     int deleteOverride(@Param("userId") Long userId,
                        @Param("overrideId") Long overrideId);
 
-    @Select("""
-            SELECT capability_code
-            FROM u_user_capability_ban
-            WHERE user_id = #{userId}
-              AND is_banned = 1
-              AND (start_at IS NULL OR start_at <= CURRENT_TIMESTAMP(3))
-              AND (end_at IS NULL OR end_at > CURRENT_TIMESTAMP(3))
-            ORDER BY capability_code ASC
-            """)
-    List<String> listActiveCapabilityCodes(@Param("userId") Long userId);
-
     @Update("""
             INSERT INTO u_user_authz_version (user_id, version, updated_at)
             VALUES (#{userId}, 1, CURRENT_TIMESTAMP(3))

@@ -15,8 +15,6 @@ import moe.hhm.shiori.user.admin.dto.AdminRoleResponse;
 import moe.hhm.shiori.user.admin.dto.AdminUserAdminRoleUpdateRequest;
 import moe.hhm.shiori.user.admin.dto.AdminUserAuditItemResponse;
 import moe.hhm.shiori.user.admin.dto.AdminUserAuditPageResponse;
-import moe.hhm.shiori.user.admin.dto.AdminUserCapabilityBanResponse;
-import moe.hhm.shiori.user.admin.dto.AdminUserCapabilityBanUpsertRequest;
 import moe.hhm.shiori.user.admin.dto.AdminUserDetailResponse;
 import moe.hhm.shiori.user.admin.dto.AdminUserLockRequest;
 import moe.hhm.shiori.user.admin.dto.AdminUserPasswordResetRequest;
@@ -26,12 +24,12 @@ import moe.hhm.shiori.user.admin.dto.AdminUserStatusUpdateRequest;
 import moe.hhm.shiori.user.admin.dto.AdminUserSummaryResponse;
 import moe.hhm.shiori.user.admin.dto.AdminUserUnlockRequest;
 import moe.hhm.shiori.user.admin.model.AdminUserAuditRecord;
-import moe.hhm.shiori.user.admin.model.AdminUserCapabilityBanRecord;
 import moe.hhm.shiori.user.admin.model.AdminUserRecord;
-import moe.hhm.shiori.user.admin.model.UserCapability;
 import moe.hhm.shiori.user.admin.repository.AdminUserMapper;
-import moe.hhm.shiori.user.authz.service.AuthzSnapshotService;
+import moe.hhm.shiori.user.auth.config.UserSecurityProperties;
 import moe.hhm.shiori.user.auth.service.TokenService;
+import moe.hhm.shiori.user.authz.service.AuthzSnapshotService;
+import moe.hhm.shiori.user.authz.service.AuthzEventPublisher;
 import moe.hhm.shiori.user.config.UserMqProperties;
 import moe.hhm.shiori.user.config.UserOutboxProperties;
 import moe.hhm.shiori.user.domain.UserStatus;
@@ -41,7 +39,6 @@ import moe.hhm.shiori.user.event.UserPasswordResetPayload;
 import moe.hhm.shiori.user.event.UserRoleChangedPayload;
 import moe.hhm.shiori.user.event.UserStatusChangedPayload;
 import moe.hhm.shiori.user.outbox.model.UserOutboxEventEntity;
-import moe.hhm.shiori.user.auth.config.UserSecurityProperties;
 import org.springframework.http.HttpStatus;
 import org.springframework.lang.Nullable;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -59,7 +56,6 @@ public class AdminUserService {
     private static final String EVENT_USER_ROLE_CHANGED = "UserRoleChanged";
     private static final String EVENT_USER_PASSWORD_RESET = "UserPasswordReset";
     private static final String EVENT_USER_ROLE_BINDINGS_CHANGED = "UserRoleBindingsChanged";
-    private static final String EVENT_USER_PERMISSION_OVERRIDE_CHANGED = "UserPermissionOverrideChanged";
 
     private final AdminUserMapper adminUserMapper;
     private final ObjectMapper objectMapper;
@@ -70,6 +66,8 @@ public class AdminUserService {
     private final UserSecurityProperties userSecurityProperties;
     @Nullable
     private final AuthzSnapshotService authzSnapshotService;
+    @Nullable
+    private final AuthzEventPublisher authzEventPublisher;
 
     public AdminUserService(AdminUserMapper adminUserMapper,
                             ObjectMapper objectMapper,
@@ -78,7 +76,8 @@ public class AdminUserService {
                             UserMqProperties userMqProperties,
                             UserOutboxProperties userOutboxProperties,
                             UserSecurityProperties userSecurityProperties,
-                            @Nullable AuthzSnapshotService authzSnapshotService) {
+                            @Nullable AuthzSnapshotService authzSnapshotService,
+                            @Nullable AuthzEventPublisher authzEventPublisher) {
         this.adminUserMapper = adminUserMapper;
         this.objectMapper = objectMapper;
         this.passwordEncoder = passwordEncoder;
@@ -87,6 +86,7 @@ public class AdminUserService {
         this.userOutboxProperties = userOutboxProperties;
         this.userSecurityProperties = userSecurityProperties;
         this.authzSnapshotService = authzSnapshotService;
+        this.authzEventPublisher = authzEventPublisher;
     }
 
     public AdminUserPageResponse listUsers(String keyword, String status, String role, int page, int size) {
@@ -221,6 +221,7 @@ public class AdminUserService {
             );
             long version = bumpAuthzVersion(targetUserId);
             appendRoleBindingsChangedOutbox(targetUserId, version, operatorUserId, request.reason());
+            publishAuthzChanged(targetUserId, version, request.reason());
         }
         return new AdminUserStatusResponse(after.userId(), resolveStatus(after.status()).name(), afterAdmin);
     }
@@ -322,87 +323,6 @@ public class AdminUserService {
                 .toList();
     }
 
-    public List<AdminUserCapabilityBanResponse> listCapabilityBans(Long userId) {
-        requireUser(userId);
-        return adminUserMapper.listCapabilityBansByUserId(userId).stream()
-                .map(this::toCapabilityBanResponse)
-                .toList();
-    }
-
-    @Transactional(rollbackFor = Exception.class)
-    public AdminUserCapabilityBanResponse upsertCapabilityBan(Long operatorUserId,
-                                                              Long targetUserId,
-                                                              AdminUserCapabilityBanUpsertRequest request) {
-        requireUser(targetUserId);
-        UserCapability capability = parseCapability(request.capability());
-        LocalDateTime startAt = request.startAt() == null ? LocalDateTime.now() : request.startAt();
-        LocalDateTime endAt = request.endAt();
-        if (endAt != null && !endAt.isAfter(startAt)) {
-            throw new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST);
-        }
-
-        String beforeSnapshot = capabilityBanSnapshot(targetUserId);
-        adminUserMapper.upsertCapabilityBan(
-                targetUserId,
-                capability.name(),
-                1,
-                normalizeReason(request.reason()),
-                operatorUserId,
-                startAt,
-                endAt
-        );
-        String afterSnapshot = capabilityBanSnapshot(targetUserId);
-        insertAudit(
-                operatorUserId,
-                targetUserId,
-                "USER_CAPABILITY_BAN_UPSERT",
-                beforeSnapshot,
-                afterSnapshot,
-                request.reason()
-        );
-        long version = bumpAuthzVersion(targetUserId);
-        appendPermissionOverrideChangedOutbox(targetUserId, version, operatorUserId, request.reason());
-        return findCapabilityBanResponse(targetUserId, capability.name());
-    }
-
-    @Transactional(rollbackFor = Exception.class)
-    public AdminUserCapabilityBanResponse removeCapabilityBan(Long operatorUserId,
-                                                              Long targetUserId,
-                                                              String capabilityRaw,
-                                                              String reason) {
-        requireUser(targetUserId);
-        UserCapability capability = parseCapability(capabilityRaw);
-        String beforeSnapshot = capabilityBanSnapshot(targetUserId);
-        int affected = adminUserMapper.disableCapabilityBan(
-                targetUserId,
-                capability.name(),
-                normalizeReason(reason),
-                operatorUserId
-        );
-        if (affected == 0) {
-            throw new BizException(UserErrorCode.CAPABILITY_BAN_NOT_FOUND, HttpStatus.NOT_FOUND);
-        }
-        String afterSnapshot = capabilityBanSnapshot(targetUserId);
-        insertAudit(
-                operatorUserId,
-                targetUserId,
-                "USER_CAPABILITY_BAN_REMOVE",
-                beforeSnapshot,
-                afterSnapshot,
-                reason
-        );
-        long version = bumpAuthzVersion(targetUserId);
-        appendPermissionOverrideChangedOutbox(targetUserId, version, operatorUserId, reason);
-        return findCapabilityBanResponse(targetUserId, capability.name());
-    }
-
-    public List<String> listActiveCapabilities(Long userId) {
-        if (userId == null || userId <= 0) {
-            return List.of();
-        }
-        return adminUserMapper.listActiveCapabilityCodes(userId);
-    }
-
     private AdminUserRecord requireUser(Long userId) {
         AdminUserRecord record = adminUserMapper.findByUserId(userId);
         if (record == null || (record.isDeleted() != null && record.isDeleted() == 1)) {
@@ -430,15 +350,6 @@ public class AdminUserService {
             return objectMapper.writeValueAsString(mutable);
         } catch (JacksonException e) {
             return "{}";
-        }
-    }
-
-    private String capabilityBanSnapshot(Long userId) {
-        List<AdminUserCapabilityBanRecord> records = adminUserMapper.listCapabilityBansByUserId(userId);
-        try {
-            return objectMapper.writeValueAsString(records);
-        } catch (JacksonException e) {
-            return "[]";
         }
     }
 
@@ -490,37 +401,6 @@ public class AdminUserService {
             }
         }
         return new ArrayList<>(set);
-    }
-
-    private AdminUserCapabilityBanResponse findCapabilityBanResponse(Long userId, String capabilityCode) {
-        return adminUserMapper.listCapabilityBansByUserId(userId).stream()
-                .filter(item -> capabilityCode.equalsIgnoreCase(item.capabilityCode()))
-                .findFirst()
-                .map(this::toCapabilityBanResponse)
-                .orElseThrow(() -> new BizException(UserErrorCode.CAPABILITY_BAN_NOT_FOUND, HttpStatus.NOT_FOUND));
-    }
-
-    private UserCapability parseCapability(String rawCapability) {
-        try {
-            return UserCapability.parse(rawCapability);
-        } catch (IllegalArgumentException ex) {
-            throw new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST);
-        }
-    }
-
-    private AdminUserCapabilityBanResponse toCapabilityBanResponse(AdminUserCapabilityBanRecord record) {
-        return new AdminUserCapabilityBanResponse(
-                record.id(),
-                record.userId(),
-                record.capabilityCode(),
-                record.isBanned() != null && record.isBanned() == 1,
-                record.reason(),
-                record.operatorUserId(),
-                record.startAt(),
-                record.endAt(),
-                record.createdAt(),
-                record.updatedAt()
-        );
     }
 
     private UserStatus resolveStatusForUpdate(String status) {
@@ -637,25 +517,6 @@ public class AdminUserService {
         );
     }
 
-    private void appendPermissionOverrideChangedOutbox(Long targetUserId,
-                                                       Long version,
-                                                       Long operatorUserId,
-                                                       String reason) {
-        UserAuthzChangedPayload payload = new UserAuthzChangedPayload(
-                targetUserId,
-                version,
-                Instant.now().toString(),
-                normalizeReason(reason),
-                operatorUserId
-        );
-        appendOutbox(
-                targetUserId,
-                EVENT_USER_PERMISSION_OVERRIDE_CHANGED,
-                payload,
-                userMqProperties.getUserPermissionOverrideChangedRoutingKey()
-        );
-    }
-
     private void appendOutbox(Long targetUserId, String type, Object payload, String routingKey) {
         if (!userOutboxProperties.isEnabled() || !userMqProperties.isEnabled()) {
             return;
@@ -699,5 +560,12 @@ public class AdminUserService {
             return 0L;
         }
         return authzSnapshotService.bumpVersion(userId);
+    }
+
+    private void publishAuthzChanged(Long userId, long version, String reason) {
+        if (authzEventPublisher == null) {
+            return;
+        }
+        authzEventPublisher.publishAfterCommit(userId, version, reason);
     }
 }

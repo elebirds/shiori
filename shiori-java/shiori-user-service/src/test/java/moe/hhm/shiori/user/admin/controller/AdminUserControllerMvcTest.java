@@ -4,7 +4,6 @@ import java.util.List;
 import moe.hhm.shiori.common.mvc.GlobalExceptionHandler;
 import moe.hhm.shiori.common.mvc.ResultResponseBodyAdvice;
 import moe.hhm.shiori.user.admin.dto.AdminRoleResponse;
-import moe.hhm.shiori.user.admin.dto.AdminUserCapabilityBanResponse;
 import moe.hhm.shiori.user.admin.dto.AdminUserDetailResponse;
 import moe.hhm.shiori.user.admin.dto.AdminUserPageResponse;
 import moe.hhm.shiori.user.admin.dto.AdminUserStatusResponse;
@@ -30,7 +29,6 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -48,9 +46,7 @@ class AdminUserControllerMvcTest {
         validator.afterPropertiesSet();
         AdminUserController userController = new AdminUserController(adminUserService);
         AdminRoleController roleController = new AdminRoleController(adminUserService);
-        AdminUserCapabilityController capabilityController = new AdminUserCapabilityController(adminUserService);
-        InternalUserCapabilityController internalCapabilityController = new InternalUserCapabilityController(adminUserService);
-        mockMvc = MockMvcBuilders.standaloneSetup(userController, roleController, capabilityController, internalCapabilityController)
+        mockMvc = MockMvcBuilders.standaloneSetup(userController, roleController)
                 .setValidator(validator)
                 .setControllerAdvice(new GlobalExceptionHandler(), new ResultResponseBodyAdvice(new ObjectMapper()))
                 .build();
@@ -158,69 +154,4 @@ class AdminUserControllerMvcTest {
                 .andExpect(jsonPath("$.data[0].roleCode").value("ROLE_ADMIN"));
     }
 
-    @Test
-    void shouldUpsertCapabilityBan() throws Exception {
-        when(adminUserService.upsertCapabilityBan(eq(99L), eq(1L), any())).thenReturn(
-                new AdminUserCapabilityBanResponse(
-                        10L,
-                        1L,
-                        "CHAT_SEND",
-                        true,
-                        "spam",
-                        99L,
-                        java.time.LocalDateTime.now(),
-                        java.time.LocalDateTime.now().plusDays(1),
-                        java.time.LocalDateTime.now(),
-                        java.time.LocalDateTime.now()
-                )
-        );
-
-        mockMvc.perform(post("/api/v2/admin/users/1/capability-bans")
-                        .principal(new UsernamePasswordAuthenticationToken(
-                                "99", "N/A", List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))
-                        ))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"capability":"CHAT_SEND","reason":"spam"}
-                                """))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.capability").value("CHAT_SEND"))
-                .andExpect(jsonPath("$.data.banned").value(true));
-    }
-
-    @Test
-    void shouldDeleteCapabilityBan() throws Exception {
-        when(adminUserService.removeCapabilityBan(eq(99L), eq(1L), eq("CHAT_SEND"), eq("recover"))).thenReturn(
-                new AdminUserCapabilityBanResponse(
-                        10L,
-                        1L,
-                        "CHAT_SEND",
-                        false,
-                        "recover",
-                        99L,
-                        java.time.LocalDateTime.now(),
-                        java.time.LocalDateTime.now(),
-                        java.time.LocalDateTime.now(),
-                        java.time.LocalDateTime.now()
-                )
-        );
-
-        mockMvc.perform(delete("/api/v2/admin/users/1/capability-bans/CHAT_SEND")
-                        .queryParam("reason", "recover")
-                        .principal(new UsernamePasswordAuthenticationToken(
-                                "99", "N/A", List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))
-                        )))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.banned").value(false));
-    }
-
-    @Test
-    void shouldListActiveCapabilitiesInternal() throws Exception {
-        when(adminUserService.listActiveCapabilities(1L)).thenReturn(List.of("CHAT_SEND"));
-
-        mockMvc.perform(get("/internal/users/1/capabilities/active"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.userId").value(1L))
-                .andExpect(jsonPath("$.capabilities[0]").value("CHAT_SEND"));
-    }
 }

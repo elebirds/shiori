@@ -33,6 +33,8 @@ class UserPermissionOverrideServiceTest {
     private UserMqProperties userMqProperties;
     @Mock
     private UserOutboxProperties userOutboxProperties;
+    @Mock
+    private AuthzEventPublisher authzEventPublisher;
 
     private UserPermissionOverrideService userPermissionOverrideService;
 
@@ -44,7 +46,8 @@ class UserPermissionOverrideServiceTest {
                 authzSnapshotService,
                 new ObjectMapper(),
                 userMqProperties,
-                userOutboxProperties
+                userOutboxProperties,
+                authzEventPublisher
         );
     }
 

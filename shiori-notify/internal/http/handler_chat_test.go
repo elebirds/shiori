@@ -311,3 +311,30 @@ func TestChatHTTPHandlers(t *testing.T) {
 		t.Fatalf("summary expected 200, got %d", summaryRec.Code)
 	}
 }
+
+func TestChatHTTPHandlersPermissionDeniedByAuthzHeader(t *testing.T) {
+	cfg := config.Config{
+		AuthEnabled:        false,
+		WSPath:             "/ws",
+		ChatEnabled:        true,
+		ChatMaxLimit:       100,
+		ReplayMaxLimit:     50,
+		ReplayDefaultLimit: 20,
+	}
+	logger := zerolog.New(io.Discard)
+	srv := NewServer(cfg, ws.NewHub(), store.NewMemoryEventStore(20), nil, &logger)
+	chatSvc := chat.NewService(chatTestRepo{}, staticVerifier{}, 100)
+	srv.WithChat(chatSvc, nil)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/chat/summary?userId=1001", nil)
+	req.Header.Set(headerUserAuthzG, "chat.read")
+	req.Header.Set(headerUserAuthzD, "chat.read")
+	srv.engine.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("summary with deny expected 403, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "CHAT_PERMISSION_DENIED") {
+		t.Fatalf("expected CHAT_PERMISSION_DENIED, body=%s", rec.Body.String())
+	}
+}

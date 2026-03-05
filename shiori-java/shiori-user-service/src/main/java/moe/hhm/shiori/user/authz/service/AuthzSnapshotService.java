@@ -59,7 +59,6 @@ public class AuthzSnapshotService {
         }
 
         Set<String> denyCodes = new LinkedHashSet<>(denyOverrides);
-        denyCodes.addAll(mapLegacyCapabilityBans(userAuthzMapper.listActiveCapabilityCodes(userId)));
 
         grants.addAll(allowOverrides);
         grants.removeAll(denyCodes);
@@ -113,13 +112,6 @@ public class AuthzSnapshotService {
         return Math.max(versionRecord.version(), 1L);
     }
 
-    public List<String> listLegacyCapabilityBans(Long userId) {
-        if (userId == null || userId <= 0) {
-            return List.of();
-        }
-        return userAuthzMapper.listActiveCapabilityCodes(userId);
-    }
-
     private AuthzSnapshotResponse emptySnapshot(Long userId) {
         Instant now = Instant.now();
         return new AuthzSnapshotResponse(
@@ -144,28 +136,6 @@ public class AuthzSnapshotService {
             }
         }
         return result;
-    }
-
-    private Set<String> mapLegacyCapabilityBans(List<String> capabilityCodes) {
-        if (capabilityCodes == null || capabilityCodes.isEmpty()) {
-            return Set.of();
-        }
-        Set<String> denies = new LinkedHashSet<>();
-        for (String capabilityCode : capabilityCodes) {
-            if (!StringUtils.hasText(capabilityCode)) {
-                continue;
-            }
-            String normalized = capabilityCode.trim().toUpperCase(Locale.ROOT);
-            switch (normalized) {
-                case "CHAT_SEND" -> denies.add("chat.send");
-                case "CHAT_READ" -> denies.add("chat.read");
-                case "ORDER_CREATE" -> denies.add("order.create");
-                case "PRODUCT_PUBLISH" -> denies.add("product.publish");
-                default -> {
-                }
-            }
-        }
-        return denies;
     }
 
     private String normalizePermissionCode(String code) {
