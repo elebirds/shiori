@@ -30,6 +30,8 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 public class PaymentServiceClient {
 
+    static final String HEADER_INTERNAL_TOKEN = "X-Shiori-Internal-Token";
+
     private static final ParameterizedTypeReference<Result<ReserveBalancePaymentSnapshot>> RESERVE_TYPE =
             new ParameterizedTypeReference<>() {
             };
@@ -43,6 +45,7 @@ public class PaymentServiceClient {
     private final RestClient restClient;
     private final GatewaySignProperties gatewaySignProperties;
     private final ObjectMapper objectMapper;
+    private final String internalToken;
 
     public PaymentServiceClient(RestClient.Builder loadBalancedRestClientBuilder,
                                 PaymentClientProperties paymentClientProperties,
@@ -53,6 +56,7 @@ public class PaymentServiceClient {
                 .build();
         this.gatewaySignProperties = gatewaySignProperties;
         this.objectMapper = objectMapper;
+        this.internalToken = paymentClientProperties.getInternalToken();
     }
 
     public ReserveBalancePaymentSnapshot reserveOrderPayment(String orderNo,
@@ -154,6 +158,7 @@ public class PaymentServiceClient {
         headers.set(GatewaySignVerifyFilter.HEADER_GATEWAY_TS, ts);
         headers.set(GatewaySignVerifyFilter.HEADER_GATEWAY_SIGN, sign);
         headers.set(GatewaySignVerifyFilter.HEADER_GATEWAY_NONCE, nonce);
+        headers.set(HEADER_INTERNAL_TOKEN, internalToken);
     }
 
     private String normalizeRoles(List<String> roles) {
