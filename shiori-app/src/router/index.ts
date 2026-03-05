@@ -13,6 +13,7 @@ const ROUTE_TITLE_MAP: Record<string, string> = {
   checkout: '收银台',
   cart: '购物车',
   'seller-orders': '卖家工作台',
+  'seller-refunds': '退款审核台',
   'seller-order-detail': '卖家订单详情',
   wallet: '钱包',
   sell: '发布商品',
@@ -75,6 +76,12 @@ const router = createRouter({
       path: '/seller/orders',
       name: 'seller-orders',
       component: () => import('@/views/SellerOrderListView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/seller/refunds',
+      name: 'seller-refunds',
+      component: () => import('@/views/SellerRefundListView.vue'),
       meta: { requiresAuth: true },
     },
     {

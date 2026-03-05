@@ -6,10 +6,13 @@ import { useRoute, useRouter } from 'vue-router'
 import OrderStageTimeline from '@/components/OrderStageTimeline.vue'
 import ResultState from '@/components/ResultState.vue'
 import {
+  applyOrderRefundV2,
   cancelOrderV2,
   confirmReceiptV2,
   getOrderDetailV2,
+  getLatestOrderRefundV2,
   getOrderTimelineV2,
+  type OrderRefundStatus,
   type OrderStatus,
   type OrderTimelineItemResponse,
 } from '@/api/orderV2'
@@ -37,6 +40,14 @@ const query = useQuery({
   },
 })
 
+const detail = computed(() => query.data.value)
+
+const latestRefundQuery = useQuery({
+  queryKey: computed(() => ['order-refund-v2', orderNo.value, detail.value?.refundNo || '']),
+  queryFn: () => getLatestOrderRefundV2(orderNo.value),
+  enabled: computed(() => orderNo.value.length > 0 && Boolean(detail.value?.refundNo)),
+})
+
 const timelineQuery = useQuery({
   queryKey: computed(() => ['order-timeline-v2', orderNo.value]),
   queryFn: () => getOrderTimelineV2(orderNo.value, { page: 1, size: 50 }),
@@ -61,9 +72,41 @@ const confirmMutation = useMutation({
   },
 })
 
-const detail = computed(() => query.data.value)
+const applyRefundMutation = useMutation({
+  mutationFn: () => {
+    const status = detail.value?.status
+    const reason =
+      status === 'PAID'
+        ? '买家发货前申请退款'
+        : status === 'DELIVERING'
+          ? '买家发货后申请退款'
+          : '买家售后申请退款'
+    return applyOrderRefundV2(orderNo.value, { reason })
+  },
+  onSuccess: async () => {
+    await query.refetch()
+    await timelineQuery.refetch()
+    await latestRefundQuery.refetch()
+    await queryClient.invalidateQueries({ queryKey: ['orders-v2'] })
+  },
+})
+
 const timelineItems = computed(() => timelineQuery.data.value?.items || [])
+const latestRefund = computed(() => latestRefundQuery.data.value)
 const errorMessage = computed(() => (query.error.value instanceof Error ? query.error.value.message : ''))
+const refundErrorMessage = computed(() => (latestRefundQuery.error.value instanceof Error ? latestRefundQuery.error.value.message : ''))
+const canApplyRefund = computed(() => {
+  if (!detail.value) {
+    return false
+  }
+  return (detail.value.status === 'PAID' || detail.value.status === 'DELIVERING' || detail.value.status === 'FINISHED') && !detail.value.refundNo
+})
+const applyRefundButtonText = computed(() => {
+  if (applyRefundMutation.isPending.value) {
+    return '提交中...'
+  }
+  return detail.value?.status === 'PAID' ? '立即退款' : '申请退款'
+})
 
 const ORDER_STATUS_TEXT: Record<OrderStatus, string> = {
   UNPAID: '待支付',
@@ -71,6 +114,13 @@ const ORDER_STATUS_TEXT: Record<OrderStatus, string> = {
   DELIVERING: '待收货',
   FINISHED: '已完成',
   CANCELED: '已取消',
+}
+
+const REFUND_STATUS_TEXT: Record<OrderRefundStatus, string> = {
+  REQUESTED: '待审核',
+  REJECTED: '已拒绝',
+  PENDING_FUNDS: '待补款',
+  SUCCEEDED: '已退款',
 }
 
 function formatMoney(priceCent: number): string {
@@ -109,6 +159,29 @@ function statusText(status: OrderStatus): string {
   return ORDER_STATUS_TEXT[status] || status
 }
 
+function refundStatusText(status?: OrderRefundStatus): string {
+  if (!status) {
+    return '-'
+  }
+  return REFUND_STATUS_TEXT[status] || status
+}
+
+function refundStatusClass(status?: OrderRefundStatus): string {
+  if (status === 'REQUESTED') {
+    return 'bg-amber-100 text-amber-700'
+  }
+  if (status === 'SUCCEEDED') {
+    return 'bg-emerald-100 text-emerald-700'
+  }
+  if (status === 'PENDING_FUNDS') {
+    return 'bg-rose-100 text-rose-700'
+  }
+  if (status === 'REJECTED') {
+    return 'bg-stone-200 text-stone-700'
+  }
+  return 'bg-stone-100 text-stone-600'
+}
+
 function transitionText(item: OrderTimelineItemResponse): string {
   return `${statusText(item.fromStatus)} -> ${statusText(item.toStatus)}`
 }
@@ -144,6 +217,16 @@ async function handleConfirm(): Promise<void> {
     }
   }
 }
+
+async function handleApplyRefund(): Promise<void> {
+  try {
+    await applyRefundMutation.mutateAsync()
+  } catch (error) {
+    if (error instanceof ApiBizError) {
+      return
+    }
+  }
+}
 </script>
 
 <template>
@@ -164,9 +247,18 @@ async function handleConfirm(): Promise<void> {
             <p class="mt-1 text-sm text-stone-600">创建于 {{ formatTime(detail.createdAt) }}</p>
             <p v-if="detail.status === 'UNPAID'" class="mt-1 text-xs text-amber-700">状态自动刷新中（每 3 秒）</p>
           </div>
-          <span class="w-fit rounded-full px-3 py-1 text-xs font-semibold" :class="statusClass(detail.status)">
-            {{ statusText(detail.status) }}
-          </span>
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="w-fit rounded-full px-3 py-1 text-xs font-semibold" :class="statusClass(detail.status)">
+              {{ statusText(detail.status) }}
+            </span>
+            <span
+              v-if="detail.refundStatus"
+              class="w-fit rounded-full px-3 py-1 text-xs font-semibold"
+              :class="refundStatusClass(detail.refundStatus)"
+            >
+              退款{{ refundStatusText(detail.refundStatus) }}
+            </span>
+          </div>
         </header>
 
         <div class="grid gap-3 rounded-xl bg-stone-50 p-4 text-sm text-stone-700 sm:grid-cols-2">
@@ -174,6 +266,9 @@ async function handleConfirm(): Promise<void> {
           <p>支付时间：{{ formatTime(detail.paidAt) }}</p>
           <p>支付方式：余额支付</p>
           <p class="sm:col-span-2">超时关单时间：{{ formatTime(detail.timeoutAt) }}</p>
+          <p v-if="detail.refundNo">退款单号：{{ detail.refundNo }}</p>
+          <p v-if="detail.refundNo">退款金额：{{ formatMoney(detail.refundAmountCent || 0) }}</p>
+          <p v-if="detail.refundNo" class="sm:col-span-2">退款更新时间：{{ formatTime(detail.refundUpdatedAt) }}</p>
         </div>
 
         <section>
@@ -208,6 +303,41 @@ async function handleConfirm(): Promise<void> {
           :paid-at="detail.paidAt"
           :timeline-items="timelineItems"
         />
+
+        <section class="space-y-3 rounded-xl border border-stone-200 bg-stone-50 p-4">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h2 class="text-base font-semibold text-stone-900">退款进度</h2>
+            <button
+              v-if="canApplyRefund"
+              type="button"
+              class="rounded-lg bg-rose-700 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-70"
+              :disabled="applyRefundMutation.isPending.value"
+              @click="handleApplyRefund"
+            >
+              {{ applyRefundButtonText }}
+            </button>
+          </div>
+
+          <p v-if="!detail.refundNo" class="text-sm text-stone-500">当前订单暂无退款申请。</p>
+
+          <div v-else class="space-y-2 rounded-lg bg-white p-3 text-sm text-stone-700">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="font-medium text-stone-900">退款状态</span>
+              <span class="rounded-full px-2.5 py-1 text-xs font-semibold" :class="refundStatusClass(latestRefund?.status || detail.refundStatus)">
+                {{ refundStatusText(latestRefund?.status || detail.refundStatus) }}
+              </span>
+            </div>
+            <p>退款单号：{{ latestRefund?.refundNo || detail.refundNo }}</p>
+            <p>退款金额：{{ formatMoney(latestRefund?.amountCent || detail.refundAmountCent || 0) }}</p>
+            <p>申请原因：{{ latestRefund?.applyReason || '-' }}</p>
+            <p>审核截止：{{ formatTime(latestRefund?.reviewDeadlineAt) }}</p>
+            <p>审核时间：{{ formatTime(latestRefund?.reviewedAt) }}</p>
+            <p>拒绝原因：{{ latestRefund?.rejectReason || '-' }}</p>
+            <p>支付退款单：{{ latestRefund?.paymentNo || '-' }}</p>
+            <p v-if="latestRefund?.lastError" class="text-rose-600">最近错误：{{ latestRefund.lastError }}</p>
+            <p v-if="refundErrorMessage" class="text-rose-600">{{ refundErrorMessage }}</p>
+          </div>
+        </section>
 
         <section class="space-y-2">
           <h2 class="text-base font-semibold text-stone-900">操作记录</h2>

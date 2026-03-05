@@ -4,7 +4,7 @@ import { computed, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 
 import ResultState from '@/components/ResultState.vue'
-import { cancelOrderV2, confirmReceiptV2, listMyOrdersV2, type OrderStatus } from '@/api/orderV2'
+import { cancelOrderV2, confirmReceiptV2, listMyOrdersV2, type OrderRefundStatus, type OrderStatus } from '@/api/orderV2'
 import { ApiBizError } from '@/types/result'
 import { useChatStore } from '@/stores/chat'
 
@@ -55,6 +55,13 @@ const ORDER_STATUS_TEXT: Record<OrderStatus, string> = {
   CANCELED: '已取消',
 }
 
+const REFUND_STATUS_TEXT: Record<OrderRefundStatus, string> = {
+  REQUESTED: '退款待审核',
+  REJECTED: '退款已拒绝',
+  PENDING_FUNDS: '退款待补款',
+  SUCCEEDED: '已退款',
+}
+
 function formatMoney(priceCent: number): string {
   return `¥ ${(priceCent / 100).toFixed(2)}`
 }
@@ -89,6 +96,29 @@ function statusClass(status: OrderStatus): string {
 
 function statusText(status: OrderStatus): string {
   return ORDER_STATUS_TEXT[status] || status
+}
+
+function refundStatusText(status?: OrderRefundStatus): string {
+  if (!status) {
+    return '-'
+  }
+  return REFUND_STATUS_TEXT[status] || status
+}
+
+function refundStatusClass(status?: OrderRefundStatus): string {
+  if (status === 'REQUESTED') {
+    return 'bg-amber-100 text-amber-700'
+  }
+  if (status === 'SUCCEEDED') {
+    return 'bg-emerald-100 text-emerald-700'
+  }
+  if (status === 'PENDING_FUNDS') {
+    return 'bg-rose-100 text-rose-700'
+  }
+  if (status === 'REJECTED') {
+    return 'bg-stone-200 text-stone-700'
+  }
+  return 'bg-stone-100 text-stone-600'
 }
 
 function handlePay(orderNo: string, conversationId?: number): void {
@@ -138,6 +168,9 @@ async function handleConfirm(orderNo: string, conversationId?: number): Promise<
               <p class="mt-1 text-base font-semibold text-stone-900">{{ formatMoney(item.totalAmountCent) }}</p>
               <p class="mt-1 text-xs text-stone-500">创建时间 {{ formatTime(item.createdAt) }}</p>
               <p class="mt-1 text-xs text-stone-500">支付时间 {{ formatTime(item.paidAt) }}</p>
+              <p v-if="item.refundNo" class="mt-1 text-xs text-stone-500">
+                退款单 {{ item.refundNo }} / {{ formatMoney(item.refundAmountCent || 0) }} / 更新 {{ formatTime(item.refundUpdatedAt) }}
+              </p>
             </div>
 
             <div class="flex flex-wrap items-center gap-2">
@@ -149,6 +182,13 @@ async function handleConfirm(orderNo: string, conversationId?: number): Promise<
               </RouterLink>
               <span class="rounded-full px-3 py-1 text-xs font-semibold" :class="statusClass(item.status)">
                 {{ statusText(item.status) }}
+              </span>
+              <span
+                v-if="item.refundStatus"
+                class="rounded-full px-3 py-1 text-xs font-semibold"
+                :class="refundStatusClass(item.refundStatus)"
+              >
+                {{ refundStatusText(item.refundStatus) }}
               </span>
 
               <button
