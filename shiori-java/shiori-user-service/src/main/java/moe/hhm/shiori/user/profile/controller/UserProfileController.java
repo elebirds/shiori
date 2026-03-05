@@ -43,8 +43,9 @@ public class UserProfileController {
     }
 
     @GetMapping("/profiles/{userNo}")
-    public PublicUserProfileResponse getPublicProfile(@PathVariable String userNo) {
-        return userProfileService.getProfileByUserNo(userNo);
+    public PublicUserProfileResponse getPublicProfile(@PathVariable String userNo,
+                                                      Authentication authentication) {
+        return userProfileService.getProfileByUserNo(userNo, resolveOptionalUserId(authentication));
     }
 
     @GetMapping("/profiles/by-user-ids")
@@ -80,5 +81,20 @@ public class UserProfileController {
                 .cacheControl(CacheControl.maxAge(Duration.ofMinutes(10)))
                 .contentType(mediaType)
                 .body(avatar.bytes());
+    }
+
+    private Long resolveOptionalUserId(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return null;
+        }
+        String principal = authentication.getName();
+        if (principal == null || principal.isBlank()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(principal);
+        } catch (NumberFormatException ex) {
+            return null;
+        }
     }
 }

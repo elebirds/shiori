@@ -1,4 +1,4 @@
-import { httpGet, httpPost, httpPut } from '@/api/http'
+import { httpDelete, httpGet, httpPost, httpPut } from '@/api/http'
 
 export interface LoginRequest {
   username: string
@@ -69,6 +69,25 @@ export interface PublicUserProfile {
   gender: number
   age?: number
   bio?: string
+  followerCount?: number
+  followingCount?: number
+  followedByCurrentUser?: boolean
+}
+
+export interface FollowUserItem {
+  userId: number
+  userNo: string
+  nickname: string
+  avatarUrl?: string
+  bio?: string
+  followedAt: string
+}
+
+export interface FollowUserPageResponse {
+  total: number
+  page: number
+  size: number
+  items: FollowUserItem[]
 }
 
 export interface UpdateProfileRequest {
@@ -121,6 +140,28 @@ export function getUserProfilesByUserIds(userIds: number[]): Promise<PublicUserP
       userIds: normalized.join(','),
     },
   })
+}
+
+export function followUser(targetUserNo: string): Promise<SimpleSuccessResponse> {
+  return httpPost<SimpleSuccessResponse>(`/api/user/follows/${encodeURIComponent(targetUserNo)}`)
+}
+
+export function unfollowUser(targetUserNo: string): Promise<SimpleSuccessResponse> {
+  return httpDelete<SimpleSuccessResponse>(`/api/user/follows/${encodeURIComponent(targetUserNo)}`)
+}
+
+export function listUserFollowersByUserNo(
+  userNo: string,
+  params?: { page?: number; size?: number },
+): Promise<FollowUserPageResponse> {
+  return httpGet<FollowUserPageResponse>(`/api/user/profiles/${encodeURIComponent(userNo)}/followers`, { params })
+}
+
+export function listUserFollowingByUserNo(
+  userNo: string,
+  params?: { page?: number; size?: number },
+): Promise<FollowUserPageResponse> {
+  return httpGet<FollowUserPageResponse>(`/api/user/profiles/${encodeURIComponent(userNo)}/following`, { params })
 }
 
 export function updateMyProfile(payload: UpdateProfileRequest): Promise<UserProfile> {

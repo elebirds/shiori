@@ -100,6 +100,18 @@ const router = createRouter({
       meta: { public: true },
     },
     {
+      path: '/u/:userNo/followers',
+      name: 'user-followers',
+      component: () => import('@/views/UserFollowListView.vue'),
+      meta: { public: true, followMode: 'followers' },
+    },
+    {
+      path: '/u/:userNo/following',
+      name: 'user-following',
+      component: () => import('@/views/UserFollowListView.vue'),
+      meta: { public: true, followMode: 'following' },
+    },
+    {
       path: '/profile',
       name: 'profile',
       redirect: () => {

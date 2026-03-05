@@ -282,6 +282,21 @@
    2. 用户端新增钱包页：`/wallet`（余额展示 + CDK 兑换）
    3. 订单页“立即支付”改为跳转收银台，v2 支付严格无请求体
    4. 管理端新增 CDK 管理页：`/payments/cdks`（批次创建、明文一次展示、CSV 导出）
+9. v0.8-a 粉丝与关注机制（单向关注 MVP）：
+   1. 用户主页支持关注/取关，接口幂等：
+      1. `POST /api/user/follows/{targetUserNo}`
+      2. `DELETE /api/user/follows/{targetUserNo}`
+   2. 用户公开资料新增关注态字段（`GET /api/user/profiles/{userNo}`）：
+      1. `followerCount`
+      2. `followingCount`
+      3. `followedByCurrentUser`
+   3. 新增公开列表查询：
+      1. `GET /api/user/profiles/{userNo}/followers?page={n}&size={n}`
+      2. `GET /api/user/profiles/{userNo}/following?page={n}&size={n}`
+   4. 用户端新增关注列表页面路由：
+      1. `/u/:userNo/followers`
+      2. `/u/:userNo/following`
+   5. 数据层新增关系表：`u_user_follow`（唯一键 `follower_user_id + followed_user_id`，按创建时间倒序查询）。
 
 ---
 

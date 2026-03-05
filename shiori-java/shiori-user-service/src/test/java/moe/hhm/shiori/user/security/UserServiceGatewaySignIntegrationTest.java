@@ -4,6 +4,7 @@ import moe.hhm.shiori.common.security.GatewaySignUtils;
 import moe.hhm.shiori.common.security.GatewaySignVerifyFilter;
 import moe.hhm.shiori.user.admin.repository.AdminUserMapper;
 import moe.hhm.shiori.user.auth.repository.AuthUserMapper;
+import moe.hhm.shiori.user.follow.repository.UserFollowMapper;
 import moe.hhm.shiori.user.profile.repository.UserProfileMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +43,9 @@ class UserServiceGatewaySignIntegrationTest {
 
     @MockitoBean
     private AdminUserMapper adminUserMapper;
+
+    @MockitoBean
+    private UserFollowMapper userFollowMapper;
 
     @Test
     void shouldReturn401WhenSignHeadersMissing() throws Exception {
