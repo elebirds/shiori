@@ -163,6 +163,15 @@ public class PaymentService {
         }
 
         WalletAccountRecord buyerWallet = ensureWalletForUpdate(buyerUserId);
+        TradePaymentRecord latest = paymentMapper.findTradeByOrderNoForUpdate(orderNo.trim());
+        if (latest != null) {
+            TradePaymentStatus latestStatus = TradePaymentStatus.fromCode(latest.status());
+            if (latestStatus == TradePaymentStatus.RESERVED) {
+                return new ReserveOrderPaymentResponse(orderNo.trim(), latest.paymentNo(), latestStatus.name(), true);
+            }
+            throw new BizException(PaymentErrorCode.PAYMENT_TRADE_STATUS_INVALID, HttpStatus.CONFLICT);
+        }
+
         long availableBefore = safeNonNegative(buyerWallet.availableBalanceCent());
         long frozenBefore = safeNonNegative(buyerWallet.frozenBalanceCent());
         long amount = safePositive(amountCent);
@@ -189,11 +198,12 @@ public class PaymentService {
             );
         } catch (DuplicateKeyException ex) {
             TradePaymentRecord duplicated = paymentMapper.findTradeByOrderNo(orderNo.trim());
-            if (duplicated != null) {
+            if (duplicated != null
+                    && TradePaymentStatus.fromCode(duplicated.status()) == TradePaymentStatus.RESERVED) {
                 return new ReserveOrderPaymentResponse(orderNo.trim(), duplicated.paymentNo(),
                         TradePaymentStatus.fromCode(duplicated.status()).name(), true);
             }
-            throw ex;
+            throw new BizException(PaymentErrorCode.PAYMENT_TRADE_STATUS_INVALID, HttpStatus.CONFLICT);
         }
 
         return new ReserveOrderPaymentResponse(orderNo.trim(), paymentNo, TradePaymentStatus.RESERVED.name(), false);
@@ -353,8 +363,11 @@ public class PaymentService {
 
     private String maskCode(String code) {
         String normalized = normalizeCode(code);
+        if (normalized.length() <= 4) {
+            return "****";
+        }
         if (normalized.length() <= 8) {
-            return normalized;
+            return normalized.substring(0, 2) + "****" + normalized.substring(normalized.length() - 2);
         }
         return normalized.substring(0, 4) + "****" + normalized.substring(normalized.length() - 4);
     }
