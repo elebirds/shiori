@@ -17,7 +17,12 @@ public enum OrderErrorCode implements ErrorCode {
     ORDER_PRODUCT_SERVICE_ERROR(50013, "商品服务异常"),
     ORDER_PRODUCT_RESPONSE_INVALID(50014, "商品服务响应异常"),
     ORDER_SELF_PURCHASE_NOT_ALLOWED(50015, "不允许购买自己发布的商品"),
-    ORDER_IDEMPOTENCY_CONFLICT(50016, "幂等键冲突");
+    ORDER_IDEMPOTENCY_CONFLICT(50016, "幂等键冲突"),
+    ORDER_PAYMENT_UNREACHABLE(50017, "支付服务不可达"),
+    ORDER_PAYMENT_TIMEOUT(50018, "支付服务响应超时"),
+    ORDER_BALANCE_NOT_ENOUGH(50019, "余额不足"),
+    ORDER_PAYMENT_RESPONSE_INVALID(50020, "支付服务响应异常"),
+    ORDER_PAYMENT_SERVICE_ERROR(50021, "支付服务异常");
 
     private final int code;
     private final String message;

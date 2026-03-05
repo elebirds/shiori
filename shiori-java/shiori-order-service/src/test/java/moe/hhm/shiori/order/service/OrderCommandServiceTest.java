@@ -7,6 +7,9 @@ import moe.hhm.shiori.order.client.ProductDetailSnapshot;
 import moe.hhm.shiori.order.client.ProductServiceClient;
 import moe.hhm.shiori.order.client.ProductSkuSnapshot;
 import moe.hhm.shiori.order.client.NotifyChatClient;
+import moe.hhm.shiori.order.client.PaymentServiceClient;
+import moe.hhm.shiori.order.client.ReserveBalancePaymentSnapshot;
+import moe.hhm.shiori.order.client.SettleBalancePaymentSnapshot;
 import moe.hhm.shiori.order.config.OrderMqProperties;
 import moe.hhm.shiori.order.config.OrderProperties;
 import moe.hhm.shiori.order.dto.CreateOrderItem;
@@ -43,6 +46,8 @@ class OrderCommandServiceTest {
     private ProductServiceClient productServiceClient;
     @Mock
     private NotifyChatClient notifyChatClient;
+    @Mock
+    private PaymentServiceClient paymentServiceClient;
 
     private OrderCommandService orderCommandService;
 
@@ -54,6 +59,7 @@ class OrderCommandServiceTest {
                 orderMapper,
                 productServiceClient,
                 notifyChatClient,
+                paymentServiceClient,
                 orderProperties,
                 orderMqProperties,
                 new ObjectMapper(),
@@ -204,6 +210,47 @@ class OrderCommandServiceTest {
         assertThatThrownBy(() -> orderCommandService.payOrder(1001L, "O202603040004", "PAY-004", "idem-pay-conflict"))
                 .isInstanceOf(BizException.class)
                 .matches(ex -> ((BizException) ex).getErrorCode().code() == 50016);
+    }
+
+    @Test
+    void shouldPayOrderByBalance() {
+        when(orderMapper.findOrderByOrderNo("O202603050001"))
+                .thenReturn(new OrderRecord(
+                        14L, "O202603050001", 1001L, 2001L, 1, 2399L, 1,
+                        null, null, null, null, null, null, null, 0, null, null
+                ));
+        when(orderMapper.findOperateIdempotency(1001L, "PAY", "idem-balance-pay-1")).thenReturn(null);
+        when(paymentServiceClient.reserveOrderPayment("O202603050001", 1001L, 2001L, 2399L, 1001L, List.of("ROLE_USER")))
+                .thenReturn(new ReserveBalancePaymentSnapshot("O202603050001", "P-001", "RESERVED", false));
+        when(orderMapper.markOrderPaidByBalance(eq("O202603050001"), eq(1001L), eq("P-001"), any(), eq(1), eq(2)))
+                .thenReturn(1);
+
+        OrderOperateResponse response =
+                orderCommandService.payOrderByBalance(1001L, "O202603050001", "idem-balance-pay-1");
+
+        assertThat(response.idempotent()).isFalse();
+        assertThat(response.status()).isEqualTo("PAID");
+        verify(paymentServiceClient).reserveOrderPayment("O202603050001", 1001L, 2001L, 2399L, 1001L, List.of("ROLE_USER"));
+        verify(orderMapper).markOrderPaidByBalance(eq("O202603050001"), eq(1001L), eq("P-001"), any(), eq(1), eq(2));
+    }
+
+    @Test
+    void shouldSettleBalanceEscrowWhenBuyerConfirmReceipt() {
+        when(orderMapper.findOrderByOrderNo("O202603050002"))
+                .thenReturn(new OrderRecord(
+                        15L, "O202603050002", 1001L, 2001L, 4, 3999L, 1,
+                        "P-002", null, null, null, null, null, null, 0, null, null
+                ));
+        when(orderMapper.markOrderFinishedByBuyer("O202603050002", 1001L, 4, 5)).thenReturn(1);
+        when(orderMapper.findPaymentModeByOrderNo("O202603050002")).thenReturn("BALANCE_ESCROW");
+        when(paymentServiceClient.settleOrderPayment("O202603050002", "BUYER", 1001L, 1001L, List.of("ROLE_USER")))
+                .thenReturn(new SettleBalancePaymentSnapshot("O202603050002", "P-002", "SETTLED", false));
+
+        OrderOperateResponse response = orderCommandService.confirmReceiptAsBuyer(1001L, "O202603050002", null);
+
+        assertThat(response.idempotent()).isFalse();
+        assertThat(response.status()).isEqualTo("FINISHED");
+        verify(paymentServiceClient).settleOrderPayment("O202603050002", "BUYER", 1001L, 1001L, List.of("ROLE_USER"));
     }
 
     private ProductDetailSnapshot product(Long productId, String productNo, Long ownerUserId,

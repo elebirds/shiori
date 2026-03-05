@@ -23,6 +23,8 @@ order:
   timeout-minutes: ${ORDER_TIMEOUT_MINUTES:15}
   product-client:
     service-base-url: ${ORDER_PRODUCT_SERVICE_BASE_URL:http://shiori-product-service}
+  payment-client:
+    service-base-url: ${ORDER_PAYMENT_SERVICE_BASE_URL:http://shiori-payment-service}
   notify-client:
     service-base-url: ${ORDER_NOTIFY_SERVICE_BASE_URL:http://shiori-notify}
   outbox:

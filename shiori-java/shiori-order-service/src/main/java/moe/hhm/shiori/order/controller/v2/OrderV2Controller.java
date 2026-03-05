@@ -13,7 +13,6 @@ import moe.hhm.shiori.order.dto.CreateOrderResponse;
 import moe.hhm.shiori.order.dto.OrderDetailResponse;
 import moe.hhm.shiori.order.dto.OrderOperateResponse;
 import moe.hhm.shiori.order.dto.OrderPageResponse;
-import moe.hhm.shiori.order.dto.PayOrderRequest;
 import moe.hhm.shiori.order.dto.v2.ChatToOrderClickRequest;
 import moe.hhm.shiori.order.dto.v2.ConfirmReceiptRequest;
 import moe.hhm.shiori.order.dto.v2.OrderOperateResponseV2;
@@ -96,16 +95,19 @@ public class OrderV2Controller {
 
     @PostMapping("/{orderNo}/pay")
     public OrderOperateResponse pay(@PathVariable String orderNo,
-                                    @Valid @RequestBody PayOrderRequest request,
+                                    @RequestBody(required = false) String rawBody,
                                     @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
                                     Authentication authentication,
                                     HttpServletRequest httpServletRequest) {
         if (!StringUtils.hasText(idempotencyKey)) {
             throw new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST);
         }
+        if (StringUtils.hasText(rawBody)) {
+            throw new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST, "v2支付接口不接受请求体");
+        }
         permissionGuard.require("order.pay", httpServletRequest::getHeader);
         Long userId = CurrentUserSupport.requireUserId(authentication);
-        return orderCommandService.payOrder(userId, orderNo, request.paymentNo().trim(), idempotencyKey.trim());
+        return orderCommandService.payOrderByBalance(userId, orderNo, idempotencyKey.trim());
     }
 
     @PostMapping("/{orderNo}/cancel")

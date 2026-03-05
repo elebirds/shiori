@@ -18,8 +18,12 @@ import moe.hhm.shiori.order.client.ProductServiceClient;
 import moe.hhm.shiori.order.client.ProductSkuSnapshot;
 import moe.hhm.shiori.order.client.NotifyChatClient;
 import moe.hhm.shiori.order.client.ChatConversationSnapshot;
+import moe.hhm.shiori.order.client.PaymentServiceClient;
+import moe.hhm.shiori.order.client.ReleaseBalancePaymentSnapshot;
+import moe.hhm.shiori.order.client.ReserveBalancePaymentSnapshot;
 import moe.hhm.shiori.order.config.OrderMqProperties;
 import moe.hhm.shiori.order.config.OrderProperties;
+import moe.hhm.shiori.order.domain.OrderPaymentMode;
 import moe.hhm.shiori.order.domain.OrderStatus;
 import moe.hhm.shiori.order.domain.OutboxStatus;
 import moe.hhm.shiori.order.dto.CreateOrderItem;
@@ -73,6 +77,7 @@ public class OrderCommandService {
     private final OrderMapper orderMapper;
     private final ProductServiceClient productServiceClient;
     private final NotifyChatClient notifyChatClient;
+    private final PaymentServiceClient paymentServiceClient;
     private final OrderProperties orderProperties;
     private final OrderMqProperties orderMqProperties;
     private final ObjectMapper objectMapper;
@@ -81,6 +86,7 @@ public class OrderCommandService {
     public OrderCommandService(OrderMapper orderMapper,
                                ProductServiceClient productServiceClient,
                                NotifyChatClient notifyChatClient,
+                               PaymentServiceClient paymentServiceClient,
                                OrderProperties orderProperties,
                                OrderMqProperties orderMqProperties,
                                ObjectMapper objectMapper,
@@ -88,6 +94,7 @@ public class OrderCommandService {
         this.orderMapper = orderMapper;
         this.productServiceClient = productServiceClient;
         this.notifyChatClient = notifyChatClient;
+        this.paymentServiceClient = paymentServiceClient;
         this.orderProperties = orderProperties;
         this.orderMqProperties = orderMqProperties;
         this.objectMapper = objectMapper;
@@ -180,6 +187,94 @@ public class OrderCommandService {
             throw new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST);
         }
         orderMetrics.incChatToOrderClick(normalizedSource);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public OrderOperateResponse payOrderByBalance(Long buyerUserId, String orderNo, String idempotencyKey) {
+        String normalizedIdempotencyKey = requireIdempotencyKey(idempotencyKey);
+        OrderRecord order = requireOrder(orderNo);
+        ensureBuyer(order, buyerUserId);
+
+        if (hasOperateIdempotencyHit(buyerUserId, OP_PAY, normalizedIdempotencyKey, orderNo)) {
+            OrderStatus status = OrderStatus.fromCode(order.status());
+            if (status == OrderStatus.PAID && isBalanceEscrowOrder(orderNo)) {
+                return new OrderOperateResponse(orderNo, OrderStatus.PAID.name(), true);
+            }
+            throw new BizException(OrderErrorCode.ORDER_STATUS_INVALID, HttpStatus.CONFLICT);
+        }
+
+        OrderStatus status = OrderStatus.fromCode(order.status());
+        if (status == OrderStatus.PAID) {
+            if (isBalanceEscrowOrder(orderNo)) {
+                saveOperateIdempotency(buyerUserId, OP_PAY, normalizedIdempotencyKey, orderNo);
+                return new OrderOperateResponse(orderNo, OrderStatus.PAID.name(), true);
+            }
+            throw new BizException(OrderErrorCode.ORDER_PAYMENT_CONFLICT, HttpStatus.CONFLICT);
+        }
+        if (status != OrderStatus.UNPAID) {
+            throw new BizException(OrderErrorCode.ORDER_STATUS_INVALID, HttpStatus.CONFLICT);
+        }
+
+        ReserveBalancePaymentSnapshot reserved = paymentServiceClient.reserveOrderPayment(
+                orderNo,
+                order.buyerUserId(),
+                order.sellerUserId(),
+                order.totalAmountCent(),
+                buyerUserId,
+                List.of("ROLE_USER")
+        );
+        String paymentNo = reserved.paymentNo();
+        boolean releaseRequired = true;
+
+        try {
+            int affected = orderMapper.markOrderPaidByBalance(
+                    orderNo,
+                    buyerUserId,
+                    paymentNo,
+                    LocalDateTime.now(),
+                    OrderStatus.UNPAID.getCode(),
+                    OrderStatus.PAID.getCode()
+            );
+            if (affected == 0) {
+                OrderRecord latest = requireOrder(orderNo);
+                if (OrderStatus.fromCode(latest.status()) == OrderStatus.PAID
+                        && Objects.equals(latest.paymentNo(), paymentNo)
+                        && isBalanceEscrowOrder(orderNo)) {
+                    releaseRequired = false;
+                    saveOperateIdempotency(buyerUserId, OP_PAY, normalizedIdempotencyKey, orderNo);
+                    return new OrderOperateResponse(orderNo, OrderStatus.PAID.name(), true);
+                }
+                throw new BizException(OrderErrorCode.ORDER_STATUS_INVALID, HttpStatus.CONFLICT);
+            }
+        } catch (DuplicateKeyException ex) {
+            OrderRecord paymentOrder = orderMapper.findOrderByPaymentNo(paymentNo);
+            if (paymentOrder != null && orderNo.equals(paymentOrder.orderNo()) && isBalanceEscrowOrder(orderNo)) {
+                releaseRequired = false;
+                saveOperateIdempotency(buyerUserId, OP_PAY, normalizedIdempotencyKey, orderNo);
+                return new OrderOperateResponse(orderNo, OrderStatus.PAID.name(), true);
+            }
+            orderMetrics.incIdempotency(OP_PAY, "conflict");
+            throw new BizException(OrderErrorCode.ORDER_PAYMENT_CONFLICT, HttpStatus.CONFLICT);
+        } catch (RuntimeException ex) {
+            if (releaseRequired) {
+                safeReleaseReservedPayment(orderNo, buyerUserId, "order_pay_failed:" + ex.getClass().getSimpleName());
+            }
+            throw ex;
+        }
+
+        releaseRequired = false;
+        try {
+            appendOrderPaidOutbox(orderNo, paymentNo, order.buyerUserId(), order.sellerUserId(), order.totalAmountCent());
+            orderMetrics.incStateTransition(OrderStatus.UNPAID.name(), OrderStatus.PAID.name(), SOURCE_BUYER);
+            insertStatusAudit(orderNo, buyerUserId, SOURCE_BUYER, OrderStatus.UNPAID, OrderStatus.PAID,
+                    "买家余额支付成功, paymentNo=" + paymentNo);
+            recordTradeStatusCardSentForChatOrder(order, "ORDER_PAID");
+            saveOperateIdempotency(buyerUserId, OP_PAY, normalizedIdempotencyKey, orderNo);
+            return new OrderOperateResponse(orderNo, OrderStatus.PAID.name(), false);
+        } catch (RuntimeException ex) {
+            safeReleaseReservedPayment(orderNo, buyerUserId, "order_pay_tx_rollback:" + ex.getClass().getSimpleName());
+            throw ex;
+        }
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -411,6 +506,7 @@ public class OrderCommandService {
             throw new BizException(OrderErrorCode.ORDER_STATUS_INVALID, HttpStatus.CONFLICT);
         }
 
+        settleBalanceEscrowIfNeeded(orderNo, order, SOURCE_SELLER, sellerUserId);
         orderMetrics.incStateTransition(OrderStatus.DELIVERING.name(), OrderStatus.FINISHED.name(), SOURCE_SELLER);
         insertStatusAudit(orderNo, sellerUserId, SOURCE_SELLER, OrderStatus.DELIVERING, OrderStatus.FINISHED, normalizedReason);
         appendOrderFinishedOutbox(orderNo, order.buyerUserId(), order.sellerUserId(), SOURCE_SELLER, sellerUserId);
@@ -482,6 +578,7 @@ public class OrderCommandService {
             throw new BizException(OrderErrorCode.ORDER_STATUS_INVALID, HttpStatus.CONFLICT);
         }
 
+        settleBalanceEscrowIfNeeded(orderNo, before, SOURCE_ADMIN, operatorUserId);
         orderMetrics.incStateTransition(OrderStatus.DELIVERING.name(), OrderStatus.FINISHED.name(), SOURCE_ADMIN);
         insertStatusAudit(orderNo, operatorUserId, SOURCE_ADMIN, OrderStatus.DELIVERING, OrderStatus.FINISHED, normalizedReason);
         appendOrderFinishedOutbox(orderNo, before.buyerUserId(), before.sellerUserId(), SOURCE_ADMIN, operatorUserId);
@@ -518,6 +615,7 @@ public class OrderCommandService {
             throw new BizException(OrderErrorCode.ORDER_STATUS_INVALID, HttpStatus.CONFLICT);
         }
 
+        settleBalanceEscrowIfNeeded(orderNo, order, SOURCE_BUYER, buyerUserId);
         orderMetrics.incStateTransition(OrderStatus.DELIVERING.name(), OrderStatus.FINISHED.name(), SOURCE_BUYER);
         insertStatusAudit(orderNo, buyerUserId, SOURCE_BUYER, OrderStatus.DELIVERING, OrderStatus.FINISHED, normalizedReason);
         recordTradeStatusCardSentForChatOrder(order, "ORDER_FINISHED");
@@ -915,6 +1013,42 @@ public class OrderCommandService {
         } catch (JacksonException e) {
             return "{}";
         }
+    }
+
+    private void settleBalanceEscrowIfNeeded(String orderNo,
+                                             OrderRecord order,
+                                             String operatorType,
+                                             Long operatorUserId) {
+        if (order == null || !isBalanceEscrowOrder(orderNo)) {
+            return;
+        }
+        paymentServiceClient.settleOrderPayment(
+                orderNo,
+                operatorType,
+                operatorUserId,
+                operatorUserId == null ? order.buyerUserId() : operatorUserId,
+                List.of("ROLE_USER")
+        );
+    }
+
+    private void safeReleaseReservedPayment(String orderNo, Long userId, String reason) {
+        try {
+            ReleaseBalancePaymentSnapshot released = paymentServiceClient.releaseOrderPayment(
+                    orderNo,
+                    reason,
+                    userId,
+                    List.of("ROLE_USER")
+            );
+            log.warn("订单支付补偿释放执行, orderNo={}, status={}, idempotent={}",
+                    orderNo, released.status(), released.idempotent());
+        } catch (RuntimeException ex) {
+            log.error("订单支付补偿释放失败, orderNo={}, err={}", orderNo, ex.getMessage());
+        }
+    }
+
+    private boolean isBalanceEscrowOrder(String orderNo) {
+        String mode = orderMapper.findPaymentModeByOrderNo(orderNo);
+        return OrderPaymentMode.fromCode(mode) == OrderPaymentMode.BALANCE_ESCROW;
     }
 
     private void ensureBuyer(OrderRecord order, Long buyerUserId) {

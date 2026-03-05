@@ -187,6 +187,14 @@ public interface OrderMapper {
     OrderRecord findOrderByOrderNo(@Param("orderNo") String orderNo);
 
     @Select("""
+            SELECT payment_mode
+            FROM o_order
+            WHERE order_no = #{orderNo}
+            LIMIT 1
+            """)
+    String findPaymentModeByOrderNo(@Param("orderNo") String orderNo);
+
+    @Select("""
             SELECT id,
                    order_no AS orderNo,
                    buyer_user_id AS buyerUserId,
@@ -424,6 +432,26 @@ public interface OrderMapper {
                       @Param("paidAt") LocalDateTime paidAt,
                       @Param("expectStatus") Integer expectStatus,
                       @Param("paidStatus") Integer paidStatus);
+
+    @Update("""
+            UPDATE o_order
+            SET status = #{paidStatus},
+                payment_no = #{paymentNo},
+                payment_mode = 'BALANCE_ESCROW',
+                paid_at = #{paidAt},
+                updated_at = CURRENT_TIMESTAMP(3),
+                version = version + 1
+            WHERE order_no = #{orderNo}
+              AND buyer_user_id = #{buyerUserId}
+              AND status = #{expectStatus}
+              AND is_deleted = 0
+            """)
+    int markOrderPaidByBalance(@Param("orderNo") String orderNo,
+                               @Param("buyerUserId") Long buyerUserId,
+                               @Param("paymentNo") String paymentNo,
+                               @Param("paidAt") LocalDateTime paidAt,
+                               @Param("expectStatus") Integer expectStatus,
+                               @Param("paidStatus") Integer paidStatus);
 
     @Update("""
             UPDATE o_order
