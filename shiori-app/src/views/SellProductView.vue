@@ -300,21 +300,11 @@ onUnmounted(() => {
               @change="handleCoverChange"
             />
           </label>
-          <p class="text-xs text-stone-500">支持 jpg/jpeg/png/webp，上传成功后会自动回填 objectKey。</p>
+          <p class="text-xs text-stone-500">支持 jpg/jpeg/png/webp，上传成功后会自动绑定封面。</p>
           <p v-if="selectedCoverName" class="text-xs text-stone-600">已选文件：{{ selectedCoverName }}</p>
           <p v-if="uploadingCover" class="text-xs text-amber-700">正在上传封面...</p>
           <p v-if="uploadMessage" class="text-xs text-emerald-700">{{ uploadMessage }}</p>
         </div>
-
-        <label class="text-sm text-stone-700 sm:col-span-2">
-          封面 object key（自动回填，可手工覆盖）
-          <input
-            v-model.trim="form.coverObjectKey"
-            type="text"
-            class="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2 outline-none transition focus:border-amber-500"
-            placeholder="product/1001/202603/xxx.jpg"
-          />
-        </label>
 
         <div v-if="coverPreviewUrl" class="sm:col-span-2">
           <p class="mb-1 text-xs text-stone-600">封面预览</p>
