@@ -14,6 +14,11 @@ type HTTPUserCapabilityChecker struct {
 	client  *http.Client
 }
 
+const (
+	capabilityCheckMaxAttempts  = 2
+	capabilityCheckRetryBackoff = 60 * time.Millisecond
+)
+
 type activeCapabilityResponse struct {
 	UserID       int64    `json:"userId"`
 	Capabilities []string `json:"capabilities"`
@@ -53,24 +58,51 @@ func (c *HTTPUserCapabilityChecker) IsBanned(userID int64, capability string) (b
 	if err != nil {
 		return false, fmt.Errorf("build capability query request failed: %w", err)
 	}
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return false, fmt.Errorf("query capability bans failed: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return false, fmt.Errorf("query capability bans failed with status=%d", resp.StatusCode)
-	}
-
-	var payload activeCapabilityResponse
-	if decodeErr := json.NewDecoder(resp.Body).Decode(&payload); decodeErr != nil {
-		return false, fmt.Errorf("decode capability bans response failed: %w", decodeErr)
-	}
-
-	for _, item := range payload.Capabilities {
-		if strings.EqualFold(strings.TrimSpace(item), capability) {
-			return true, nil
+	var lastErr error
+	for attempt := 1; attempt <= capabilityCheckMaxAttempts; attempt++ {
+		resp, doErr := c.client.Do(req)
+		if doErr != nil {
+			lastErr = &ErrCapabilityCheckFailed{
+				Reason: "transport_error",
+				Cause:  doErr,
+			}
+			if attempt < capabilityCheckMaxAttempts {
+				time.Sleep(capabilityCheckRetryBackoff)
+				continue
+			}
+			return false, lastErr
 		}
+
+		var payload activeCapabilityResponse
+		decodeErr := json.NewDecoder(resp.Body).Decode(&payload)
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			lastErr = &ErrCapabilityCheckFailed{
+				Reason:     "upstream_status",
+				StatusCode: resp.StatusCode,
+			}
+			if resp.StatusCode >= 500 && attempt < capabilityCheckMaxAttempts {
+				time.Sleep(capabilityCheckRetryBackoff)
+				continue
+			}
+			return false, lastErr
+		}
+		if decodeErr != nil {
+			return false, &ErrCapabilityCheckFailed{
+				Reason: "decode_error",
+				Cause:  decodeErr,
+			}
+		}
+
+		for _, item := range payload.Capabilities {
+			if strings.EqualFold(strings.TrimSpace(item), capability) {
+				return true, nil
+			}
+		}
+		return false, nil
 	}
-	return false, nil
+	if lastErr != nil {
+		return false, lastErr
+	}
+	return false, &ErrCapabilityCheckFailed{Reason: "unknown"}
 }
