@@ -136,6 +136,7 @@ type Repository interface {
 	UpdateLastRead(conversationID, userID, lastReadMsgID int64) (int64, error)
 	ListConversations(userID, cursor int64, limit int) ([]ConversationItem, bool, error)
 	ListMessages(userID, conversationID, before int64, limit int) ([]Message, bool, error)
+	ListMessagesAfter(userID, conversationID, after int64, limit int) ([]Message, bool, error)
 	CountUnreadConversations(userID int64) (int64, error)
 	CountUnreadMessages(userID int64) (int64, error)
 	IsEitherBlocked(userA, userB int64) (bool, error)

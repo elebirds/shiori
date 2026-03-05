@@ -90,6 +90,10 @@ func (f *fakeRepo) ListMessages(userID, conversationID, before int64, limit int)
 	return []Message{}, false, nil
 }
 
+func (f *fakeRepo) ListMessagesAfter(userID, conversationID, after int64, limit int) ([]Message, bool, error) {
+	return []Message{}, false, nil
+}
+
 func (f *fakeRepo) CountUnreadConversations(userID int64) (int64, error) {
 	return f.unreadConv, nil
 }

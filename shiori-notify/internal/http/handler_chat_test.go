@@ -95,6 +95,20 @@ func (chatTestRepo) ListMessages(userID, conversationID, before int64, limit int
 	}, false, nil
 }
 
+func (chatTestRepo) ListMessagesAfter(userID, conversationID, after int64, limit int) ([]chat.Message, bool, error) {
+	return []chat.Message{
+		{
+			ID:             after + 1,
+			ConversationID: conversationID,
+			SenderID:       2002,
+			ReceiverID:     1001,
+			ClientMsgID:    "m-after-1",
+			Content:        "after message",
+			CreatedAt:      time.Now().UTC(),
+		},
+	}, false, nil
+}
+
 func (chatTestRepo) CountUnreadConversations(userID int64) (int64, error) {
 	return 1, nil
 }
@@ -246,6 +260,23 @@ func TestChatHTTPHandlers(t *testing.T) {
 	srv.engine.ServeHTTP(listMsgRec, listMsgReq)
 	if listMsgRec.Code != http.StatusOK {
 		t.Fatalf("list messages expected 200, got %d", listMsgRec.Code)
+	}
+
+	listMsgAfterRec := httptest.NewRecorder()
+	listMsgAfterReq := httptest.NewRequest(http.MethodGet, "/api/chat/conversations/11/messages?userId=1001&limit=20&afterSeq=21", nil)
+	srv.engine.ServeHTTP(listMsgAfterRec, listMsgAfterReq)
+	if listMsgAfterRec.Code != http.StatusOK {
+		t.Fatalf("list messages afterSeq expected 200, got %d", listMsgAfterRec.Code)
+	}
+	if !strings.Contains(listMsgAfterRec.Body.String(), "\"nextAfterSeq\":22") {
+		t.Fatalf("list messages afterSeq missing nextAfterSeq, body=%s", listMsgAfterRec.Body.String())
+	}
+
+	listMsgConflictRec := httptest.NewRecorder()
+	listMsgConflictReq := httptest.NewRequest(http.MethodGet, "/api/chat/conversations/11/messages?userId=1001&limit=20&before=20&afterSeq=21", nil)
+	srv.engine.ServeHTTP(listMsgConflictRec, listMsgConflictReq)
+	if listMsgConflictRec.Code != http.StatusBadRequest {
+		t.Fatalf("list messages before+afterSeq expected 400, got %d", listMsgConflictRec.Code)
 	}
 
 	readRec := httptest.NewRecorder()

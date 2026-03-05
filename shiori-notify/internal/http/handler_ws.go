@@ -66,10 +66,14 @@ func (s *Server) handleWS(c *gin.Context) {
 		s.logger.Debug().Str("userId", userID).Msg("websocket user id is non-numeric, chat commands disabled")
 	}
 	joinedConversations := make(map[int64]struct{})
+	joinedCount := 0
 
 	go client.Run(func(payload []byte) {
-		s.handleWSMessage(client, numericUserID, joinedConversations, payload)
+		s.handleWSMessage(client, numericUserID, joinedConversations, &joinedCount, payload)
 	}, func() {
+		if joinedCount > 0 {
+			metrics.AddChatOnlineSessions(-joinedCount)
+		}
 		s.hub.Remove(userID, client)
 		connections := s.hub.ConnectionCount()
 		metrics.SetWSConnections(connections)
@@ -80,7 +84,7 @@ func (s *Server) handleWS(c *gin.Context) {
 	})
 }
 
-func (s *Server) handleWSMessage(client *ws.Client, userID int64, joined map[int64]struct{}, payload []byte) {
+func (s *Server) handleWSMessage(client *ws.Client, userID int64, joined map[int64]struct{}, joinedCount *int, payload []byte) {
 	if client == nil {
 		return
 	}
@@ -100,7 +104,7 @@ func (s *Server) handleWSMessage(client *ws.Client, userID int64, joined map[int
 			s.sendChatError(client, "CHAT_INVALID_USER", chat.ErrInvalidArgument)
 			return
 		}
-		s.handleWSJoin(client, userID, joined, incoming)
+		s.handleWSJoin(client, userID, joined, joinedCount, incoming)
 	case "send":
 		if userID <= 0 {
 			s.sendChatError(client, "CHAT_INVALID_USER", chat.ErrInvalidArgument)
@@ -122,7 +126,7 @@ func (s *Server) handleWSMessage(client *ws.Client, userID int64, joined map[int
 	}
 }
 
-func (s *Server) handleWSJoin(client *ws.Client, userID int64, joined map[int64]struct{}, incoming wsIncoming) {
+func (s *Server) handleWSJoin(client *ws.Client, userID int64, joined map[int64]struct{}, joinedCount *int, incoming wsIncoming) {
 	if s.chat == nil {
 		_ = client.Send(mustJSON(map[string]any{
 			"type":    "error",
@@ -136,7 +140,13 @@ func (s *Server) handleWSJoin(client *ws.Client, userID int64, joined map[int64]
 		s.sendChatError(client, "CHAT_JOIN_FAILED", err)
 		return
 	}
-	joined[conversation.ID] = struct{}{}
+	if _, exists := joined[conversation.ID]; !exists {
+		joined[conversation.ID] = struct{}{}
+		if joinedCount != nil {
+			(*joinedCount)++
+		}
+		metrics.AddChatOnlineSessions(1)
+	}
 	_ = client.Send(mustJSON(map[string]any{
 		"type":           "join_ack",
 		"conversationId": conversation.ID,
@@ -197,7 +207,10 @@ func (s *Server) handleWSSend(client *ws.Client, userID int64, joined map[int64]
 		"content":        message.Content,
 		"createdAt":      message.CreatedAt.UTC().Format(time.RFC3339Nano),
 	})
-	_, _ = s.hub.SendToUser(strconv.FormatInt(message.ReceiverID, 10), receiverPayload)
+	deliveredCount, _ := s.hub.SendToUser(strconv.FormatInt(message.ReceiverID, 10), receiverPayload)
+	if deliveredCount > 0 {
+		metrics.ObserveChatDeliveryLatency("realtime", time.Since(message.CreatedAt))
+	}
 
 	if s.chatMQ != nil {
 		if err := s.chatMQ.PublishMessage(chat.BroadcastEvent{
@@ -275,6 +288,7 @@ func (s *Server) sendChatError(client *ws.Client, code string, err error) {
 	case errors.As(err, &rateLimited):
 		message = "chat message rate limited"
 		retryAfterSeconds = rateLimited.RetryAfterSeconds
+		metrics.IncChatRateLimitHit("ws")
 	case errors.As(err, &capabilityBanned):
 		message = "chat capability banned: " + strings.TrimSpace(strings.ToUpper(capabilityBanned.Capability))
 	}

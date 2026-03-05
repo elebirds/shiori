@@ -335,6 +335,52 @@ WHERE m.conversation_id = ?
 	return items, hasMore, nil
 }
 
+func (r *MySQLRepository) ListMessagesAfter(userID, conversationID, after int64, limit int) ([]Message, bool, error) {
+	if userID <= 0 || conversationID <= 0 || after < 0 {
+		return nil, false, ErrInvalidArgument
+	}
+	query := `
+SELECT m.id, m.conversation_id, m.sender_id, m.receiver_id, m.client_msg_id, m.content, m.created_at
+FROM message m
+JOIN conversation c ON c.id = m.conversation_id
+WHERE m.conversation_id = ?
+  AND (c.buyer_id = ? OR c.seller_id = ?)
+  AND m.id > ?
+ORDER BY m.id ASC
+LIMIT ?`
+	rows, err := r.db.Query(query, conversationID, userID, userID, after, limit+1)
+	if err != nil {
+		return nil, false, fmt.Errorf("query messages after seq failed: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]Message, 0, limit+1)
+	for rows.Next() {
+		var item Message
+		if err := rows.Scan(
+			&item.ID,
+			&item.ConversationID,
+			&item.SenderID,
+			&item.ReceiverID,
+			&item.ClientMsgID,
+			&item.Content,
+			&item.CreatedAt,
+		); err != nil {
+			return nil, false, fmt.Errorf("scan messages after seq failed: %w", err)
+		}
+		item.CreatedAt = item.CreatedAt.UTC()
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, false, fmt.Errorf("iterate messages after seq failed: %w", err)
+	}
+	hasMore := len(items) > limit
+	if hasMore {
+		items = items[:limit]
+	}
+	return items, hasMore, nil
+}
+
 func (r *MySQLRepository) CountUnreadConversations(userID int64) (int64, error) {
 	if userID <= 0 {
 		return 0, ErrInvalidArgument

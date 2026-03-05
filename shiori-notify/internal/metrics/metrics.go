@@ -15,16 +15,21 @@ const labelUnknown = "unknown"
 var (
 	registerOnce sync.Once
 
-	wsConnections     prometheus.Gauge
-	wsPushTotal       *prometheus.CounterVec
-	mqConsumeTotal    *prometheus.CounterVec
-	mqRouteDuration   *prometheus.HistogramVec
-	replayQueryTotal  *prometheus.CounterVec
-	replayEventsTotal *prometheus.CounterVec
-	storeWriteTotal   *prometheus.CounterVec
-	readOpTotal       *prometheus.CounterVec
-	readMarkedTotal   *prometheus.CounterVec
-	authFailureTotal  *prometheus.CounterVec
+	wsConnections                 prometheus.Gauge
+	chatOnlineSessions            prometheus.Gauge
+	wsPushTotal                   *prometheus.CounterVec
+	mqConsumeTotal                *prometheus.CounterVec
+	mqRouteDuration               *prometheus.HistogramVec
+	replayQueryTotal              *prometheus.CounterVec
+	replayEventsTotal             *prometheus.CounterVec
+	storeWriteTotal               *prometheus.CounterVec
+	readOpTotal                   *prometheus.CounterVec
+	readMarkedTotal               *prometheus.CounterVec
+	authFailureTotal              *prometheus.CounterVec
+	chatDeliveryLatency           *prometheus.HistogramVec
+	chatCompensationQueryTotal    *prometheus.CounterVec
+	chatCompensationMessagesTotal prometheus.Counter
+	chatRateLimitHitTotal         *prometheus.CounterVec
 )
 
 func register() {
@@ -32,6 +37,10 @@ func register() {
 		wsConnections = prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "shiori_notify_ws_connections",
 			Help: "Current number of active websocket connections",
+		})
+		chatOnlineSessions = prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "shiori_notify_chat_online_sessions",
+			Help: "Current number of joined chat conversation sessions",
 		})
 		wsPushTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "shiori_notify_ws_push_total",
@@ -70,9 +79,27 @@ func register() {
 			Name: "shiori_notify_auth_failure_total",
 			Help: "Total auth failures grouped by source and reason",
 		}, []string{"source", "reason"})
+		chatDeliveryLatency = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "shiori_notify_chat_delivery_latency_seconds",
+			Help:    "Chat message delivery latency in seconds grouped by path",
+			Buckets: prometheus.DefBuckets,
+		}, []string{"path"})
+		chatCompensationQueryTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "shiori_notify_chat_compensation_query_total",
+			Help: "Total chat compensation queries grouped by result",
+		}, []string{"result"})
+		chatCompensationMessagesTotal = prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "shiori_notify_chat_compensation_messages_total",
+			Help: "Total chat messages returned by compensation queries",
+		})
+		chatRateLimitHitTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "shiori_notify_chat_rate_limit_hit_total",
+			Help: "Total chat rate-limit hits grouped by source",
+		}, []string{"source"})
 
 		prometheus.MustRegister(
 			wsConnections,
+			chatOnlineSessions,
 			wsPushTotal,
 			mqConsumeTotal,
 			mqRouteDuration,
@@ -82,6 +109,10 @@ func register() {
 			readOpTotal,
 			readMarkedTotal,
 			authFailureTotal,
+			chatDeliveryLatency,
+			chatCompensationQueryTotal,
+			chatCompensationMessagesTotal,
+			chatRateLimitHitTotal,
 		)
 	})
 }
@@ -94,6 +125,14 @@ func Handler() http.Handler {
 func SetWSConnections(count int) {
 	register()
 	wsConnections.Set(float64(count))
+}
+
+func AddChatOnlineSessions(delta int) {
+	if delta == 0 {
+		return
+	}
+	register()
+	chatOnlineSessions.Add(float64(delta))
 }
 
 func AddWSPush(result, eventType string, count int) {
@@ -157,6 +196,32 @@ func IncAuthFailure(source, reason string) {
 		sanitizeLabel(source),
 		sanitizeLabel(reason),
 	).Inc()
+}
+
+func ObserveChatDeliveryLatency(path string, duration time.Duration) {
+	if duration < 0 {
+		duration = 0
+	}
+	register()
+	chatDeliveryLatency.WithLabelValues(sanitizeLabel(path)).Observe(duration.Seconds())
+}
+
+func IncChatCompensationQuery(result string) {
+	register()
+	chatCompensationQueryTotal.WithLabelValues(sanitizeLabel(result)).Inc()
+}
+
+func AddChatCompensationMessages(count int) {
+	if count <= 0 {
+		return
+	}
+	register()
+	chatCompensationMessagesTotal.Add(float64(count))
+}
+
+func IncChatRateLimitHit(source string) {
+	register()
+	chatRateLimitHitTotal.WithLabelValues(sanitizeLabel(source)).Inc()
 }
 
 func sanitizeLabel(value string) string {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/hhm/shiori/shiori-notify/internal/chat"
+	"github.com/hhm/shiori/shiori-notify/internal/metrics"
 	"github.com/hhm/shiori/shiori-notify/internal/ws"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog"
@@ -78,9 +79,9 @@ func (p *Publisher) PublishMessage(event chat.BroadcastEvent) error {
 		false,
 		false,
 		amqp.Publishing{
-			ContentType: "application/json",
-			Body:        body,
-			Timestamp:   time.Now().UTC(),
+			ContentType:  "application/json",
+			Body:         body,
+			Timestamp:    time.Now().UTC(),
 			DeliveryMode: amqp.Persistent,
 		},
 	); err != nil {
@@ -217,12 +218,19 @@ func (c *Consumer) handleDelivery(delivery amqp.Delivery) {
 		c.logger.Warn().Err(err).Msg("marshal ws chat payload failed")
 		return
 	}
-	_, sendErr := c.hub.SendToUser(strconv.FormatInt(event.ReceiverID, 10), payload)
-	if sendErr != nil && !errors.Is(sendErr, ws.ErrNoSession) {
+	sent, sendErr := c.hub.SendToUser(strconv.FormatInt(event.ReceiverID, 10), payload)
+	if sendErr != nil {
+		if errors.Is(sendErr, ws.ErrNoSession) {
+			return
+		}
 		c.logger.Warn().Err(sendErr).
 			Int64("receiverId", event.ReceiverID).
 			Int64("messageId", event.MessageID).
 			Msg("push chat message from broadcast failed")
+		return
+	}
+	if sent > 0 {
+		metrics.ObserveChatDeliveryLatency("broadcast", time.Since(event.CreatedAt))
 	}
 }
 

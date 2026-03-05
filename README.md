@@ -234,6 +234,23 @@
    1. 封禁记录支持原因、操作人、开始时间、结束时间
    2. 管理端用户页新增能力封禁操作与记录查看
 
+## 🆕 v0.6（M4）聊天可靠性与可观测性增强
+
+1. 聊天消息补偿拉取增强：
+   1. `GET /api/chat/conversations/{conversationId}/messages?afterSeq=...`
+   2. `afterSeq` 与 `before` 互斥，返回增量消息与 `nextAfterSeq`
+2. 已读一致性：
+   1. `member_state.last_read_msg_id` 更新使用单调递增策略（防回退、可重放）
+3. 可观测指标补齐（notify）：
+   1. `shiori_notify_ws_connections`
+   2. `shiori_notify_chat_online_sessions`
+   3. `shiori_notify_chat_delivery_latency_seconds{path}`
+   4. `shiori_notify_chat_compensation_query_total{result}`
+   5. `shiori_notify_chat_compensation_messages_total`
+   6. `shiori_notify_chat_rate_limit_hit_total{source}`
+4. perf 资产新增：
+   1. `perf/k6-chat-conversation.js`（建连、发消息、断线重连、`afterSeq` 补偿）
+
 ---
 
 ## 🛠️ 技术栈清单 (Tech Stack)

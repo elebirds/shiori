@@ -202,6 +202,13 @@ func (s *Service) ListMessages(userID, conversationID, before int64, limit int) 
 	return s.repo.ListMessages(userID, conversationID, before, s.normalizeLimit(limit))
 }
 
+func (s *Service) ListMessagesAfter(userID, conversationID, after int64, limit int) ([]Message, bool, error) {
+	if userID <= 0 || conversationID <= 0 || after < 0 {
+		return nil, false, ErrInvalidArgument
+	}
+	return s.repo.ListMessagesAfter(userID, conversationID, after, s.normalizeLimit(limit))
+}
+
 func (s *Service) Block(userID, targetUserID int64) error {
 	if userID <= 0 || targetUserID <= 0 || userID == targetUserID {
 		return ErrInvalidArgument

@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/hhm/shiori/shiori-notify/internal/chat"
+	"github.com/hhm/shiori/shiori-notify/internal/metrics"
 )
 
 type readConversationRequest struct {
@@ -130,11 +131,30 @@ func (s *Server) handleListMessages(c *gin.Context) {
 		})
 		return
 	}
-	before, beforeValid := parseInt64Query(c.Query("before"))
+	beforeText := c.Query("before")
+	afterSeqText := c.Query("afterSeq")
+	hasBefore := strings.TrimSpace(beforeText) != ""
+	hasAfterSeq := strings.TrimSpace(afterSeqText) != ""
+	if hasBefore && hasAfterSeq {
+		s.writeJSON(c, http.StatusBadRequest, gin.H{
+			"code":    40023,
+			"message": "before and afterSeq cannot be used together",
+		})
+		return
+	}
+	before, beforeValid := parseInt64Query(beforeText)
 	if !beforeValid {
 		s.writeJSON(c, http.StatusBadRequest, gin.H{
 			"code":    40013,
 			"message": "before must be a valid int64",
+		})
+		return
+	}
+	afterSeq, afterSeqValid := parseInt64Query(afterSeqText)
+	if !afterSeqValid {
+		s.writeJSON(c, http.StatusBadRequest, gin.H{
+			"code":    40022,
+			"message": "afterSeq must be a valid int64",
 		})
 		return
 	}
@@ -143,6 +163,47 @@ func (s *Server) handleListMessages(c *gin.Context) {
 		s.writeJSON(c, http.StatusBadRequest, gin.H{
 			"code":    40011,
 			"message": "limit must be a positive integer",
+		})
+		return
+	}
+
+	if hasAfterSeq {
+		items, hasMore, listErr := s.chat.ListMessagesAfter(userID, conversationID, afterSeq, limit)
+		if listErr != nil {
+			metrics.IncChatCompensationQuery("error")
+			s.writeChatError(c, listErr, "list messages failed")
+			return
+		}
+
+		responseItems := make([]gin.H, 0, len(items))
+		nextAfterSeq := afterSeq
+		for i := range items {
+			item := items[i]
+			responseItems = append(responseItems, gin.H{
+				"messageId":      item.ID,
+				"conversationId": item.ConversationID,
+				"senderId":       item.SenderID,
+				"receiverId":     item.ReceiverID,
+				"clientMsgId":    item.ClientMsgID,
+				"content":        item.Content,
+				"createdAt":      item.CreatedAt.UTC().Format(time.RFC3339Nano),
+			})
+			nextAfterSeq = item.ID
+		}
+		if len(items) > 0 {
+			metrics.IncChatCompensationQuery("hit")
+			metrics.AddChatCompensationMessages(len(items))
+		} else {
+			metrics.IncChatCompensationQuery("miss")
+		}
+		s.writeJSON(c, http.StatusOK, gin.H{
+			"code":    0,
+			"message": "success",
+			"data": gin.H{
+				"items":        responseItems,
+				"hasMore":      hasMore,
+				"nextAfterSeq": nextAfterSeq,
+			},
 		})
 		return
 	}
@@ -935,6 +996,7 @@ func (s *Server) writeChatError(c *gin.Context, err error, fallbackMessage strin
 			"message": "chat message contains forbidden content",
 		})
 	case errors.As(err, &rateLimited):
+		metrics.IncChatRateLimitHit("http")
 		s.writeJSON(c, http.StatusTooManyRequests, gin.H{
 			"code":    42901,
 			"message": "chat message rate limited",
