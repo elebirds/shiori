@@ -81,6 +81,7 @@ const ORDER_STATUS_TEXT: Record<OrderStatus, string> = {
   DELIVERING: '待收货',
   FINISHED: '已完成',
   CANCELED: '已取消',
+  REFUNDED: '已退款',
 }
 
 function statusText(status: OrderStatus): string {

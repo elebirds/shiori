@@ -155,6 +155,17 @@ class OrderCommandServiceTest {
     }
 
     @Test
+    void shouldRejectDeliverWhenRefundAlreadySucceeded() {
+        when(orderMapper.findOrderByOrderNo("O202603040001"))
+                .thenReturn(orderRecordWithRefund(10L, "O202603040001", 1001L, 2001L, 2, 1999L, 1, "PAY-1", "SUCCEEDED"));
+
+        assertThatThrownBy(() -> orderCommandService.deliverOrderAsSeller(2001L, "O202603040001", "ship"))
+                .isInstanceOf(BizException.class)
+                .matches(ex -> ((BizException) ex).getErrorCode().code() == 50004);
+        verify(orderMapper, never()).markOrderDeliveringBySeller(anyString(), anyLong(), any(), any());
+    }
+
+    @Test
     void shouldRejectFinishWhenStatusInvalidForSeller() {
         when(orderMapper.findOrderByOrderNo("O202603040002"))
                 .thenReturn(orderRecord(11L, "O202603040002", 1001L, 2001L, 2, 2999L, 1, "PAY-2"));
@@ -231,6 +242,18 @@ class OrderCommandServiceTest {
         verify(paymentServiceClient).settleOrderPayment("O202603050002", "BUYER", 1001L, 1001L, List.of("ROLE_USER"));
     }
 
+    @Test
+    void shouldRejectConfirmReceiptWhenRefundAlreadySucceeded() {
+        when(orderMapper.findOrderByOrderNo("O202603050002"))
+                .thenReturn(orderRecordWithRefund(15L, "O202603050002", 1001L, 2001L, 4, 3999L, 1, "P-002", "SUCCEEDED"));
+
+        assertThatThrownBy(() -> orderCommandService.confirmReceiptAsBuyer(1001L, "O202603050002", null))
+                .isInstanceOf(BizException.class)
+                .matches(ex -> ((BizException) ex).getErrorCode().code() == 50004);
+        verify(orderMapper, never()).markOrderFinishedByBuyer(anyString(), anyLong(), any(), any());
+        verify(paymentServiceClient, never()).settleOrderPayment(anyString(), anyString(), any(), any(), anyList());
+    }
+
     private ProductDetailSnapshot product(Long productId, String productNo, Long ownerUserId,
                                           Long skuId, String skuNo, Long priceCent) {
         return new ProductDetailSnapshot(
@@ -264,6 +287,41 @@ class OrderCommandServiceTest {
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                (LocalDateTime) null,
+                (LocalDateTime) null
+        );
+    }
+
+    private OrderRecord orderRecordWithRefund(Long id,
+                                              String orderNo,
+                                              Long buyerUserId,
+                                              Long sellerUserId,
+                                              Integer status,
+                                              Long totalAmountCent,
+                                              Integer itemCount,
+                                              String paymentNo,
+                                              String refundStatus) {
+        return new OrderRecord(
+                id,
+                orderNo,
+                buyerUserId,
+                sellerUserId,
+                status,
+                totalAmountCent,
+                itemCount,
+                paymentNo,
+                refundStatus,
+                "R-TEST",
+                totalAmountCent,
                 null,
                 null,
                 null,

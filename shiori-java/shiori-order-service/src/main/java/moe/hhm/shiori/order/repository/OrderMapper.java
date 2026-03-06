@@ -907,7 +907,7 @@ public interface OrderMapper {
             UPDATE o_order_refund
             SET status = #{toStatus},
                 reviewed_by_user_id = #{reviewedByUserId},
-                reviewed_at = #{reviewedAt},
+                reviewed_at = CURRENT_TIMESTAMP(3),
                 auto_approved = #{autoApproved},
                 payment_no = #{paymentNo},
                 last_error = #{lastError},
@@ -919,7 +919,6 @@ public interface OrderMapper {
                                 @Param("expectStatus") String expectStatus,
                                 @Param("toStatus") String toStatus,
                                 @Param("reviewedByUserId") Long reviewedByUserId,
-                                @Param("reviewedAt") LocalDateTime reviewedAt,
                                 @Param("autoApproved") Integer autoApproved,
                                 @Param("paymentNo") String paymentNo,
                                 @Param("lastError") String lastError);
@@ -928,7 +927,7 @@ public interface OrderMapper {
             UPDATE o_order_refund
             SET status = #{toStatus},
                 reviewed_by_user_id = #{reviewedByUserId},
-                reviewed_at = #{reviewedAt},
+                reviewed_at = CURRENT_TIMESTAMP(3),
                 auto_approved = #{autoApproved},
                 reject_reason = #{rejectReason},
                 updated_at = CURRENT_TIMESTAMP(3)
@@ -939,7 +938,6 @@ public interface OrderMapper {
                           @Param("expectStatus") String expectStatus,
                           @Param("toStatus") String toStatus,
                           @Param("reviewedByUserId") Long reviewedByUserId,
-                          @Param("reviewedAt") LocalDateTime reviewedAt,
                           @Param("autoApproved") Integer autoApproved,
                           @Param("rejectReason") String rejectReason);
 
@@ -965,7 +963,7 @@ public interface OrderMapper {
             SET refund_status = #{refundStatus},
                 refund_no = #{refundNo},
                 refund_amount_cent = #{refundAmountCent},
-                refund_updated_at = #{refundUpdatedAt},
+                refund_updated_at = CURRENT_TIMESTAMP(3),
                 updated_at = CURRENT_TIMESTAMP(3),
                 version = version + 1
             WHERE order_no = #{orderNo}
@@ -974,8 +972,25 @@ public interface OrderMapper {
     int updateOrderRefundSummary(@Param("orderNo") String orderNo,
                                  @Param("refundStatus") String refundStatus,
                                  @Param("refundNo") String refundNo,
-                                 @Param("refundAmountCent") Long refundAmountCent,
-                                 @Param("refundUpdatedAt") LocalDateTime refundUpdatedAt);
+                                 @Param("refundAmountCent") Long refundAmountCent);
+
+    @Update("""
+            UPDATE o_order
+            SET status = #{refundedStatus},
+                finished_at = COALESCE(finished_at, CURRENT_TIMESTAMP(3)),
+                updated_at = CURRENT_TIMESTAMP(3),
+                version = version + 1
+            WHERE order_no = #{orderNo}
+              AND refund_status = #{refundStatus}
+              AND status IN (#{paidStatus}, #{deliveringStatus}, #{finishedStatus})
+              AND is_deleted = 0
+            """)
+    int markOrderRefunded(@Param("orderNo") String orderNo,
+                          @Param("refundStatus") String refundStatus,
+                          @Param("refundedStatus") Integer refundedStatus,
+                          @Param("paidStatus") Integer paidStatus,
+                          @Param("deliveringStatus") Integer deliveringStatus,
+                          @Param("finishedStatus") Integer finishedStatus);
 
     @Select("""
             <script>

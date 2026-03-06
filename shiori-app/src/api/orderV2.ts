@@ -1,6 +1,6 @@
 import { httpDelete, httpGet, httpPost, httpPut } from '@/api/http'
 
-export type OrderStatus = 'UNPAID' | 'PAID' | 'CANCELED' | 'DELIVERING' | 'FINISHED'
+export type OrderStatus = 'UNPAID' | 'PAID' | 'CANCELED' | 'DELIVERING' | 'FINISHED' | 'REFUNDED'
 export type OrderRefundStatus = 'REQUESTED' | 'REJECTED' | 'PENDING_FUNDS' | 'SUCCEEDED'
 
 export interface CreateOrderItem {

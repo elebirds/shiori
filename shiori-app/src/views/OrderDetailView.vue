@@ -107,16 +107,7 @@ const reviewMode = ref<'create' | 'edit'>('create')
 const actionErrorMessage = ref('')
 
 const applyRefundMutation = useMutation({
-  mutationFn: () => {
-    const status = detail.value?.status
-    const reason =
-      status === 'PAID'
-        ? '买家发货前申请退款'
-        : status === 'DELIVERING'
-          ? '买家发货后申请退款'
-          : '买家售后申请退款'
-    return applyOrderRefundV2(orderNo.value, { reason })
-  },
+  mutationFn: (reason: string) => applyOrderRefundV2(orderNo.value, { reason }),
   onSuccess: async () => {
     await query.refetch()
     await timelineQuery.refetch()
@@ -146,6 +137,7 @@ const ORDER_STATUS_TEXT: Record<OrderStatus, string> = {
   DELIVERING: '待收货',
   FINISHED: '已完成',
   CANCELED: '已取消',
+  REFUNDED: '已退款',
 }
 
 const REFUND_STATUS_TEXT: Record<OrderRefundStatus, string> = {
@@ -183,6 +175,9 @@ function statusClass(status: OrderStatus): string {
   }
   if (status === 'FINISHED') {
     return 'bg-emerald-100 text-emerald-700'
+  }
+  if (status === 'REFUNDED') {
+    return 'bg-teal-100 text-teal-700'
   }
   return 'bg-stone-200 text-stone-700'
 }
@@ -282,10 +277,28 @@ async function handleConfirm(): Promise<void> {
 }
 
 async function handleApplyRefund(): Promise<void> {
+  const status = detail.value?.status
+  const suggested =
+    status === 'PAID'
+      ? '买家发货前申请退款'
+      : status === 'DELIVERING'
+        ? '买家发货后申请退款'
+        : '买家售后申请退款'
+  const raw = window.prompt('请输入退款理由（必填）', suggested)
+  if (raw === null) {
+    return
+  }
+  const reason = raw.trim()
+  if (!reason) {
+    actionErrorMessage.value = '退款理由不能为空'
+    return
+  }
   try {
-    await applyRefundMutation.mutateAsync()
+    actionErrorMessage.value = ''
+    await applyRefundMutation.mutateAsync(reason)
   } catch (error) {
     if (error instanceof ApiBizError) {
+      actionErrorMessage.value = error.message
       return
     }
   }

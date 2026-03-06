@@ -158,13 +158,12 @@ public class OrderV2Controller {
 
     @PostMapping("/{orderNo}/refunds")
     public OrderRefundResponse applyRefund(@PathVariable String orderNo,
-                                           @Valid @RequestBody(required = false) CreateOrderRefundRequest request,
+                                           @Valid @RequestBody CreateOrderRefundRequest request,
                                            Authentication authentication,
                                            HttpServletRequest httpServletRequest) {
         permissionGuard.require("order.refund.apply", httpServletRequest::getHeader);
         Long userId = CurrentUserSupport.requireUserId(authentication);
-        String reason = request == null ? null : request.reason();
-        return orderRefundService.applyRefund(userId, orderNo, reason);
+        return orderRefundService.applyRefund(userId, orderNo, request.reason());
     }
 
     @GetMapping("/{orderNo}/refunds/latest")

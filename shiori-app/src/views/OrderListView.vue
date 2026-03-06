@@ -53,6 +53,7 @@ const ORDER_STATUS_TEXT: Record<OrderStatus, string> = {
   DELIVERING: '待收货',
   FINISHED: '已完成',
   CANCELED: '已取消',
+  REFUNDED: '已退款',
 }
 
 const REFUND_STATUS_TEXT: Record<OrderRefundStatus, string> = {
@@ -90,6 +91,9 @@ function statusClass(status: OrderStatus): string {
   }
   if (status === 'FINISHED') {
     return 'bg-emerald-100 text-emerald-700'
+  }
+  if (status === 'REFUNDED') {
+    return 'bg-teal-100 text-teal-700'
   }
   return 'bg-stone-200 text-stone-700'
 }

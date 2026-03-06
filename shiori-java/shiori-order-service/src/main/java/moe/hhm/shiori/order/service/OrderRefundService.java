@@ -78,6 +78,9 @@ public class OrderRefundService {
         }
 
         String normalizedReason = StringUtils.hasText(reason) ? reason.trim() : null;
+        if (!StringUtils.hasText(normalizedReason)) {
+            throw new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST, "退款原因不能为空");
+        }
         LocalDateTime now = LocalDateTime.now();
         OrderRefundEntity entity = new OrderRefundEntity();
         entity.setRefundNo(generateRefundNo());
@@ -173,7 +176,6 @@ public class OrderRefundService {
                 OrderRefundStatus.REQUESTED.name(),
                 OrderRefundStatus.REJECTED.name(),
                 sellerUserId,
-                LocalDateTime.now(),
                 0,
                 normalizedReason
         );
@@ -301,6 +303,7 @@ public class OrderRefundService {
                 reason
         );
         syncOrderRefundSummary(refund.orderNo(), paymentStatus.name(), refund.refundNo(), refund.amountCent());
+        syncOrderStatusAfterRefund(refund.orderNo(), paymentStatus, operatorUserId, operatorRole, reason);
         return toResponse(requireRefund(refund.refundNo()), false);
     }
 
@@ -326,7 +329,6 @@ public class OrderRefundService {
                 OrderRefundStatus.REQUESTED.name(),
                 paymentStatus.name(),
                 operatorUserId,
-                LocalDateTime.now(),
                 autoApproved ? 1 : 0,
                 paymentSnapshot.paymentNo(),
                 paymentStatus == OrderRefundStatus.PENDING_FUNDS ? "SELLER_BALANCE_NOT_ENOUGH" : null
@@ -345,6 +347,7 @@ public class OrderRefundService {
                 reason
         );
         syncOrderRefundSummary(refund.orderNo(), paymentStatus.name(), refund.refundNo(), refund.amountCent());
+        syncOrderStatusAfterRefund(refund.orderNo(), paymentStatus, operatorUserId, operatorRole, reason);
         return toResponse(requireRefund(refund.refundNo()), false);
     }
 
@@ -383,7 +386,42 @@ public class OrderRefundService {
     }
 
     private void syncOrderRefundSummary(String orderNo, String refundStatus, String refundNo, Long refundAmountCent) {
-        orderMapper.updateOrderRefundSummary(orderNo, refundStatus, refundNo, refundAmountCent, LocalDateTime.now());
+        orderMapper.updateOrderRefundSummary(orderNo, refundStatus, refundNo, refundAmountCent);
+    }
+
+    private void syncOrderStatusAfterRefund(String orderNo,
+                                            OrderRefundStatus paymentStatus,
+                                            Long operatorUserId,
+                                            String operatorRole,
+                                            String reason) {
+        if (paymentStatus != OrderRefundStatus.SUCCEEDED) {
+            return;
+        }
+        OrderRecord before = requireOrder(orderNo);
+        OrderStatus beforeStatus = OrderStatus.fromCode(before.status());
+        if (beforeStatus == OrderStatus.REFUNDED) {
+            return;
+        }
+        int affected = orderMapper.markOrderRefunded(
+                orderNo,
+                OrderRefundStatus.SUCCEEDED.name(),
+                OrderStatus.REFUNDED.getCode(),
+                OrderStatus.PAID.getCode(),
+                OrderStatus.DELIVERING.getCode(),
+                OrderStatus.FINISHED.getCode()
+        );
+        if (affected <= 0) {
+            return;
+        }
+        OrderStatus fromStatus = beforeStatus == null ? OrderStatus.PAID : beforeStatus;
+        orderMapper.insertStatusAuditLog(
+                orderNo,
+                operatorUserId,
+                StringUtils.hasText(operatorRole) ? operatorRole : ROLE_SYSTEM,
+                fromStatus.getCode(),
+                OrderStatus.REFUNDED.getCode(),
+                trimOptional(reason)
+        );
     }
 
     private void insertRefundAudit(String refundNo,

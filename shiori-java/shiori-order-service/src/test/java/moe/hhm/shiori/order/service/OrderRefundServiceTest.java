@@ -1,6 +1,7 @@
 package moe.hhm.shiori.order.service;
 
 import java.time.LocalDateTime;
+import moe.hhm.shiori.common.exception.BizException;
 import moe.hhm.shiori.order.client.PaymentServiceClient;
 import moe.hhm.shiori.order.client.RefundBalancePaymentSnapshot;
 import moe.hhm.shiori.order.config.OrderProperties;
@@ -17,6 +18,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -67,7 +69,7 @@ class OrderRefundServiceTest {
         when(paymentServiceClient.refundOrderPayment(eq("O2001"), eq("R2001"), eq("SELLER"), eq(2001L), anyString(),
                 eq(2001L), any()))
                 .thenReturn(new RefundBalancePaymentSnapshot("O2001", "R2001", "P2001", "PENDING_FUNDS", false));
-        when(orderMapper.markOrderRefundReviewed(eq("R2001"), eq("REQUESTED"), eq("PENDING_FUNDS"), eq(2001L), any(),
+        when(orderMapper.markOrderRefundReviewed(eq("R2001"), eq("REQUESTED"), eq("PENDING_FUNDS"), eq(2001L),
                 eq(0), eq("P2001"), eq("SELLER_BALANCE_NOT_ENOUGH")))
                 .thenReturn(1);
         when(orderMapper.findOrderRefundByRefundNo("R2001"))
@@ -89,6 +91,9 @@ class OrderRefundServiceTest {
         when(orderMapper.updateOrderRefundAfterRetry(eq("R3001"), eq("PENDING_FUNDS"), eq("SUCCEEDED"),
                 eq("P3001"), eq(null), eq(1)))
                 .thenReturn(1);
+        when(orderMapper.findOrderByOrderNo("O3001"))
+                .thenReturn(order("O3001", 1001L, 2001L, 4, 100L));
+        when(orderMapper.markOrderRefunded("O3001", "SUCCEEDED", 6, 2, 4, 5)).thenReturn(1);
         when(orderMapper.findOrderRefundByRefundNo("R3001"))
                 .thenReturn(refund("R3001", "O3001", 1001L, 2001L, "SUCCEEDED"));
 
@@ -123,11 +128,23 @@ class OrderRefundServiceTest {
             return refund(refundNo, "O5001", 1001L, 2001L, "REQUESTED");
         });
 
-        orderRefundService.applyRefund(1001L, "O5001", null);
+        orderRefundService.applyRefund(1001L, "O5001", "不想要了");
 
         ArgumentCaptor<OrderRefundEntity> captor = ArgumentCaptor.forClass(OrderRefundEntity.class);
         verify(orderMapper).insertOrderRefund(captor.capture());
         assertThat(captor.getValue().getRefundNo()).startsWith("R");
+    }
+
+    @Test
+    void shouldRejectApplyRefundWhenReasonBlank() {
+        when(orderMapper.findOrderByOrderNo("O6001"))
+                .thenReturn(order("O6001", 1001L, 2001L, 4, 555L));
+        when(orderMapper.findPaymentModeByOrderNo("O6001")).thenReturn("BALANCE_ESCROW");
+        when(orderMapper.findOrderRefundByOrderNoForUpdate("O6001")).thenReturn(null);
+
+        assertThatThrownBy(() -> orderRefundService.applyRefund(1001L, "O6001", "   "))
+                .isInstanceOf(BizException.class);
+        verify(orderMapper, never()).insertOrderRefund(any());
     }
 
     private OrderRecord order(String orderNo, Long buyerUserId, Long sellerUserId, Integer status, Long amountCent) {

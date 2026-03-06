@@ -25,6 +25,7 @@ import moe.hhm.shiori.order.client.ReserveBalancePaymentSnapshot;
 import moe.hhm.shiori.order.config.OrderMqProperties;
 import moe.hhm.shiori.order.config.OrderProperties;
 import moe.hhm.shiori.order.domain.OrderPaymentMode;
+import moe.hhm.shiori.order.domain.OrderRefundStatus;
 import moe.hhm.shiori.order.domain.OrderStatus;
 import moe.hhm.shiori.order.domain.OutboxStatus;
 import moe.hhm.shiori.order.dto.CreateOrderItem;
@@ -448,6 +449,7 @@ public class OrderCommandService {
     public OrderOperateResponse deliverOrderAsSeller(Long sellerUserId, String orderNo, String reason) {
         OrderRecord order = requireOrder(orderNo);
         ensureSeller(order, sellerUserId);
+        ensureOrderNotRefunded(order);
         String normalizedReason = resolveDeliverReason(reason, false);
 
         OrderStatus status = OrderStatus.fromCode(order.status());
@@ -483,6 +485,7 @@ public class OrderCommandService {
     public OrderOperateResponse finishOrderAsSeller(Long sellerUserId, String orderNo, String reason) {
         OrderRecord order = requireOrder(orderNo);
         ensureSeller(order, sellerUserId);
+        ensureOrderNotRefunded(order);
         String normalizedReason = resolveFinishReason(reason, false);
 
         OrderStatus status = OrderStatus.fromCode(order.status());
@@ -517,6 +520,7 @@ public class OrderCommandService {
     @Transactional(rollbackFor = Exception.class)
     public OrderOperateResponse deliverOrderAsAdmin(Long operatorUserId, String orderNo, String reason) {
         OrderRecord before = requireOrder(orderNo);
+        ensureOrderNotRefunded(before);
         String normalizedReason = resolveDeliverReason(reason, true);
 
         OrderStatus status = OrderStatus.fromCode(before.status());
@@ -554,6 +558,7 @@ public class OrderCommandService {
     @Transactional(rollbackFor = Exception.class)
     public OrderOperateResponse finishOrderAsAdmin(Long operatorUserId, String orderNo, String reason) {
         OrderRecord before = requireOrder(orderNo);
+        ensureOrderNotRefunded(before);
         String normalizedReason = resolveFinishReason(reason, true);
 
         OrderStatus status = OrderStatus.fromCode(before.status());
@@ -592,6 +597,7 @@ public class OrderCommandService {
     public OrderOperateResponse confirmReceiptAsBuyer(Long buyerUserId, String orderNo, String reason) {
         OrderRecord order = requireOrder(orderNo);
         ensureBuyer(order, buyerUserId);
+        ensureOrderNotRefunded(order);
         String normalizedReason = resolveConfirmReceiptReason(reason);
 
         OrderStatus status = OrderStatus.fromCode(order.status());
@@ -1066,6 +1072,9 @@ public class OrderCommandService {
         if (order == null || !isBalanceEscrowOrder(orderNo)) {
             return;
         }
+        if (OrderRefundStatus.SUCCEEDED == OrderRefundStatus.fromCode(order.refundStatus())) {
+            return;
+        }
         paymentServiceClient.settleOrderPayment(
                 orderNo,
                 operatorType,
@@ -1104,6 +1113,15 @@ public class OrderCommandService {
     private void ensureSeller(OrderRecord order, Long sellerUserId) {
         if (!order.sellerUserId().equals(sellerUserId)) {
             throw new BizException(OrderErrorCode.ORDER_NO_PERMISSION, HttpStatus.FORBIDDEN);
+        }
+    }
+
+    private void ensureOrderNotRefunded(OrderRecord order) {
+        if (order == null) {
+            return;
+        }
+        if (OrderRefundStatus.SUCCEEDED == OrderRefundStatus.fromCode(order.refundStatus())) {
+            throw new BizException(OrderErrorCode.ORDER_STATUS_INVALID, HttpStatus.CONFLICT);
         }
     }
 
