@@ -1,15 +1,20 @@
 package moe.hhm.shiori.product.service;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import moe.hhm.shiori.common.error.CommonErrorCode;
 import moe.hhm.shiori.common.error.ProductErrorCode;
 import moe.hhm.shiori.common.exception.BizException;
+import moe.hhm.shiori.product.config.ProductMqProperties;
+import moe.hhm.shiori.product.config.ProductOutboxProperties;
+import moe.hhm.shiori.product.domain.OutboxStatus;
 import moe.hhm.shiori.product.domain.ProductStatus;
 import moe.hhm.shiori.product.dto.CreateProductRequest;
 import moe.hhm.shiori.product.dto.ProductDetailResponse;
@@ -20,6 +25,9 @@ import moe.hhm.shiori.product.dto.SpecItemResponse;
 import moe.hhm.shiori.product.dto.SkuInput;
 import moe.hhm.shiori.product.dto.SkuResponse;
 import moe.hhm.shiori.product.dto.UpdateProductRequest;
+import moe.hhm.shiori.product.event.EventEnvelope;
+import moe.hhm.shiori.product.event.ProductPublishedPayload;
+import moe.hhm.shiori.product.model.ProductOutboxEventEntity;
 import moe.hhm.shiori.product.model.ProductEntity;
 import moe.hhm.shiori.product.model.ProductRecord;
 import moe.hhm.shiori.product.model.ProductV2Record;
@@ -31,6 +39,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 @Service
 public class ProductService {
@@ -38,11 +48,22 @@ public class ProductService {
     private final ProductMapper productMapper;
     private final OssObjectService ossObjectService;
     private final SkuSpecCodec skuSpecCodec;
+    private final ProductMqProperties productMqProperties;
+    private final ProductOutboxProperties productOutboxProperties;
+    private final ObjectMapper objectMapper;
 
-    public ProductService(ProductMapper productMapper, OssObjectService ossObjectService, SkuSpecCodec skuSpecCodec) {
+    public ProductService(ProductMapper productMapper,
+                          OssObjectService ossObjectService,
+                          SkuSpecCodec skuSpecCodec,
+                          ProductMqProperties productMqProperties,
+                          ProductOutboxProperties productOutboxProperties,
+                          ObjectMapper objectMapper) {
         this.productMapper = productMapper;
         this.ossObjectService = ossObjectService;
         this.skuSpecCodec = skuSpecCodec;
+        this.productMqProperties = productMqProperties;
+        this.productOutboxProperties = productOutboxProperties;
+        this.objectMapper = objectMapper;
     }
 
     public ProductPageResponse listOnSaleProducts(String keyword, int page, int size) {
@@ -217,6 +238,11 @@ public class ProductService {
             throw new BizException(ProductErrorCode.INVALID_PRODUCT_STATUS, HttpStatus.BAD_REQUEST);
         }
         productMapper.updateProductStatusById(productId, ProductStatus.ON_SALE.getCode());
+        ProductV2Record latest = productMapper.findProductV2ById(productId);
+        if (latest == null) {
+            throw new IllegalStateException("商品上架后未找到详情记录");
+        }
+        appendProductPublishedOutbox(latest);
         return new ProductWriteResponse(productId, product.productNo(), ProductStatus.ON_SALE.name());
     }
 
@@ -324,6 +350,50 @@ public class ProductService {
         if (!coverObjectKey.startsWith("product/") || coverObjectKey.contains("..")) {
             throw new BizException(ProductErrorCode.INVALID_MEDIA_OBJECT_KEY, HttpStatus.BAD_REQUEST);
         }
+    }
+
+    private void appendProductPublishedOutbox(ProductV2Record product) {
+        if (!productOutboxProperties.isEnabled() || !productMqProperties.isEnabled()) {
+            return;
+        }
+        if (product == null || product.id() == null || product.ownerUserId() == null) {
+            return;
+        }
+
+        ProductPublishedPayload payload = new ProductPublishedPayload(
+                product.id(),
+                product.productNo(),
+                product.ownerUserId(),
+                product.title(),
+                product.coverObjectKey(),
+                product.minPriceCent(),
+                product.maxPriceCent(),
+                product.campusCode()
+        );
+        EventEnvelope envelope = new EventEnvelope(
+                UUID.randomUUID().toString().replace("-", ""),
+                "PRODUCT_PUBLISHED",
+                product.productNo(),
+                Instant.now().toString(),
+                objectMapper.valueToTree(payload)
+        );
+        String envelopeJson;
+        try {
+            envelopeJson = objectMapper.writeValueAsString(envelope);
+        } catch (JacksonException ex) {
+            throw new IllegalStateException("构建 product outbox 事件失败", ex);
+        }
+
+        ProductOutboxEventEntity entity = new ProductOutboxEventEntity();
+        entity.setEventId(envelope.eventId());
+        entity.setAggregateId(product.productNo());
+        entity.setType(envelope.type());
+        entity.setPayload(envelopeJson);
+        entity.setExchangeName(productMqProperties.getEventExchange());
+        entity.setRoutingKey(productMqProperties.getProductPublishedRoutingKey());
+        entity.setStatus(OutboxStatus.PENDING.name());
+        entity.setRetryCount(0);
+        productMapper.insertProductOutboxEvent(entity);
     }
 
     private boolean isDeleted(ProductRecord product) {

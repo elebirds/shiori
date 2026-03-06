@@ -26,7 +26,8 @@ public class GatewaySignProperties {
             "/api/v2/product/**",
             "/api/user/profiles/**",
             "/api/user/media/avatar/**",
-            "/api/v2/product/users/**"
+            "/api/v2/product/users/**",
+            "/api/v2/social/users/*/posts"
     ));
 
     public boolean isEnabled() {
