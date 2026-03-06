@@ -1,4 +1,4 @@
-package moe.hhm.shiori.social.storage;
+package moe.hhm.shiori.common.storage;
 
 import java.time.Duration;
 import java.util.Map;

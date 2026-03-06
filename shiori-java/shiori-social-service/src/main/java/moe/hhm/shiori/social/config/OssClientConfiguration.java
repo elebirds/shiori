@@ -1,10 +1,11 @@
 package moe.hhm.shiori.social.config;
 
 import java.net.URI;
-import moe.hhm.shiori.social.storage.AwsS3PresignClient;
-import moe.hhm.shiori.social.storage.OssObjectService;
-import moe.hhm.shiori.social.storage.S3CompatibleOssObjectService;
-import moe.hhm.shiori.social.storage.S3PresignClient;
+import moe.hhm.shiori.common.storage.AwsS3PresignClient;
+import moe.hhm.shiori.common.storage.OssObjectService;
+import moe.hhm.shiori.common.storage.OssProperties;
+import moe.hhm.shiori.common.storage.S3CompatibleOssObjectService;
+import moe.hhm.shiori.common.storage.S3PresignClient;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;

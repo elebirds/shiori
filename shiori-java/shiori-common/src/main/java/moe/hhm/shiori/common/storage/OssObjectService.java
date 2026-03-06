@@ -1,4 +1,4 @@
-package moe.hhm.shiori.product.storage;
+package moe.hhm.shiori.common.storage;
 
 import java.util.Map;
 

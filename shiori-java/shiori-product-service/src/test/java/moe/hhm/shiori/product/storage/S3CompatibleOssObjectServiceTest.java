@@ -4,7 +4,10 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.regex.Pattern;
 import moe.hhm.shiori.common.exception.BizException;
-import moe.hhm.shiori.product.config.OssProperties;
+import moe.hhm.shiori.common.storage.OssObjectService;
+import moe.hhm.shiori.common.storage.OssProperties;
+import moe.hhm.shiori.common.storage.S3CompatibleOssObjectService;
+import moe.hhm.shiori.common.storage.S3PresignClient;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
