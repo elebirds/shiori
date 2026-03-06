@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useQuery } from '@tanstack/vue-query'
-import { computed, reactive } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 
 import { getWalletBalance, listWalletLedger } from '@/api/payment'
 
@@ -66,6 +66,34 @@ const wallet = computed(() => {
 const ledgerItems = computed(() => ledgerQuery.data.value?.items || [])
 const ledgerTotal = computed(() => ledgerQuery.data.value?.total || 0)
 const ledgerTotalPages = computed(() => Math.max(1, Math.ceil(ledgerTotal.value / ledgerPager.size)))
+const mobileFilterOpen = ref(false)
+const isMobileViewport = ref(false)
+
+let mobileMediaQuery: MediaQueryList | null = null
+
+function syncMobileViewport(): void {
+  if (!mobileMediaQuery) {
+    return
+  }
+  isMobileViewport.value = mobileMediaQuery.matches
+  if (!isMobileViewport.value) {
+    mobileFilterOpen.value = false
+  }
+}
+
+onMounted(() => {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return
+  }
+  mobileMediaQuery = window.matchMedia('(max-width: 767px)')
+  syncMobileViewport()
+  mobileMediaQuery.addEventListener('change', syncMobileViewport)
+})
+
+onBeforeUnmount(() => {
+  mobileMediaQuery?.removeEventListener('change', syncMobileViewport)
+  mobileMediaQuery = null
+})
 
 const CHANGE_TYPE_TEXT: Record<string, string> = {
   CDK_REDEEM: 'CDK 兑换入账',
@@ -117,6 +145,7 @@ function applyLedgerFilter(): void {
   ledgerApplied.bizNo = ledgerDraft.bizNo.trim()
   ledgerApplied.createdFrom = ledgerDraft.createdFrom
   ledgerApplied.createdTo = ledgerDraft.createdTo
+  mobileFilterOpen.value = false
 }
 
 function clearLedgerFilter(): void {
@@ -171,68 +200,117 @@ function clearLedgerFilter(): void {
         <article class="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
           <h2 class="text-lg font-semibold text-[var(--shiori-pay-ink)]">资金流水</h2>
 
-          <div class="shiori-filter-shell mt-3 border-blue-100/90 bg-gradient-to-br from-blue-50/75 via-white to-cyan-50/45">
+          <div class="mt-3 rounded-xl border border-blue-100 bg-blue-50/40 p-3 md:hidden">
+            <div class="flex items-center justify-between">
+              <p class="text-xs font-medium tracking-[0.08em] text-[var(--shiori-pay-mute)]">流水筛选</p>
+              <span class="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-[11px] text-[var(--shiori-pay-blue-700)]">
+                共 {{ ledgerTotal }} 条
+              </span>
+            </div>
+            <button
+              type="button"
+              class="mt-3 w-full rounded-xl bg-[var(--shiori-pay-blue-700)] px-4 py-2 text-sm font-medium text-white"
+              @click="mobileFilterOpen = true"
+            >
+              打开筛选面板
+            </button>
+          </div>
+
+          <div class="hidden md:block shiori-filter-shell shiori-filter-shell-pay mt-3">
             <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
               <p class="text-xs font-medium tracking-[0.08em] text-[var(--shiori-pay-mute)]">流水筛选</p>
               <span class="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-[11px] text-[var(--shiori-pay-blue-700)]">
                 共 {{ ledgerTotal }} 条
               </span>
             </div>
-            <div class="grid gap-3 md:grid-cols-2">
-            <select
-              v-model="ledgerDraft.bizType"
-              class="shiori-filter-control border-blue-200 text-[var(--shiori-pay-ink)] focus:border-[var(--shiori-pay-blue-600)] focus:ring-blue-200"
-            >
-              <option value="">全部业务类型</option>
-              <option value="ORDER">ORDER</option>
-              <option value="CDK">CDK</option>
-            </select>
-            <select
-              v-model="ledgerDraft.changeType"
-              class="shiori-filter-control border-blue-200 text-[var(--shiori-pay-ink)] focus:border-[var(--shiori-pay-blue-600)] focus:ring-blue-200"
-            >
-              <option value="">全部变更类型</option>
-              <option value="CDK_REDEEM">CDK_REDEEM</option>
-              <option value="ORDER_PAY_RESERVE_BUYER">ORDER_PAY_RESERVE_BUYER</option>
-              <option value="ORDER_PAY_SETTLE_BUYER">ORDER_PAY_SETTLE_BUYER</option>
-              <option value="ORDER_PAY_SETTLE_SELLER">ORDER_PAY_SETTLE_SELLER</option>
-              <option value="ORDER_REFUND_BUYER">ORDER_REFUND_BUYER</option>
-              <option value="ORDER_REFUND_SELLER">ORDER_REFUND_SELLER</option>
-            </select>
-            <input
-              v-model.trim="ledgerDraft.bizNo"
-              type="text"
-              placeholder="业务号（订单号/批次号）"
-              class="shiori-filter-control border-blue-200 text-[var(--shiori-pay-ink)] focus:border-[var(--shiori-pay-blue-600)] focus:ring-blue-200"
-            />
-            <input
-              v-model="ledgerDraft.createdFrom"
-              type="datetime-local"
-              class="shiori-filter-control border-blue-200 text-[var(--shiori-pay-ink)] focus:border-[var(--shiori-pay-blue-600)] focus:ring-blue-200"
-            />
-            <input
-              v-model="ledgerDraft.createdTo"
-              type="datetime-local"
-              class="shiori-filter-control border-blue-200 text-[var(--shiori-pay-ink)] focus:border-[var(--shiori-pay-blue-600)] focus:ring-blue-200"
-            />
-            <div class="flex gap-2 md:col-span-2">
-              <button
-                type="button"
-                class="shiori-filter-primary shiori-filter-primary-pay flex-1"
-                @click="applyLedgerFilter"
-              >
-                查询
-              </button>
-              <button
-                type="button"
-                class="shiori-filter-secondary border-blue-200 text-[var(--shiori-pay-blue-700)] hover:bg-blue-50"
-                @click="clearLedgerFilter"
-              >
-                清空
-              </button>
-            </div>
+            <div class="shiori-filter-fields">
+              <div class="shiori-filter-field">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="M4 8h16M4 16h16" /></svg>
+                <select v-model="ledgerDraft.bizType" class="shiori-filter-control shiori-filter-control-w-sm border-blue-200 text-[var(--shiori-pay-ink)] focus:border-[var(--shiori-pay-blue-600)] focus:ring-blue-200">
+                  <option value="">业务类型</option>
+                  <option value="ORDER">ORDER</option>
+                  <option value="CDK">CDK</option>
+                </select>
+              </div>
+              <div class="shiori-filter-field">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="M4 12h16M8 8h8M8 16h8" /></svg>
+                <select v-model="ledgerDraft.changeType" class="shiori-filter-control shiori-filter-control-w-md border-blue-200 text-[var(--shiori-pay-ink)] focus:border-[var(--shiori-pay-blue-600)] focus:ring-blue-200">
+                  <option value="">变更类型</option>
+                  <option value="CDK_REDEEM">CDK_REDEEM</option>
+                  <option value="ORDER_PAY_RESERVE_BUYER">ORDER_PAY_RESERVE_BUYER</option>
+                  <option value="ORDER_PAY_SETTLE_BUYER">ORDER_PAY_SETTLE_BUYER</option>
+                  <option value="ORDER_PAY_SETTLE_SELLER">ORDER_PAY_SETTLE_SELLER</option>
+                  <option value="ORDER_REFUND_BUYER">ORDER_REFUND_BUYER</option>
+                  <option value="ORDER_REFUND_SELLER">ORDER_REFUND_SELLER</option>
+                </select>
+              </div>
+              <div class="shiori-filter-field">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="M4 7h16M4 12h12M4 17h8" /></svg>
+                <input v-model.trim="ledgerDraft.bizNo" type="text" placeholder="业务号" class="shiori-filter-control shiori-filter-control-w-md border-blue-200 text-[var(--shiori-pay-ink)] focus:border-[var(--shiori-pay-blue-600)] focus:ring-blue-200" />
+              </div>
+              <div class="shiori-filter-field">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="M8 2v4M16 2v4M4 10h16M5 6h14a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1Z" /></svg>
+                <input v-model="ledgerDraft.createdFrom" type="datetime-local" class="shiori-filter-control shiori-filter-control-w-md border-blue-200 text-[var(--shiori-pay-ink)] focus:border-[var(--shiori-pay-blue-600)] focus:ring-blue-200" />
+              </div>
+              <div class="shiori-filter-field">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="M8 2v4M16 2v4M4 10h16M5 6h14a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1Z" /></svg>
+                <input v-model="ledgerDraft.createdTo" type="datetime-local" class="shiori-filter-control shiori-filter-control-w-md border-blue-200 text-[var(--shiori-pay-ink)] focus:border-[var(--shiori-pay-blue-600)] focus:ring-blue-200" />
+              </div>
+              <div class="flex gap-2">
+                <button type="button" class="shiori-filter-primary shiori-filter-primary-pay" @click="applyLedgerFilter">查询</button>
+                <button type="button" class="shiori-filter-secondary border-blue-200 text-[var(--shiori-pay-blue-700)] hover:bg-blue-50" @click="clearLedgerFilter">清空</button>
+              </div>
             </div>
             <p v-if="ledgerQuery.isFetching.value" class="shiori-filter-hint mt-2 text-[var(--shiori-pay-blue-700)]/90">正在刷新流水列表...</p>
+          </div>
+
+          <div v-if="isMobileViewport && mobileFilterOpen" class="shiori-filter-sheet md:hidden">
+            <button type="button" class="shiori-filter-sheet-mask" aria-label="关闭筛选面板" @click="mobileFilterOpen = false" />
+            <section class="shiori-filter-sheet-panel">
+              <div class="mx-auto mb-3 h-1.5 w-12 rounded-full bg-stone-300" />
+              <div class="flex items-center justify-between">
+                <h2 class="text-base font-semibold text-stone-900">流水筛选</h2>
+                <button type="button" class="text-sm text-stone-500" @click="mobileFilterOpen = false">关闭</button>
+              </div>
+              <div class="mt-3 shiori-filter-fields">
+                <div class="shiori-filter-field w-full">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="M4 8h16M4 16h16" /></svg>
+                  <select v-model="ledgerDraft.bizType" class="shiori-filter-control shiori-filter-control-w-full border-blue-200 text-[var(--shiori-pay-ink)] focus:border-[var(--shiori-pay-blue-600)] focus:ring-blue-200">
+                    <option value="">业务类型</option>
+                    <option value="ORDER">ORDER</option>
+                    <option value="CDK">CDK</option>
+                  </select>
+                </div>
+                <div class="shiori-filter-field w-full">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="M4 12h16M8 8h8M8 16h8" /></svg>
+                  <select v-model="ledgerDraft.changeType" class="shiori-filter-control shiori-filter-control-w-full border-blue-200 text-[var(--shiori-pay-ink)] focus:border-[var(--shiori-pay-blue-600)] focus:ring-blue-200">
+                    <option value="">变更类型</option>
+                    <option value="CDK_REDEEM">CDK_REDEEM</option>
+                    <option value="ORDER_PAY_RESERVE_BUYER">ORDER_PAY_RESERVE_BUYER</option>
+                    <option value="ORDER_PAY_SETTLE_BUYER">ORDER_PAY_SETTLE_BUYER</option>
+                    <option value="ORDER_PAY_SETTLE_SELLER">ORDER_PAY_SETTLE_SELLER</option>
+                    <option value="ORDER_REFUND_BUYER">ORDER_REFUND_BUYER</option>
+                    <option value="ORDER_REFUND_SELLER">ORDER_REFUND_SELLER</option>
+                  </select>
+                </div>
+                <div class="shiori-filter-field w-full">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="M4 7h16M4 12h12M4 17h8" /></svg>
+                  <input v-model.trim="ledgerDraft.bizNo" type="text" placeholder="业务号" class="shiori-filter-control shiori-filter-control-w-full border-blue-200 text-[var(--shiori-pay-ink)] focus:border-[var(--shiori-pay-blue-600)] focus:ring-blue-200" />
+                </div>
+                <div class="shiori-filter-field w-full">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="M8 2v4M16 2v4M4 10h16M5 6h14a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1Z" /></svg>
+                  <input v-model="ledgerDraft.createdFrom" type="datetime-local" class="shiori-filter-control shiori-filter-control-w-full border-blue-200 text-[var(--shiori-pay-ink)] focus:border-[var(--shiori-pay-blue-600)] focus:ring-blue-200" />
+                </div>
+                <div class="shiori-filter-field w-full">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="M8 2v4M16 2v4M4 10h16M5 6h14a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1Z" /></svg>
+                  <input v-model="ledgerDraft.createdTo" type="datetime-local" class="shiori-filter-control shiori-filter-control-w-full border-blue-200 text-[var(--shiori-pay-ink)] focus:border-[var(--shiori-pay-blue-600)] focus:ring-blue-200" />
+                </div>
+              </div>
+              <div class="mt-4 flex gap-2">
+                <button type="button" class="shiori-filter-primary shiori-filter-primary-pay flex-1" @click="applyLedgerFilter">应用筛选</button>
+                <button type="button" class="shiori-filter-secondary border-blue-200 text-[var(--shiori-pay-blue-700)] hover:bg-blue-50" @click="clearLedgerFilter">清空</button>
+              </div>
+            </section>
           </div>
 
           <p v-if="ledgerQuery.error.value instanceof Error" class="mt-3 text-sm text-rose-600">{{ ledgerQuery.error.value.message }}</p>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useQuery } from '@tanstack/vue-query'
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import ResultState from '@/components/ResultState.vue'
@@ -87,11 +87,40 @@ const items = computed(() => query.data.value?.items || [])
 const total = computed(() => query.data.value?.total || 0)
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / size)))
 const errorMessage = computed(() => (query.error.value instanceof Error ? query.error.value.message : ''))
+const mobileFilterOpen = ref(false)
+const isMobileViewport = ref(false)
+
+let mobileMediaQuery: MediaQueryList | null = null
+
+function syncMobileViewport(): void {
+  if (!mobileMediaQuery) {
+    return
+  }
+  isMobileViewport.value = mobileMediaQuery.matches
+  if (!isMobileViewport.value) {
+    mobileFilterOpen.value = false
+  }
+}
+
+onMounted(() => {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return
+  }
+  mobileMediaQuery = window.matchMedia('(max-width: 767px)')
+  syncMobileViewport()
+  mobileMediaQuery.addEventListener('change', syncMobileViewport)
+})
+
+onBeforeUnmount(() => {
+  mobileMediaQuery?.removeEventListener('change', syncMobileViewport)
+  mobileMediaQuery = null
+})
 
 function applyFilter(): void {
   page.value = 1
   keyword.value = keywordInput.value.trim()
   campusCode.value = campusCodeInput.value.trim()
+  mobileFilterOpen.value = false
 }
 
 function resetFilter(): void {
@@ -105,6 +134,7 @@ function resetFilter(): void {
   sortBy.value = 'CREATED_AT'
   sortDir.value = 'DESC'
   page.value = 1
+  mobileFilterOpen.value = false
 }
 
 function goDetail(productId: number): void {
@@ -155,7 +185,7 @@ function formatStatus(code: ProductStatus): string {
 
 <template>
   <section class="space-y-5">
-    <div class="shiori-filter-shell space-y-4">
+    <div class="rounded-2xl border border-stone-200 bg-white/90 p-4 md:hidden">
       <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 class="font-display text-2xl text-stone-900">商品广场</h1>
@@ -165,74 +195,139 @@ function formatStatus(code: ProductStatus): string {
           当前 {{ total }} 条商品
         </span>
       </div>
+      <button
+        type="button"
+        class="mt-3 w-full rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2 text-sm font-medium text-white"
+        @click="mobileFilterOpen = true"
+      >
+        打开筛选面板
+      </button>
+    </div>
 
-      <div class="shiori-filter-grid">
-        <input
-          v-model="keywordInput"
-          type="text"
-          class="shiori-filter-control"
-          placeholder="关键词"
-          @keyup.enter="applyFilter"
-        />
-        <input
-          v-model="campusCodeInput"
-          type="text"
-          class="shiori-filter-control"
-          placeholder="交易校区（如主校区）"
-          @keyup.enter="applyFilter"
-        />
-        <select
-          v-model="categoryCode"
-          class="shiori-filter-control"
-        >
-          <option value="">全部分类</option>
-          <option v-for="item in categoryOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-        </select>
-        <select
-          v-model="conditionLevel"
-          class="shiori-filter-control"
-        >
-          <option value="">全部成色</option>
-          <option v-for="item in conditionOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-        </select>
-        <select
-          v-model="tradeMode"
-          class="shiori-filter-control"
-        >
-          <option value="">全部交易方式</option>
-          <option v-for="item in tradeModeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-        </select>
-        <select
-          v-model="sortBy"
-          class="shiori-filter-control"
-        >
-          <option v-for="item in sortByOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-        </select>
-        <select
-          v-model="sortDir"
-          class="shiori-filter-control"
-        >
-          <option value="DESC">降序</option>
-          <option value="ASC">升序</option>
-        </select>
+    <div class="hidden space-y-4 md:block shiori-filter-shell shiori-filter-shell-amber">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="font-display text-2xl text-stone-900">商品广场</h1>
+          <p class="text-sm text-stone-600">支持分类、成色、交易方式和校区筛选</p>
+        </div>
+        <span class="inline-flex w-fit items-center rounded-full border border-amber-200/70 bg-white/90 px-3 py-1 text-xs font-medium text-amber-700">
+          当前 {{ total }} 条商品
+        </span>
+      </div>
+
+      <div class="shiori-filter-fields">
+        <div class="shiori-filter-field">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon">
+            <path d="m21 21-4.35-4.35M10.8 18a7.2 7.2 0 1 0 0-14.4 7.2 7.2 0 0 0 0 14.4Z" />
+          </svg>
+          <input v-model="keywordInput" type="text" class="shiori-filter-control shiori-filter-control-w-lg" placeholder="关键词" @keyup.enter="applyFilter" />
+        </div>
+        <div class="shiori-filter-field">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon">
+            <path d="M12 21s7-5.2 7-11a7 7 0 1 0-14 0c0 5.8 7 11 7 11Z" />
+            <circle cx="12" cy="10" r="2.5" />
+          </svg>
+          <input v-model="campusCodeInput" type="text" class="shiori-filter-control shiori-filter-control-w-md" placeholder="校区" @keyup.enter="applyFilter" />
+        </div>
+        <div class="shiori-filter-field">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+          <select v-model="categoryCode" class="shiori-filter-control shiori-filter-control-w-sm">
+            <option value="">全部分类</option>
+            <option v-for="item in categoryOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+          </select>
+        </div>
+        <div class="shiori-filter-field">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="M4 12h16M8 8h8M8 16h8" /></svg>
+          <select v-model="conditionLevel" class="shiori-filter-control shiori-filter-control-w-sm">
+            <option value="">全部成色</option>
+            <option v-for="item in conditionOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+          </select>
+        </div>
+        <div class="shiori-filter-field">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="M4 8h16M4 16h16" /></svg>
+          <select v-model="tradeMode" class="shiori-filter-control shiori-filter-control-w-sm">
+            <option value="">全部交易方式</option>
+            <option v-for="item in tradeModeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+          </select>
+        </div>
+        <div class="shiori-filter-field">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="M7 6h10M7 12h7M7 18h4" /></svg>
+          <select v-model="sortBy" class="shiori-filter-control shiori-filter-control-w-sm">
+            <option v-for="item in sortByOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+          </select>
+        </div>
+        <div class="shiori-filter-field">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="m8 7 4-4 4 4M16 17l-4 4-4-4" /></svg>
+          <select v-model="sortDir" class="shiori-filter-control shiori-filter-control-w-sm">
+            <option value="DESC">降序</option>
+            <option value="ASC">升序</option>
+          </select>
+        </div>
         <div class="flex gap-2">
-          <button
-            type="button"
-            class="shiori-filter-primary flex-1"
-            @click="applyFilter"
-          >
-            筛选
-          </button>
-          <button
-            type="button"
-            class="shiori-filter-secondary"
-            @click="resetFilter"
-          >
-            重置
-          </button>
+          <button type="button" class="shiori-filter-primary" @click="applyFilter">筛选</button>
+          <button type="button" class="shiori-filter-secondary" @click="resetFilter">重置</button>
         </div>
       </div>
       <p v-if="query.isFetching.value" class="shiori-filter-hint">正在刷新筛选结果...</p>
+    </div>
+
+    <div v-if="isMobileViewport && mobileFilterOpen" class="shiori-filter-sheet md:hidden">
+      <button type="button" class="shiori-filter-sheet-mask" aria-label="关闭筛选面板" @click="mobileFilterOpen = false" />
+      <section class="shiori-filter-sheet-panel">
+        <div class="mx-auto mb-3 h-1.5 w-12 rounded-full bg-stone-300" />
+        <div class="flex items-center justify-between">
+          <h2 class="text-base font-semibold text-stone-900">筛选条件</h2>
+          <button type="button" class="text-sm text-stone-500" @click="mobileFilterOpen = false">关闭</button>
+        </div>
+        <div class="mt-3 shiori-filter-fields">
+          <div class="shiori-filter-field w-full">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="m21 21-4.35-4.35M10.8 18a7.2 7.2 0 1 0 0-14.4 7.2 7.2 0 0 0 0 14.4Z" /></svg>
+            <input v-model="keywordInput" type="text" class="shiori-filter-control shiori-filter-control-w-full" placeholder="关键词" @keyup.enter="applyFilter" />
+          </div>
+          <div class="shiori-filter-field w-full">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="M12 21s7-5.2 7-11a7 7 0 1 0-14 0c0 5.8 7 11 7 11Z" /><circle cx="12" cy="10" r="2.5" /></svg>
+            <input v-model="campusCodeInput" type="text" class="shiori-filter-control shiori-filter-control-w-full" placeholder="校区" @keyup.enter="applyFilter" />
+          </div>
+          <div class="shiori-filter-field w-full">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+            <select v-model="categoryCode" class="shiori-filter-control shiori-filter-control-w-full">
+              <option value="">全部分类</option>
+              <option v-for="item in categoryOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+            </select>
+          </div>
+          <div class="shiori-filter-field w-full">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="M4 12h16M8 8h8M8 16h8" /></svg>
+            <select v-model="conditionLevel" class="shiori-filter-control shiori-filter-control-w-full">
+              <option value="">全部成色</option>
+              <option v-for="item in conditionOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+            </select>
+          </div>
+          <div class="shiori-filter-field w-full">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="M4 8h16M4 16h16" /></svg>
+            <select v-model="tradeMode" class="shiori-filter-control shiori-filter-control-w-full">
+              <option value="">全部交易方式</option>
+              <option v-for="item in tradeModeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+            </select>
+          </div>
+          <div class="shiori-filter-field w-full">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="M7 6h10M7 12h7M7 18h4" /></svg>
+            <select v-model="sortBy" class="shiori-filter-control shiori-filter-control-w-full">
+              <option v-for="item in sortByOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+            </select>
+          </div>
+          <div class="shiori-filter-field w-full">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="m8 7 4-4 4 4M16 17l-4 4-4-4" /></svg>
+            <select v-model="sortDir" class="shiori-filter-control shiori-filter-control-w-full">
+              <option value="DESC">降序</option>
+              <option value="ASC">升序</option>
+            </select>
+          </div>
+        </div>
+        <div class="mt-4 flex gap-2">
+          <button type="button" class="shiori-filter-primary flex-1" @click="applyFilter">应用筛选</button>
+          <button type="button" class="shiori-filter-secondary" @click="resetFilter">重置</button>
+        </div>
+      </section>
     </div>
 
     <ResultState :loading="query.isLoading.value" :error="errorMessage" :empty="!query.isLoading.value && items.length === 0" empty-text="暂无上架商品">
