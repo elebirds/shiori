@@ -88,6 +88,7 @@ class AdminOrderReviewV2ControllerMvcTest {
                         5,
                         BigDecimal.valueOf(5.0),
                         "nice",
+                        List.of("product/test/review-1.jpg"),
                         "VISIBLE",
                         null,
                         null,

@@ -12,8 +12,19 @@ export interface PresignUploadResponse {
   requiredHeaders: Record<string, string>
 }
 
+export interface ResolveMediaUrlsResponse {
+  urls: Record<string, string>
+}
+
 export function presignProductUpload(payload: PresignUploadRequest): Promise<PresignUploadResponse> {
   return httpPost<PresignUploadResponse>('/api/v2/product/media/presign-upload', payload)
+}
+
+export function resolveProductMediaUrls(objectKeys: string[]): Promise<ResolveMediaUrlsResponse> {
+  const normalized = Array.from(new Set(objectKeys.map((item) => item.trim()).filter((item) => item)))
+  return httpPost<ResolveMediaUrlsResponse>('/api/v2/product/media/resolve-urls', {
+    objectKeys: normalized,
+  })
 }
 
 export async function uploadByPresignedUrl(
@@ -43,4 +54,3 @@ export async function uploadByPresignedUrl(
     throw new Error(`对象上传失败（${response.status}）`)
   }
 }
-

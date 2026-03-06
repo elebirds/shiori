@@ -28,6 +28,7 @@ public interface OrderReviewMapper {
                 credibility_star,
                 overall_star,
                 comment,
+                image_object_keys,
                 visibility_status,
                 visibility_reason,
                 visibility_operator_user_id,
@@ -46,6 +47,7 @@ public interface OrderReviewMapper {
                 #{credibilityStar},
                 #{overallStar},
                 #{comment},
+                #{imageObjectKeys},
                 #{visibilityStatus},
                 #{visibilityReason},
                 #{visibilityOperatorUserId},
@@ -70,6 +72,7 @@ public interface OrderReviewMapper {
                    credibility_star AS credibilityStar,
                    overall_star AS overallStar,
                    comment,
+                   image_object_keys AS imageObjectKeys,
                    visibility_status AS visibilityStatus,
                    visibility_reason AS visibilityReason,
                    visibility_operator_user_id AS visibilityOperatorUserId,
@@ -97,6 +100,7 @@ public interface OrderReviewMapper {
                    credibility_star AS credibilityStar,
                    overall_star AS overallStar,
                    comment,
+                   image_object_keys AS imageObjectKeys,
                    visibility_status AS visibilityStatus,
                    visibility_reason AS visibilityReason,
                    visibility_operator_user_id AS visibilityOperatorUserId,
@@ -118,6 +122,7 @@ public interface OrderReviewMapper {
                 credibility_star = #{credibilityStar},
                 overall_star = #{overallStar},
                 comment = #{comment},
+                image_object_keys = #{imageObjectKeys},
                 edit_count = edit_count + 1,
                 last_edited_at = #{lastEditedAt},
                 updated_at = CURRENT_TIMESTAMP(3)
@@ -132,6 +137,7 @@ public interface OrderReviewMapper {
                             @Param("credibilityStar") Integer credibilityStar,
                             @Param("overallStar") BigDecimal overallStar,
                             @Param("comment") String comment,
+                            @Param("imageObjectKeys") String imageObjectKeys,
                             @Param("lastEditedAt") LocalDateTime lastEditedAt,
                             @Param("expectedEditCount") Integer expectedEditCount);
 
@@ -192,6 +198,7 @@ public interface OrderReviewMapper {
                    credibility_star AS credibilityStar,
                    overall_star AS overallStar,
                    comment,
+                   image_object_keys AS imageObjectKeys,
                    visibility_status AS visibilityStatus,
                    visibility_reason AS visibilityReason,
                    visibility_operator_user_id AS visibilityOperatorUserId,
@@ -224,6 +231,7 @@ public interface OrderReviewMapper {
                    credibility_star AS credibilityStar,
                    overall_star AS overallStar,
                    comment,
+                   image_object_keys AS imageObjectKeys,
                    visibility_status AS visibilityStatus,
                    visibility_reason AS visibilityReason,
                    visibility_operator_user_id AS visibilityOperatorUserId,
@@ -294,6 +302,7 @@ public interface OrderReviewMapper {
                    credibility_star AS credibilityStar,
                    overall_star AS overallStar,
                    comment,
+                   image_object_keys AS imageObjectKeys,
                    visibility_status AS visibilityStatus,
                    visibility_reason AS visibilityReason,
                    visibility_operator_user_id AS visibilityOperatorUserId,
@@ -342,4 +351,52 @@ public interface OrderReviewMapper {
                                              @Param("createdTo") LocalDateTime createdTo,
                                              @Param("size") int size,
                                              @Param("offset") int offset);
+
+    @Select("""
+            SELECT COUNT(1)
+            FROM o_order_review r
+            WHERE r.visibility_status = 'VISIBLE'
+              AND EXISTS (
+                  SELECT 1
+                  FROM o_order_item i
+                  WHERE i.order_no = r.order_no
+                    AND i.product_id = #{productId}
+              )
+            """)
+    long countVisibleReviewsByProductId(@Param("productId") Long productId);
+
+    @Select("""
+            SELECT r.id,
+                   r.order_no AS orderNo,
+                   r.reviewer_user_id AS reviewerUserId,
+                   r.reviewed_user_id AS reviewedUserId,
+                   r.reviewer_role AS reviewerRole,
+                   r.communication_star AS communicationStar,
+                   r.timeliness_star AS timelinessStar,
+                   r.credibility_star AS credibilityStar,
+                   r.overall_star AS overallStar,
+                   r.comment,
+                   r.image_object_keys AS imageObjectKeys,
+                   r.visibility_status AS visibilityStatus,
+                   r.visibility_reason AS visibilityReason,
+                   r.visibility_operator_user_id AS visibilityOperatorUserId,
+                   r.visibility_updated_at AS visibilityUpdatedAt,
+                   r.edit_count AS editCount,
+                   r.last_edited_at AS lastEditedAt,
+                   r.created_at AS createdAt,
+                   r.updated_at AS updatedAt
+            FROM o_order_review r
+            WHERE r.visibility_status = 'VISIBLE'
+              AND EXISTS (
+                  SELECT 1
+                  FROM o_order_item i
+                  WHERE i.order_no = r.order_no
+                    AND i.product_id = #{productId}
+              )
+            ORDER BY r.created_at DESC, r.id DESC
+            LIMIT #{size} OFFSET #{offset}
+            """)
+    List<OrderReviewRecord> listVisibleReviewsByProductId(@Param("productId") Long productId,
+                                                          @Param("size") int size,
+                                                          @Param("offset") int offset);
 }

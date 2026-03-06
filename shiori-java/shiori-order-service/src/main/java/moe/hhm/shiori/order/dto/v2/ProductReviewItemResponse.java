@@ -4,7 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
-public record UserReviewItemResponse(
+public record ProductReviewItemResponse(
         Long reviewId,
         String orderNo,
         Long reviewerUserId,

@@ -11,6 +11,8 @@ import moe.hhm.shiori.order.dto.v2.AdminOrderReviewVisibilityResponse;
 import moe.hhm.shiori.order.dto.v2.OrderReviewContextResponse;
 import moe.hhm.shiori.order.dto.v2.OrderReviewItemResponse;
 import moe.hhm.shiori.order.dto.v2.OrderReviewUpsertRequest;
+import moe.hhm.shiori.order.dto.v2.ProductReviewItemResponse;
+import moe.hhm.shiori.order.dto.v2.ProductReviewPageResponse;
 import moe.hhm.shiori.order.dto.v2.PraiseWallItemResponse;
 import moe.hhm.shiori.order.dto.v2.PraiseWallPageResponse;
 import moe.hhm.shiori.order.dto.v2.UserCreditCompositeResponse;
@@ -29,10 +31,15 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 
@@ -40,20 +47,24 @@ import java.util.Objects;
 public class OrderReviewService {
 
     private static final int MAX_PAGE_SIZE = 100;
+    private static final int MAX_REVIEW_IMAGE_COUNT = 6;
 
     private final OrderMapper orderMapper;
     private final OrderReviewMapper orderReviewMapper;
     private final OrderProperties orderProperties;
     private final OrderMetrics orderMetrics;
+    private final ObjectMapper objectMapper;
 
     public OrderReviewService(OrderMapper orderMapper,
                               OrderReviewMapper orderReviewMapper,
                               OrderProperties orderProperties,
-                              OrderMetrics orderMetrics) {
+                              OrderMetrics orderMetrics,
+                              ObjectMapper objectMapper) {
         this.orderMapper = orderMapper;
         this.orderReviewMapper = orderReviewMapper;
         this.orderProperties = orderProperties;
         this.orderMetrics = orderMetrics;
+        this.objectMapper = objectMapper;
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -83,6 +94,7 @@ public class OrderReviewService {
         entity.setCredibilityStar(request.credibilityStar());
         entity.setOverallStar(calculateOverallStar(party.role(), request));
         entity.setComment(normalizeComment(request.comment()));
+        entity.setImageObjectKeys(serializeImageObjectKeys(normalizeImageObjectKeys(request.imageObjectKeys())));
         entity.setVisibilityStatus(OrderReviewVisibilityStatus.VISIBLE.name());
         entity.setEditCount(0);
         try {
@@ -129,6 +141,7 @@ public class OrderReviewService {
                 request.credibilityStar(),
                 calculateOverallStar(party.role(), request),
                 normalizeComment(request.comment()),
+                serializeImageObjectKeys(normalizeImageObjectKeys(request.imageObjectKeys())),
                 now,
                 existed.editCount() == null ? 0 : existed.editCount()
         );
@@ -220,6 +233,7 @@ public class OrderReviewService {
                         item.credibilityStar(),
                         item.overallStar(),
                         item.comment(),
+                        readImageObjectKeys(item.imageObjectKeys()),
                         item.createdAt()
                 ))
                 .toList();
@@ -248,11 +262,40 @@ public class OrderReviewService {
                         item.credibilityStar(),
                         item.overallStar(),
                         resolvePublicComment(item.overallStar(), item.comment()),
+                        resolvePublicImageObjectKeys(item.overallStar(), readImageObjectKeys(item.imageObjectKeys())),
                         item.createdAt()
                 ))
                 .toList();
         orderMetrics.incOrderCreditQuery("review_list");
         return new UserReviewPageResponse(total, normalizedPage, normalizedSize, items);
+    }
+
+    public ProductReviewPageResponse listProductReviews(Long productId, int page, int size) {
+        if (productId == null || productId <= 0) {
+            throw new BizException(OrderErrorCode.ORDER_ITEM_INVALID, HttpStatus.BAD_REQUEST);
+        }
+        int normalizedPage = Math.max(page, 1);
+        int normalizedSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
+        int offset = (normalizedPage - 1) * normalizedSize;
+
+        long total = orderReviewMapper.countVisibleReviewsByProductId(productId);
+        List<ProductReviewItemResponse> items = orderReviewMapper.listVisibleReviewsByProductId(productId, normalizedSize, offset)
+                .stream()
+                .map(item -> new ProductReviewItemResponse(
+                        item.id(),
+                        item.orderNo(),
+                        item.reviewerUserId(),
+                        item.reviewerRole(),
+                        item.communicationStar(),
+                        item.timelinessStar(),
+                        item.credibilityStar(),
+                        item.overallStar(),
+                        resolvePublicComment(item.overallStar(), item.comment()),
+                        resolvePublicImageObjectKeys(item.overallStar(), readImageObjectKeys(item.imageObjectKeys())),
+                        item.createdAt()
+                ))
+                .toList();
+        return new ProductReviewPageResponse(total, normalizedPage, normalizedSize, items);
     }
 
     public AdminOrderReviewPageResponse listAdminReviews(Long reviewedUserId,
@@ -434,6 +477,62 @@ public class OrderReviewService {
         return comment;
     }
 
+    private List<String> resolvePublicImageObjectKeys(BigDecimal overallStar, List<String> imageObjectKeys) {
+        if (overallStar == null || overallStar.compareTo(BigDecimal.valueOf(4)) < 0) {
+            return List.of();
+        }
+        return imageObjectKeys;
+    }
+
+    private List<String> normalizeImageObjectKeys(List<String> imageObjectKeys) {
+        if (imageObjectKeys == null || imageObjectKeys.isEmpty()) {
+            return List.of();
+        }
+        if (imageObjectKeys.size() > MAX_REVIEW_IMAGE_COUNT) {
+            throw new BizException(OrderErrorCode.ORDER_ITEM_INVALID, HttpStatus.BAD_REQUEST);
+        }
+        LinkedHashSet<String> deduplicated = new LinkedHashSet<>();
+        for (String raw : imageObjectKeys) {
+            if (!StringUtils.hasText(raw)) {
+                continue;
+            }
+            String candidate = raw.trim();
+            if (!candidate.startsWith("product/") || candidate.length() > 255 || candidate.contains("..")
+                    || candidate.contains("\\") || candidate.startsWith("/") || candidate.endsWith("/")) {
+                throw new BizException(OrderErrorCode.ORDER_ITEM_INVALID, HttpStatus.BAD_REQUEST);
+            }
+            deduplicated.add(candidate);
+            if (deduplicated.size() > MAX_REVIEW_IMAGE_COUNT) {
+                throw new BizException(OrderErrorCode.ORDER_ITEM_INVALID, HttpStatus.BAD_REQUEST);
+            }
+        }
+        return new ArrayList<>(deduplicated);
+    }
+
+    private String serializeImageObjectKeys(List<String> imageObjectKeys) {
+        if (imageObjectKeys == null || imageObjectKeys.isEmpty()) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(imageObjectKeys);
+        } catch (JacksonException ex) {
+            throw new BizException(OrderErrorCode.ORDER_ITEM_INVALID, HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    private List<String> readImageObjectKeys(String imageObjectKeysRaw) {
+        if (!StringUtils.hasText(imageObjectKeysRaw)) {
+            return List.of();
+        }
+        try {
+            List<String> parsed = objectMapper.readValue(imageObjectKeysRaw, new TypeReference<List<String>>() {
+            });
+            return normalizeImageObjectKeys(parsed);
+        } catch (JacksonException ex) {
+            return List.of();
+        }
+    }
+
     private OrderReviewItemResponse toItemResponse(OrderReviewRecord record) {
         return new OrderReviewItemResponse(
                 record.id(),
@@ -446,6 +545,7 @@ public class OrderReviewService {
                 record.credibilityStar(),
                 record.overallStar(),
                 record.comment(),
+                readImageObjectKeys(record.imageObjectKeys()),
                 record.visibilityStatus(),
                 record.visibilityReason(),
                 record.visibilityOperatorUserId(),

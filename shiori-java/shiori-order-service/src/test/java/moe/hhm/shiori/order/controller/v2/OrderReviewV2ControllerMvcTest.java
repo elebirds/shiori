@@ -74,6 +74,7 @@ class OrderReviewV2ControllerMvcTest {
                         5,
                         BigDecimal.valueOf(5.0),
                         "很好",
+                        List.of("product/test/review-1.jpg"),
                         "VISIBLE",
                         null,
                         null,
@@ -180,6 +181,7 @@ class OrderReviewV2ControllerMvcTest {
                                 5,
                                 BigDecimal.valueOf(4.7),
                                 "好评",
+                                List.of("product/test/review-1.jpg"),
                                 LocalDateTime.now()
                         ))
                 ));

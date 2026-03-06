@@ -2,6 +2,7 @@ package moe.hhm.shiori.order.dto.v2;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 public record OrderReviewItemResponse(
         Long reviewId,
@@ -14,6 +15,7 @@ public record OrderReviewItemResponse(
         Integer credibilityStar,
         BigDecimal overallStar,
         String comment,
+        List<String> imageObjectKeys,
         String visibilityStatus,
         String visibilityReason,
         Long visibilityOperatorUserId,
@@ -24,4 +26,3 @@ public record OrderReviewItemResponse(
         LocalDateTime updatedAt
 ) {
 }
-

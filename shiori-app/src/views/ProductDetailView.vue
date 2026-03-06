@@ -4,7 +4,8 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import ResultState from '@/components/ResultState.vue'
-import { addCartItemV2, createOrderV2 } from '@/api/orderV2'
+import { addCartItemV2, createOrderV2, listProductReviewsV2 } from '@/api/orderV2'
+import { resolveProductMediaUrls } from '@/api/media'
 import {
   getProductDetailV2,
   type ProductCategoryCode,
@@ -44,6 +45,43 @@ const query = useQuery({
 
 const product = computed(() => query.data.value)
 const errorMessage = computed(() => (query.error.value instanceof Error ? query.error.value.message : ''))
+const productReviewPageSize = 8
+
+const productReviewQuery = useQuery({
+  queryKey: computed(() => ['product-reviews-v2', productId.value, productReviewPageSize]),
+  queryFn: () =>
+    listProductReviewsV2(productId.value, {
+      page: 1,
+      size: productReviewPageSize,
+    }),
+  enabled: computed(() => Number.isFinite(productId.value) && productId.value > 0),
+})
+
+const productReviews = computed(() => productReviewQuery.data.value?.items || [])
+const productReviewTotal = computed(() => productReviewQuery.data.value?.total || 0)
+const productReviewErrorMessage = computed(() => (productReviewQuery.error.value instanceof Error ? productReviewQuery.error.value.message : ''))
+const reviewImageObjectKeys = computed(() =>
+  Array.from(
+    new Set(
+      productReviews.value
+        .flatMap((item) => item.imageObjectKeys || [])
+        .map((item) => item.trim())
+        .filter((item) => item),
+    ),
+  ),
+)
+
+const reviewImageUrlsQuery = useQuery({
+  queryKey: computed(() => ['product-review-image-urls', reviewImageObjectKeys.value.join(',')]),
+  queryFn: async () => {
+    if (reviewImageObjectKeys.value.length === 0) {
+      return {} as Record<string, string>
+    }
+    const response = await resolveProductMediaUrls(reviewImageObjectKeys.value)
+    return response.urls || {}
+  },
+  enabled: computed(() => reviewImageObjectKeys.value.length > 0),
+})
 
 const specOptions = computed(() => {
   const skus = product.value?.skus || []
@@ -191,6 +229,29 @@ function formatStatus(code: ProductStatus): string {
     OFF_SHELF: '已下架',
   }
   return map[code] || code
+}
+
+function formatReviewRole(role: 'BUYER' | 'SELLER'): string {
+  return role === 'BUYER' ? '买家评价' : '卖家评价'
+}
+
+function formatReviewTime(time?: string): string {
+  if (!time) {
+    return '-'
+  }
+  const date = new Date(time)
+  if (Number.isNaN(date.getTime())) {
+    return '-'
+  }
+  return date.toLocaleString('zh-CN', { hour12: false })
+}
+
+function reviewImageUrlOf(objectKey: string): string {
+  return reviewImageUrlsQuery.data.value?.[objectKey] || ''
+}
+
+function isOverallStarActive(overallStar: number, star: number): boolean {
+  return Math.round(Number(overallStar) || 0) >= star
 }
 
 function changeQuantity(delta: number): void {
@@ -483,6 +544,68 @@ async function handleConsultSeller(): Promise<void> {
           <h2 class="text-base font-semibold text-stone-900">商品详情</h2>
           <div v-if="product.detailHtml" class="rich-content mt-3 text-sm text-stone-700" v-html="product.detailHtml" />
           <p v-else class="mt-3 text-sm text-stone-500">暂无详情</p>
+        </article>
+
+        <article class="rounded-2xl border border-stone-200 bg-white/95 p-5">
+          <div class="flex items-center justify-between gap-3">
+            <h2 class="text-base font-semibold text-stone-900">商品评价</h2>
+            <span class="text-xs text-stone-500">共 {{ productReviewTotal }} 条</span>
+          </div>
+
+          <p v-if="productReviewQuery.isLoading.value" class="mt-3 text-sm text-stone-500">评价加载中...</p>
+          <p v-else-if="productReviewErrorMessage" class="mt-3 text-sm text-rose-600">{{ productReviewErrorMessage }}</p>
+          <p v-else-if="productReviews.length === 0" class="mt-3 text-sm text-stone-500">暂时还没有评价。</p>
+
+          <div v-else class="mt-4 space-y-3">
+            <article v-for="item in productReviews" :key="item.reviewId" class="rounded-xl border border-stone-200 bg-stone-50/70 p-4">
+              <header class="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p class="text-sm font-medium text-stone-900">{{ formatReviewRole(item.reviewerRole) }}</p>
+                  <p class="mt-0.5 text-xs text-stone-500">{{ formatReviewTime(item.createdAt) }}</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <div class="flex items-center">
+                    <svg
+                      v-for="star in [1, 2, 3, 4, 5]"
+                      :key="`review-${item.reviewId}-star-${star}`"
+                      viewBox="0 0 24 24"
+                      class="h-4 w-4"
+                      :class="isOverallStarActive(item.overallStar, star) ? 'fill-amber-400 text-amber-500' : 'fill-transparent text-stone-300'"
+                    >
+                      <path
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.8"
+                        d="M12 3.8l2.5 5.2 5.7.8-4.1 3.9 1 5.7L12 16.7 6.9 19.4l1-5.7-4.1-3.9 5.7-.8L12 3.8z"
+                      />
+                    </svg>
+                  </div>
+                  <span class="text-xs font-medium text-amber-700">{{ Number(item.overallStar).toFixed(1) }} 星</span>
+                </div>
+              </header>
+
+              <p class="mt-2 whitespace-pre-line text-sm text-stone-700">{{ item.comment || '该条评价未公开评论内容' }}</p>
+
+              <div v-if="(item.imageObjectKeys || []).length > 0" class="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                <article
+                  v-for="imageKey in item.imageObjectKeys"
+                  :key="`${item.reviewId}-${imageKey}`"
+                  class="aspect-square overflow-hidden rounded-lg border border-stone-200 bg-stone-100"
+                >
+                  <img
+                    v-if="reviewImageUrlOf(imageKey)"
+                    :src="reviewImageUrlOf(imageKey)"
+                    alt="评价图片"
+                    class="h-full w-full object-cover"
+                  />
+                  <div v-else class="flex h-full items-center justify-center px-2 text-center text-[11px] text-stone-500">
+                    {{ reviewImageUrlsQuery.isFetching.value ? '图片加载中...' : '图片不可用' }}
+                  </div>
+                </article>
+              </div>
+            </article>
+          </div>
         </article>
       </div>
     </ResultState>

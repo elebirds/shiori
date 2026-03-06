@@ -14,6 +14,7 @@ public record OrderReviewRecord(
         Integer credibilityStar,
         BigDecimal overallStar,
         String comment,
+        String imageObjectKeys,
         String visibilityStatus,
         String visibilityReason,
         Long visibilityOperatorUserId,

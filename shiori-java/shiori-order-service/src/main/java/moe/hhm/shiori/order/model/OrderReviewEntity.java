@@ -14,6 +14,7 @@ public class OrderReviewEntity {
     private Integer credibilityStar;
     private BigDecimal overallStar;
     private String comment;
+    private String imageObjectKeys;
     private String visibilityStatus;
     private String visibilityReason;
     private Long visibilityOperatorUserId;
@@ -99,6 +100,14 @@ public class OrderReviewEntity {
 
     public void setComment(String comment) {
         this.comment = comment;
+    }
+
+    public String getImageObjectKeys() {
+        return imageObjectKeys;
+    }
+
+    public void setImageObjectKeys(String imageObjectKeys) {
+        this.imageObjectKeys = imageObjectKeys;
     }
 
     public String getVisibilityStatus() {
