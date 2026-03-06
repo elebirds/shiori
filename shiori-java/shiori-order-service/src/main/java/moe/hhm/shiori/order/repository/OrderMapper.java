@@ -1122,7 +1122,7 @@ public interface OrderMapper {
                    updated_at AS updatedAt
             FROM o_order_refund
             WHERE status = #{status}
-              AND review_deadline_at <![CDATA[ <= ]]> #{deadline}
+              AND review_deadline_at <= #{deadline}
             ORDER BY id ASC
             LIMIT #{size}
             """)

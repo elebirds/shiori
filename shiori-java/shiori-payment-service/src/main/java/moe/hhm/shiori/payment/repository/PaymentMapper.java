@@ -511,8 +511,8 @@ public interface PaymentMapper {
                    status,
                    retry_count AS retryCount
             FROM p_wallet_balance_outbox
-            WHERE (status = 'PENDING' AND (next_retry_at IS NULL OR next_retry_at <![CDATA[ <= ]]> CURRENT_TIMESTAMP(3)))
-               OR (status = 'FAILED' AND next_retry_at <![CDATA[ <= ]]> CURRENT_TIMESTAMP(3))
+            WHERE (status = 'PENDING' AND (next_retry_at IS NULL OR next_retry_at <= CURRENT_TIMESTAMP(3)))
+               OR (status = 'FAILED' AND next_retry_at <= CURRENT_TIMESTAMP(3))
             ORDER BY id ASC
             LIMIT #{size}
             """)
