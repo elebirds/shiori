@@ -303,17 +303,30 @@ onBeforeUnmount(() => {
             </svg>
           </RouterLink>
 
+          <RouterLink
+            to="/notifications"
+            class="relative flex h-8 w-8 items-center justify-center text-stone-700 transition duration-200 hover:-translate-y-0.5 hover:scale-105 hover:text-stone-900"
+            active-class="text-stone-900"
+            aria-label="通知中心"
+            title="通知中心"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5 transition-transform duration-200">
+              <path d="M15 17H5a1 1 0 0 1-1-1v-.8a4 4 0 0 1 1.17-2.83L6 11.6V9a6 6 0 1 1 12 0v2.6l.83.77A4 4 0 0 1 20 15.2v.8a1 1 0 0 1-1 1h-4" />
+              <path d="M9 18a3 3 0 0 0 6 0" />
+            </svg>
+            <span
+              v-if="notifyStore.unreadCount > 0"
+              class="absolute -right-1 -top-1 z-20 rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white"
+            >
+              {{ notifyStore.unreadCount > 99 ? '99+' : notifyStore.unreadCount }}
+            </span>
+          </RouterLink>
+
           <div v-if="!isMobileLayout" ref="menuRef" class="relative flex items-center gap-2">
             <span class="relative h-8 w-8">
               <span class="flex h-8 w-8 overflow-hidden rounded-full border border-stone-200 bg-stone-100">
                 <img v-if="avatarPreviewUrl" :src="avatarPreviewUrl" alt="avatar" class="h-full w-full object-cover" />
                 <span v-else class="flex h-full w-full items-center justify-center text-xs text-stone-500">头像</span>
-              </span>
-              <span
-                v-if="notifyStore.unreadCount > 0"
-                class="absolute -right-1 -top-1 z-10 rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white"
-              >
-                {{ notifyStore.unreadCount > 99 ? '99+' : notifyStore.unreadCount }}
               </span>
             </span>
             <span class="hidden leading-tight sm:block">
@@ -397,12 +410,6 @@ onBeforeUnmount(() => {
           >
             <img v-if="avatarPreviewUrl" :src="avatarPreviewUrl" alt="avatar" class="h-full w-full object-cover" />
             <span v-else class="flex h-full w-full items-center justify-center text-xs text-stone-500">头像</span>
-            <span
-              v-if="notifyStore.unreadCount > 0"
-              class="absolute -right-1 -top-1 z-10 rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white"
-            >
-              {{ notifyStore.unreadCount > 99 ? '99+' : notifyStore.unreadCount }}
-            </span>
           </RouterLink>
         </template>
 

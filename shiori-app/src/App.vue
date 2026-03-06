@@ -1,26 +1,23 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
+import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import AppHeader from '@/components/AppHeader.vue'
 import ChatPopupStack from '@/components/ChatPopupStack.vue'
+import NotifyPopupStack from '@/components/NotifyPopupStack.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useChatPopupStore } from '@/stores/chatPopup'
 import { useChatStore, type ChatIncomingMessageEvent } from '@/stores/chat'
-import { useNotifyStore } from '@/stores/notify'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const chatStore = useChatStore()
 const chatPopupStore = useChatPopupStore()
-const notifyStore = useNotifyStore()
 let unlistenIncoming: (() => void) | null = null
 let audioContext: AudioContext | null = null
 let lastSoundAt = 0
 
 const CHAT_SOUND_MIN_INTERVAL_MS = 2_000
-
-const latestMessages = computed(() => notifyStore.messages.slice(0, 3))
 
 function shouldShowChatPopup(event: ChatIncomingMessageEvent): boolean {
   const route = router.currentRoute.value
@@ -136,22 +133,10 @@ onBeforeUnmount(() => {
     <AppHeader />
 
     <ChatPopupStack />
+    <NotifyPopupStack />
 
     <main class="mx-auto max-w-6xl px-4 py-8 sm:px-6">
       <RouterView />
     </main>
-
-    <aside
-      v-if="latestMessages.length > 0"
-      class="fixed bottom-4 right-4 hidden w-80 rounded-2xl border border-amber-200 bg-white/95 p-4 shadow-lg shadow-amber-900/10 backdrop-blur md:block"
-    >
-      <p class="mb-2 text-sm font-semibold text-stone-800">最近通知</p>
-      <ul class="space-y-2 text-xs text-stone-600">
-        <li v-for="item in latestMessages" :key="item.id" class="rounded-lg bg-stone-50 p-2">
-          <p class="font-medium text-stone-800">{{ item.type }} - {{ item.aggregateId }}</p>
-          <p>{{ item.createdAt }}</p>
-        </li>
-      </ul>
-    </aside>
   </div>
 </template>

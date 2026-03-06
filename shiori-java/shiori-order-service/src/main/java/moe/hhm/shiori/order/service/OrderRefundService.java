@@ -8,6 +8,7 @@ import moe.hhm.shiori.common.error.CommonErrorCode;
 import moe.hhm.shiori.common.error.OrderErrorCode;
 import moe.hhm.shiori.common.exception.BizException;
 import moe.hhm.shiori.order.client.PaymentServiceClient;
+import moe.hhm.shiori.order.client.ProductServiceClient;
 import moe.hhm.shiori.order.client.RefundBalancePaymentSnapshot;
 import moe.hhm.shiori.order.config.OrderProperties;
 import moe.hhm.shiori.order.domain.OrderPaymentMode;
@@ -15,6 +16,7 @@ import moe.hhm.shiori.order.domain.OrderRefundStatus;
 import moe.hhm.shiori.order.domain.OrderStatus;
 import moe.hhm.shiori.order.dto.OrderRefundPageResponse;
 import moe.hhm.shiori.order.dto.OrderRefundResponse;
+import moe.hhm.shiori.order.model.OrderItemRecord;
 import moe.hhm.shiori.order.model.OrderRecord;
 import moe.hhm.shiori.order.model.OrderRefundEntity;
 import moe.hhm.shiori.order.model.OrderRefundRecord;
@@ -45,13 +47,16 @@ public class OrderRefundService {
 
     private final OrderMapper orderMapper;
     private final PaymentServiceClient paymentServiceClient;
+    private final ProductServiceClient productServiceClient;
     private final OrderProperties orderProperties;
 
     public OrderRefundService(OrderMapper orderMapper,
                               PaymentServiceClient paymentServiceClient,
+                              ProductServiceClient productServiceClient,
                               OrderProperties orderProperties) {
         this.orderMapper = orderMapper;
         this.paymentServiceClient = paymentServiceClient;
+        this.productServiceClient = productServiceClient;
         this.orderProperties = orderProperties;
     }
 
@@ -413,6 +418,7 @@ public class OrderRefundService {
         if (affected <= 0) {
             return;
         }
+        releaseRefundedOrderItems(orderNo, before.buyerUserId());
         OrderStatus fromStatus = beforeStatus == null ? OrderStatus.PAID : beforeStatus;
         orderMapper.insertStatusAuditLog(
                 orderNo,
@@ -422,6 +428,29 @@ public class OrderRefundService {
                 OrderStatus.REFUNDED.getCode(),
                 trimOptional(reason)
         );
+    }
+
+    private void releaseRefundedOrderItems(String orderNo, Long buyerUserId) {
+        List<OrderItemRecord> items = orderMapper.listOrderItemsByOrderNo(orderNo);
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+        for (OrderItemRecord item : items) {
+            if (item == null || item.skuId() == null || item.quantity() == null || item.quantity() <= 0) {
+                continue;
+            }
+            productServiceClient.releaseStock(
+                    item.skuId(),
+                    item.quantity(),
+                    stockBizNo(orderNo, item.skuId()),
+                    buyerUserId,
+                    List.of("ROLE_USER")
+            );
+        }
+    }
+
+    private String stockBizNo(String orderNo, Long skuId) {
+        return orderNo + ":" + skuId;
     }
 
     private void insertRefundAudit(String refundNo,

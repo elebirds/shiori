@@ -3,9 +3,11 @@ package moe.hhm.shiori.order.service;
 import java.time.LocalDateTime;
 import moe.hhm.shiori.common.exception.BizException;
 import moe.hhm.shiori.order.client.PaymentServiceClient;
+import moe.hhm.shiori.order.client.ProductServiceClient;
 import moe.hhm.shiori.order.client.RefundBalancePaymentSnapshot;
 import moe.hhm.shiori.order.config.OrderProperties;
 import moe.hhm.shiori.order.dto.OrderRefundResponse;
+import moe.hhm.shiori.order.model.OrderItemRecord;
 import moe.hhm.shiori.order.model.OrderRecord;
 import moe.hhm.shiori.order.model.OrderRefundEntity;
 import moe.hhm.shiori.order.model.OrderRefundRecord;
@@ -34,13 +36,15 @@ class OrderRefundServiceTest {
     private OrderMapper orderMapper;
     @Mock
     private PaymentServiceClient paymentServiceClient;
+    @Mock
+    private ProductServiceClient productServiceClient;
 
     private OrderRefundService orderRefundService;
 
     @BeforeEach
     void setUp() {
         OrderProperties orderProperties = new OrderProperties();
-        orderRefundService = new OrderRefundService(orderMapper, paymentServiceClient, orderProperties);
+        orderRefundService = new OrderRefundService(orderMapper, paymentServiceClient, productServiceClient, orderProperties);
     }
 
     @Test
@@ -94,6 +98,8 @@ class OrderRefundServiceTest {
         when(orderMapper.findOrderByOrderNo("O3001"))
                 .thenReturn(order("O3001", 1001L, 2001L, 4, 100L));
         when(orderMapper.markOrderRefunded("O3001", "SUCCEEDED", 6, 2, 4, 5)).thenReturn(1);
+        when(orderMapper.listOrderItemsByOrderNo("O3001"))
+                .thenReturn(java.util.List.of(orderItem("O3001", 601L, 2)));
         when(orderMapper.findOrderRefundByRefundNo("R3001"))
                 .thenReturn(refund("R3001", "O3001", 1001L, 2001L, "SUCCEEDED"));
 
@@ -101,6 +107,7 @@ class OrderRefundServiceTest {
 
         assertThat(response.status()).isEqualTo("SUCCEEDED");
         assertThat(response.idempotent()).isFalse();
+        verify(productServiceClient).releaseStock(eq(601L), eq(2), eq("O3001:601"), eq(1001L), any());
     }
 
     @Test
@@ -194,6 +201,24 @@ class OrderRefundServiceTest {
                 0,
                 LocalDateTime.now(),
                 LocalDateTime.now()
+        );
+    }
+
+    private OrderItemRecord orderItem(String orderNo, Long skuId, Integer quantity) {
+        return new OrderItemRecord(
+                1L,
+                1L,
+                orderNo,
+                101L,
+                "P1001",
+                skuId,
+                "SKU-001",
+                "规格",
+                "{}",
+                50L,
+                quantity,
+                100L,
+                2001L
         );
     }
 }
