@@ -29,6 +29,7 @@ const secureNav = [
   { path: '/orders', label: '订单' },
   { path: '/wallet', label: '钱包' },
   { path: '/seller/orders', label: '卖家工作台' },
+  { path: '/seller/refunds', label: '退款审核' },
   { path: '/chat', label: '聊天' },
 ]
 

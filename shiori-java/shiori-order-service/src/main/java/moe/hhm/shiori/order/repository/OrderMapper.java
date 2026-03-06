@@ -10,6 +10,8 @@ import moe.hhm.shiori.order.model.OrderEntity;
 import moe.hhm.shiori.order.model.OrderItemEntity;
 import moe.hhm.shiori.order.model.OrderItemRecord;
 import moe.hhm.shiori.order.model.OrderOperateIdempotencyRecord;
+import moe.hhm.shiori.order.model.OrderRefundEntity;
+import moe.hhm.shiori.order.model.OrderRefundRecord;
 import moe.hhm.shiori.order.model.OrderRecord;
 import moe.hhm.shiori.order.model.OrderStatusAuditRecord;
 import moe.hhm.shiori.order.model.OutboxEventEntity;
@@ -192,6 +194,10 @@ public interface OrderMapper {
                 total_amount_cent,
                 item_count,
                 payment_no,
+                refund_status,
+                refund_no,
+                refund_amount_cent,
+                refund_updated_at,
                 cancel_reason,
                 timeout_at,
                 paid_at,
@@ -211,6 +217,10 @@ public interface OrderMapper {
                 #{totalAmountCent},
                 #{itemCount},
                 #{paymentNo},
+                #{refundStatus},
+                #{refundNo},
+                #{refundAmountCent},
+                #{refundUpdatedAt},
                 #{cancelReason},
                 #{timeoutAt},
                 #{paidAt},
@@ -336,6 +346,10 @@ public interface OrderMapper {
                    total_amount_cent AS totalAmountCent,
                    item_count AS itemCount,
                    payment_no AS paymentNo,
+                   refund_status AS refundStatus,
+                   refund_no AS refundNo,
+                   refund_amount_cent AS refundAmountCent,
+                   refund_updated_at AS refundUpdatedAt,
                    cancel_reason AS cancelReason,
                    timeout_at AS timeoutAt,
                    paid_at AS paidAt,
@@ -369,6 +383,10 @@ public interface OrderMapper {
                    total_amount_cent AS totalAmountCent,
                    item_count AS itemCount,
                    payment_no AS paymentNo,
+                   refund_status AS refundStatus,
+                   refund_no AS refundNo,
+                   refund_amount_cent AS refundAmountCent,
+                   refund_updated_at AS refundUpdatedAt,
                    cancel_reason AS cancelReason,
                    timeout_at AS timeoutAt,
                    paid_at AS paidAt,
@@ -422,6 +440,10 @@ public interface OrderMapper {
                    total_amount_cent AS totalAmountCent,
                    item_count AS itemCount,
                    payment_no AS paymentNo,
+                   refund_status AS refundStatus,
+                   refund_no AS refundNo,
+                   refund_amount_cent AS refundAmountCent,
+                   refund_updated_at AS refundUpdatedAt,
                    cancel_reason AS cancelReason,
                    timeout_at AS timeoutAt,
                    paid_at AS paidAt,
@@ -478,6 +500,10 @@ public interface OrderMapper {
                    total_amount_cent AS totalAmountCent,
                    item_count AS itemCount,
                    payment_no AS paymentNo,
+                   refund_status AS refundStatus,
+                   refund_no AS refundNo,
+                   refund_amount_cent AS refundAmountCent,
+                   refund_updated_at AS refundUpdatedAt,
                    cancel_reason AS cancelReason,
                    timeout_at AS timeoutAt,
                    paid_at AS paidAt,
@@ -549,6 +575,10 @@ public interface OrderMapper {
                    total_amount_cent AS totalAmountCent,
                    item_count AS itemCount,
                    payment_no AS paymentNo,
+                   refund_status AS refundStatus,
+                   refund_no AS refundNo,
+                   refund_amount_cent AS refundAmountCent,
+                   refund_updated_at AS refundUpdatedAt,
                    cancel_reason AS cancelReason,
                    timeout_at AS timeoutAt,
                    paid_at AS paidAt,
@@ -728,6 +758,438 @@ public interface OrderMapper {
                                  @Param("buyerUserId") Long buyerUserId,
                                  @Param("expectStatus") Integer expectStatus,
                                  @Param("finishedStatus") Integer finishedStatus);
+
+    @Insert("""
+            INSERT INTO o_order_refund (
+                refund_no,
+                order_no,
+                buyer_user_id,
+                seller_user_id,
+                amount_cent,
+                status,
+                apply_reason,
+                reject_reason,
+                reviewed_by_user_id,
+                review_deadline_at,
+                reviewed_at,
+                auto_approved,
+                payment_no,
+                last_error,
+                retry_count,
+                created_at,
+                updated_at
+            ) VALUES (
+                #{refundNo},
+                #{orderNo},
+                #{buyerUserId},
+                #{sellerUserId},
+                #{amountCent},
+                #{status},
+                #{applyReason},
+                #{rejectReason},
+                #{reviewedByUserId},
+                #{reviewDeadlineAt},
+                #{reviewedAt},
+                #{autoApproved},
+                #{paymentNo},
+                #{lastError},
+                #{retryCount},
+                CURRENT_TIMESTAMP(3),
+                CURRENT_TIMESTAMP(3)
+            )
+            """)
+    @Options(useGeneratedKeys = true, keyProperty = "id", keyColumn = "id")
+    int insertOrderRefund(OrderRefundEntity entity);
+
+    @Select("""
+            SELECT id,
+                   refund_no AS refundNo,
+                   order_no AS orderNo,
+                   buyer_user_id AS buyerUserId,
+                   seller_user_id AS sellerUserId,
+                   amount_cent AS amountCent,
+                   status,
+                   apply_reason AS applyReason,
+                   reject_reason AS rejectReason,
+                   reviewed_by_user_id AS reviewedByUserId,
+                   review_deadline_at AS reviewDeadlineAt,
+                   reviewed_at AS reviewedAt,
+                   auto_approved AS autoApproved,
+                   payment_no AS paymentNo,
+                   last_error AS lastError,
+                   retry_count AS retryCount,
+                   created_at AS createdAt,
+                   updated_at AS updatedAt
+            FROM o_order_refund
+            WHERE order_no = #{orderNo}
+            LIMIT 1
+            """)
+    OrderRefundRecord findOrderRefundByOrderNo(@Param("orderNo") String orderNo);
+
+    @Select("""
+            SELECT id,
+                   refund_no AS refundNo,
+                   order_no AS orderNo,
+                   buyer_user_id AS buyerUserId,
+                   seller_user_id AS sellerUserId,
+                   amount_cent AS amountCent,
+                   status,
+                   apply_reason AS applyReason,
+                   reject_reason AS rejectReason,
+                   reviewed_by_user_id AS reviewedByUserId,
+                   review_deadline_at AS reviewDeadlineAt,
+                   reviewed_at AS reviewedAt,
+                   auto_approved AS autoApproved,
+                   payment_no AS paymentNo,
+                   last_error AS lastError,
+                   retry_count AS retryCount,
+                   created_at AS createdAt,
+                   updated_at AS updatedAt
+            FROM o_order_refund
+            WHERE order_no = #{orderNo}
+            LIMIT 1
+            FOR UPDATE
+            """)
+    OrderRefundRecord findOrderRefundByOrderNoForUpdate(@Param("orderNo") String orderNo);
+
+    @Select("""
+            SELECT id,
+                   refund_no AS refundNo,
+                   order_no AS orderNo,
+                   buyer_user_id AS buyerUserId,
+                   seller_user_id AS sellerUserId,
+                   amount_cent AS amountCent,
+                   status,
+                   apply_reason AS applyReason,
+                   reject_reason AS rejectReason,
+                   reviewed_by_user_id AS reviewedByUserId,
+                   review_deadline_at AS reviewDeadlineAt,
+                   reviewed_at AS reviewedAt,
+                   auto_approved AS autoApproved,
+                   payment_no AS paymentNo,
+                   last_error AS lastError,
+                   retry_count AS retryCount,
+                   created_at AS createdAt,
+                   updated_at AS updatedAt
+            FROM o_order_refund
+            WHERE refund_no = #{refundNo}
+            LIMIT 1
+            """)
+    OrderRefundRecord findOrderRefundByRefundNo(@Param("refundNo") String refundNo);
+
+    @Select("""
+            SELECT id,
+                   refund_no AS refundNo,
+                   order_no AS orderNo,
+                   buyer_user_id AS buyerUserId,
+                   seller_user_id AS sellerUserId,
+                   amount_cent AS amountCent,
+                   status,
+                   apply_reason AS applyReason,
+                   reject_reason AS rejectReason,
+                   reviewed_by_user_id AS reviewedByUserId,
+                   review_deadline_at AS reviewDeadlineAt,
+                   reviewed_at AS reviewedAt,
+                   auto_approved AS autoApproved,
+                   payment_no AS paymentNo,
+                   last_error AS lastError,
+                   retry_count AS retryCount,
+                   created_at AS createdAt,
+                   updated_at AS updatedAt
+            FROM o_order_refund
+            WHERE refund_no = #{refundNo}
+            LIMIT 1
+            FOR UPDATE
+            """)
+    OrderRefundRecord findOrderRefundByRefundNoForUpdate(@Param("refundNo") String refundNo);
+
+    @Update("""
+            UPDATE o_order_refund
+            SET status = #{toStatus},
+                reviewed_by_user_id = #{reviewedByUserId},
+                reviewed_at = #{reviewedAt},
+                auto_approved = #{autoApproved},
+                payment_no = #{paymentNo},
+                last_error = #{lastError},
+                updated_at = CURRENT_TIMESTAMP(3)
+            WHERE refund_no = #{refundNo}
+              AND status = #{expectStatus}
+            """)
+    int markOrderRefundReviewed(@Param("refundNo") String refundNo,
+                                @Param("expectStatus") String expectStatus,
+                                @Param("toStatus") String toStatus,
+                                @Param("reviewedByUserId") Long reviewedByUserId,
+                                @Param("reviewedAt") LocalDateTime reviewedAt,
+                                @Param("autoApproved") Integer autoApproved,
+                                @Param("paymentNo") String paymentNo,
+                                @Param("lastError") String lastError);
+
+    @Update("""
+            UPDATE o_order_refund
+            SET status = #{toStatus},
+                reviewed_by_user_id = #{reviewedByUserId},
+                reviewed_at = #{reviewedAt},
+                auto_approved = #{autoApproved},
+                reject_reason = #{rejectReason},
+                updated_at = CURRENT_TIMESTAMP(3)
+            WHERE refund_no = #{refundNo}
+              AND status = #{expectStatus}
+            """)
+    int rejectOrderRefund(@Param("refundNo") String refundNo,
+                          @Param("expectStatus") String expectStatus,
+                          @Param("toStatus") String toStatus,
+                          @Param("reviewedByUserId") Long reviewedByUserId,
+                          @Param("reviewedAt") LocalDateTime reviewedAt,
+                          @Param("autoApproved") Integer autoApproved,
+                          @Param("rejectReason") String rejectReason);
+
+    @Update("""
+            UPDATE o_order_refund
+            SET status = #{toStatus},
+                payment_no = #{paymentNo},
+                last_error = #{lastError},
+                retry_count = retry_count + #{retryInc},
+                updated_at = CURRENT_TIMESTAMP(3)
+            WHERE refund_no = #{refundNo}
+              AND status = #{expectStatus}
+            """)
+    int updateOrderRefundAfterRetry(@Param("refundNo") String refundNo,
+                                    @Param("expectStatus") String expectStatus,
+                                    @Param("toStatus") String toStatus,
+                                    @Param("paymentNo") String paymentNo,
+                                    @Param("lastError") String lastError,
+                                    @Param("retryInc") int retryInc);
+
+    @Update("""
+            UPDATE o_order
+            SET refund_status = #{refundStatus},
+                refund_no = #{refundNo},
+                refund_amount_cent = #{refundAmountCent},
+                refund_updated_at = #{refundUpdatedAt},
+                updated_at = CURRENT_TIMESTAMP(3),
+                version = version + 1
+            WHERE order_no = #{orderNo}
+              AND is_deleted = 0
+            """)
+    int updateOrderRefundSummary(@Param("orderNo") String orderNo,
+                                 @Param("refundStatus") String refundStatus,
+                                 @Param("refundNo") String refundNo,
+                                 @Param("refundAmountCent") Long refundAmountCent,
+                                 @Param("refundUpdatedAt") LocalDateTime refundUpdatedAt);
+
+    @Select("""
+            <script>
+            SELECT COUNT(1)
+            FROM o_order_refund
+            WHERE seller_user_id = #{sellerUserId}
+            <if test="status != null and status != ''">
+              AND status = #{status}
+            </if>
+            </script>
+            """)
+    long countOrderRefundsBySeller(@Param("sellerUserId") Long sellerUserId,
+                                   @Param("status") String status);
+
+    @Select("""
+            <script>
+            SELECT id,
+                   refund_no AS refundNo,
+                   order_no AS orderNo,
+                   buyer_user_id AS buyerUserId,
+                   seller_user_id AS sellerUserId,
+                   amount_cent AS amountCent,
+                   status,
+                   apply_reason AS applyReason,
+                   reject_reason AS rejectReason,
+                   reviewed_by_user_id AS reviewedByUserId,
+                   review_deadline_at AS reviewDeadlineAt,
+                   reviewed_at AS reviewedAt,
+                   auto_approved AS autoApproved,
+                   payment_no AS paymentNo,
+                   last_error AS lastError,
+                   retry_count AS retryCount,
+                   created_at AS createdAt,
+                   updated_at AS updatedAt
+            FROM o_order_refund
+            WHERE seller_user_id = #{sellerUserId}
+            <if test="status != null and status != ''">
+              AND status = #{status}
+            </if>
+            ORDER BY id DESC
+            LIMIT #{size} OFFSET #{offset}
+            </script>
+            """)
+    List<OrderRefundRecord> listOrderRefundsBySeller(@Param("sellerUserId") Long sellerUserId,
+                                                     @Param("status") String status,
+                                                     @Param("size") int size,
+                                                     @Param("offset") int offset);
+
+    @Select("""
+            <script>
+            SELECT COUNT(1)
+            FROM o_order_refund
+            WHERE 1 = 1
+            <if test="refundNo != null and refundNo != ''">
+              AND refund_no = #{refundNo}
+            </if>
+            <if test="orderNo != null and orderNo != ''">
+              AND order_no = #{orderNo}
+            </if>
+            <if test="status != null and status != ''">
+              AND status = #{status}
+            </if>
+            <if test="buyerUserId != null">
+              AND buyer_user_id = #{buyerUserId}
+            </if>
+            <if test="sellerUserId != null">
+              AND seller_user_id = #{sellerUserId}
+            </if>
+            </script>
+            """)
+    long countOrderRefundsForAdmin(@Param("refundNo") String refundNo,
+                                   @Param("orderNo") String orderNo,
+                                   @Param("status") String status,
+                                   @Param("buyerUserId") Long buyerUserId,
+                                   @Param("sellerUserId") Long sellerUserId);
+
+    @Select("""
+            <script>
+            SELECT id,
+                   refund_no AS refundNo,
+                   order_no AS orderNo,
+                   buyer_user_id AS buyerUserId,
+                   seller_user_id AS sellerUserId,
+                   amount_cent AS amountCent,
+                   status,
+                   apply_reason AS applyReason,
+                   reject_reason AS rejectReason,
+                   reviewed_by_user_id AS reviewedByUserId,
+                   review_deadline_at AS reviewDeadlineAt,
+                   reviewed_at AS reviewedAt,
+                   auto_approved AS autoApproved,
+                   payment_no AS paymentNo,
+                   last_error AS lastError,
+                   retry_count AS retryCount,
+                   created_at AS createdAt,
+                   updated_at AS updatedAt
+            FROM o_order_refund
+            WHERE 1 = 1
+            <if test="refundNo != null and refundNo != ''">
+              AND refund_no = #{refundNo}
+            </if>
+            <if test="orderNo != null and orderNo != ''">
+              AND order_no = #{orderNo}
+            </if>
+            <if test="status != null and status != ''">
+              AND status = #{status}
+            </if>
+            <if test="buyerUserId != null">
+              AND buyer_user_id = #{buyerUserId}
+            </if>
+            <if test="sellerUserId != null">
+              AND seller_user_id = #{sellerUserId}
+            </if>
+            ORDER BY id DESC
+            LIMIT #{size} OFFSET #{offset}
+            </script>
+            """)
+    List<OrderRefundRecord> listOrderRefundsForAdmin(@Param("refundNo") String refundNo,
+                                                     @Param("orderNo") String orderNo,
+                                                     @Param("status") String status,
+                                                     @Param("buyerUserId") Long buyerUserId,
+                                                     @Param("sellerUserId") Long sellerUserId,
+                                                     @Param("size") int size,
+                                                     @Param("offset") int offset);
+
+    @Select("""
+            SELECT id,
+                   refund_no AS refundNo,
+                   order_no AS orderNo,
+                   buyer_user_id AS buyerUserId,
+                   seller_user_id AS sellerUserId,
+                   amount_cent AS amountCent,
+                   status,
+                   apply_reason AS applyReason,
+                   reject_reason AS rejectReason,
+                   reviewed_by_user_id AS reviewedByUserId,
+                   review_deadline_at AS reviewDeadlineAt,
+                   reviewed_at AS reviewedAt,
+                   auto_approved AS autoApproved,
+                   payment_no AS paymentNo,
+                   last_error AS lastError,
+                   retry_count AS retryCount,
+                   created_at AS createdAt,
+                   updated_at AS updatedAt
+            FROM o_order_refund
+            WHERE status = #{status}
+              AND review_deadline_at <![CDATA[ <= ]]> #{deadline}
+            ORDER BY id ASC
+            LIMIT #{size}
+            """)
+    List<OrderRefundRecord> listOrderRefundsForAutoApprove(@Param("status") String status,
+                                                           @Param("deadline") LocalDateTime deadline,
+                                                           @Param("size") int size);
+
+    @Select("""
+            SELECT id,
+                   refund_no AS refundNo,
+                   order_no AS orderNo,
+                   buyer_user_id AS buyerUserId,
+                   seller_user_id AS sellerUserId,
+                   amount_cent AS amountCent,
+                   status,
+                   apply_reason AS applyReason,
+                   reject_reason AS rejectReason,
+                   reviewed_by_user_id AS reviewedByUserId,
+                   review_deadline_at AS reviewDeadlineAt,
+                   reviewed_at AS reviewedAt,
+                   auto_approved AS autoApproved,
+                   payment_no AS paymentNo,
+                   last_error AS lastError,
+                   retry_count AS retryCount,
+                   created_at AS createdAt,
+                   updated_at AS updatedAt
+            FROM o_order_refund
+            WHERE status = #{status}
+              AND seller_user_id = #{sellerUserId}
+            ORDER BY id ASC
+            LIMIT #{size}
+            """)
+    List<OrderRefundRecord> listPendingFundsOrderRefundsBySeller(@Param("sellerUserId") Long sellerUserId,
+                                                                 @Param("status") String status,
+                                                                 @Param("size") int size);
+
+    @Insert("""
+            INSERT INTO o_order_refund_audit_log (
+                refund_no,
+                order_no,
+                from_status,
+                to_status,
+                operator_user_id,
+                operator_role,
+                action,
+                reason,
+                created_at
+            ) VALUES (
+                #{refundNo},
+                #{orderNo},
+                #{fromStatus},
+                #{toStatus},
+                #{operatorUserId},
+                #{operatorRole},
+                #{action},
+                #{reason},
+                CURRENT_TIMESTAMP(3)
+            )
+            """)
+    int insertOrderRefundAuditLog(@Param("refundNo") String refundNo,
+                                  @Param("orderNo") String orderNo,
+                                  @Param("fromStatus") String fromStatus,
+                                  @Param("toStatus") String toStatus,
+                                  @Param("operatorUserId") Long operatorUserId,
+                                  @Param("operatorRole") String operatorRole,
+                                  @Param("action") String action,
+                                  @Param("reason") String reason);
 
     @Insert("""
             INSERT INTO o_outbox_event (

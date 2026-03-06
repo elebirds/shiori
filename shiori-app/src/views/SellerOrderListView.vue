@@ -4,7 +4,7 @@ import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import ResultState from '@/components/ResultState.vue'
-import { deliverSellerOrderV2, finishSellerOrderV2, listSellerOrdersV2, type OrderStatus } from '@/api/orderV2'
+import { deliverSellerOrderV2, finishSellerOrderV2, listSellerOrdersV2, type OrderRefundStatus, type OrderStatus } from '@/api/orderV2'
 import { ApiBizError } from '@/types/result'
 import { useChatStore } from '@/stores/chat'
 
@@ -62,6 +62,13 @@ const ORDER_STATUS_TEXT: Record<OrderStatus, string> = {
   CANCELED: '已取消',
 }
 
+const REFUND_STATUS_TEXT: Record<OrderRefundStatus, string> = {
+  REQUESTED: '退款待审核',
+  REJECTED: '退款已拒绝',
+  PENDING_FUNDS: '退款待补款',
+  SUCCEEDED: '已退款',
+}
+
 const actionError = computed(() => {
   const first = deliverMutation.error.value || finishMutation.error.value
   return first instanceof Error ? first.message : ''
@@ -84,6 +91,29 @@ function formatTime(raw?: string): string {
 
 function statusText(orderStatus: OrderStatus): string {
   return ORDER_STATUS_TEXT[orderStatus] || orderStatus
+}
+
+function refundStatusText(status?: OrderRefundStatus): string {
+  if (!status) {
+    return '-'
+  }
+  return REFUND_STATUS_TEXT[status] || status
+}
+
+function refundStatusClass(status?: OrderRefundStatus): string {
+  if (status === 'REQUESTED') {
+    return 'bg-amber-100 text-amber-700'
+  }
+  if (status === 'SUCCEEDED') {
+    return 'bg-emerald-100 text-emerald-700'
+  }
+  if (status === 'PENDING_FUNDS') {
+    return 'bg-rose-100 text-rose-700'
+  }
+  if (status === 'REJECTED') {
+    return 'bg-stone-200 text-stone-700'
+  }
+  return 'bg-stone-100 text-stone-600'
 }
 
 function applyFilter(): void {
@@ -124,6 +154,13 @@ async function handleFinish(targetOrderNo: string): Promise<void> {
     <header class="rounded-2xl border border-stone-200 bg-white/90 p-4">
       <h1 class="font-display text-2xl text-stone-900">卖家订单工作台</h1>
       <p class="mt-1 text-sm text-stone-600">聚焦待发货、配送中订单，支持发货与完成操作</p>
+      <button
+        type="button"
+        class="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm text-amber-700 transition hover:bg-amber-100"
+        @click="router.push('/seller/refunds')"
+      >
+        前往退款审核台
+      </button>
     </header>
 
     <section class="rounded-2xl border border-stone-200 bg-white/90 p-4">
@@ -174,6 +211,9 @@ async function handleFinish(targetOrderNo: string): Promise<void> {
               <p class="text-sm text-stone-500">订单号 {{ item.orderNo }}</p>
               <p class="mt-1 text-base font-semibold text-stone-900">{{ formatMoney(item.totalAmountCent) }}</p>
               <p class="mt-1 text-xs text-stone-500">创建 {{ formatTime(item.createdAt) }} / 支付 {{ formatTime(item.paidAt) }}</p>
+              <p v-if="item.refundNo" class="mt-1 text-xs text-stone-500">
+                退款单 {{ item.refundNo }} / {{ formatMoney(item.refundAmountCent || 0) }} / 更新 {{ formatTime(item.refundUpdatedAt) }}
+              </p>
             </div>
 
             <div class="flex flex-wrap items-center gap-2">
@@ -185,6 +225,13 @@ async function handleFinish(targetOrderNo: string): Promise<void> {
                 查看详情
               </button>
               <span class="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-700">{{ statusText(item.status) }}</span>
+              <span
+                v-if="item.refundStatus"
+                class="rounded-full px-3 py-1 text-xs font-semibold"
+                :class="refundStatusClass(item.refundStatus)"
+              >
+                {{ refundStatusText(item.refundStatus) }}
+              </span>
               <button
                 v-if="item.status === 'PAID'"
                 type="button"

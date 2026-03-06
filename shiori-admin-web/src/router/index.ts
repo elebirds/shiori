@@ -40,6 +40,12 @@ const router = createRouter({
       meta: { requiresAdmin: true },
     },
     {
+      path: '/orders/refunds',
+      name: 'order-refunds',
+      component: () => import('@/views/OrderRefundManageView.vue'),
+      meta: { requiresAdmin: true },
+    },
+    {
       path: '/chat-governance',
       name: 'chat-governance',
       component: () => import('@/views/ChatGovernanceView.vue'),
@@ -49,6 +55,12 @@ const router = createRouter({
       path: '/payments/cdks',
       name: 'payment-cdks',
       component: () => import('@/views/AdminPaymentCdkView.vue'),
+      meta: { requiresAdmin: true },
+    },
+    {
+      path: '/payments/ledger',
+      name: 'payment-ledger',
+      component: () => import('@/views/AdminPaymentLedgerView.vue'),
       meta: { requiresAdmin: true },
     },
     {

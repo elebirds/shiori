@@ -1,5 +1,6 @@
 package moe.hhm.shiori.order.service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import moe.hhm.shiori.common.exception.BizException;
@@ -115,10 +116,7 @@ class OrderCommandServiceTest {
     void shouldReturnIdempotentCreateResponseWhenOrderExists() {
         when(orderMapper.findOrderNoByBuyerAndIdempotencyKey(1001L, "idem-2")).thenReturn("O202603030001");
         when(orderMapper.findOrderByOrderNo("O202603030001"))
-                .thenReturn(new OrderRecord(
-                        1L, "O202603030001", 1001L, 2001L, 1, 999L, 1,
-                        null, null, null, null, null, null, null, null, 0, null, null
-                ));
+                .thenReturn(orderRecord(1L, "O202603030001", 1001L, 2001L, 1, 999L, 1, null));
 
         CreateOrderResponse response = orderCommandService.createOrder(
                 1001L,
@@ -135,10 +133,7 @@ class OrderCommandServiceTest {
     @Test
     void shouldReturnIdempotentPayWhenAlreadyPaid() {
         when(orderMapper.findOrderByOrderNo("O202603030009"))
-                .thenReturn(new OrderRecord(
-                        9L, "O202603030009", 1001L, 2001L, 2, 1999L, 2,
-                        "PAY-001", null, null, null, null, null, null, null, 0, null, null
-                ));
+                .thenReturn(orderRecord(9L, "O202603030009", 1001L, 2001L, 2, 1999L, 2, "PAY-001"));
 
         OrderOperateResponse response = orderCommandService.payOrder(1001L, "O202603030009", "PAY-001", "idem-pay-1");
         assertThat(response.idempotent()).isTrue();
@@ -149,10 +144,7 @@ class OrderCommandServiceTest {
     @Test
     void shouldDeliverOrderAsSeller() {
         when(orderMapper.findOrderByOrderNo("O202603040001"))
-                .thenReturn(new OrderRecord(
-                        10L, "O202603040001", 1001L, 2001L, 2, 1999L, 1,
-                        "PAY-1", null, null, null, null, null, null, null, 0, null, null
-                ));
+                .thenReturn(orderRecord(10L, "O202603040001", 1001L, 2001L, 2, 1999L, 1, "PAY-1"));
         when(orderMapper.markOrderDeliveringBySeller("O202603040001", 2001L, 2, 4)).thenReturn(1);
 
         OrderOperateResponse response = orderCommandService.deliverOrderAsSeller(2001L, "O202603040001", "ship");
@@ -165,10 +157,7 @@ class OrderCommandServiceTest {
     @Test
     void shouldRejectFinishWhenStatusInvalidForSeller() {
         when(orderMapper.findOrderByOrderNo("O202603040002"))
-                .thenReturn(new OrderRecord(
-                        11L, "O202603040002", 1001L, 2001L, 2, 2999L, 1,
-                        "PAY-2", null, null, null, null, null, null, null, 0, null, null
-                ));
+                .thenReturn(orderRecord(11L, "O202603040002", 1001L, 2001L, 2, 2999L, 1, "PAY-2"));
 
         assertThatThrownBy(() -> orderCommandService.finishOrderAsSeller(2001L, "O202603040002", "done"))
                 .isInstanceOf(BizException.class)
@@ -181,10 +170,8 @@ class OrderCommandServiceTest {
     void shouldFinishOrderAsAdmin() {
         when(orderMapper.findOrderByOrderNo("O202603040003"))
                 .thenReturn(
-                        new OrderRecord(12L, "O202603040003", 1001L, 2001L, 4, 3999L, 1,
-                                "PAY-3", null, null, null, null, null, null, null, 0, null, null),
-                        new OrderRecord(12L, "O202603040003", 1001L, 2001L, 5, 3999L, 1,
-                                "PAY-3", null, null, null, null, null, null, null, 0, null, null)
+                        orderRecord(12L, "O202603040003", 1001L, 2001L, 4, 3999L, 1, "PAY-3"),
+                        orderRecord(12L, "O202603040003", 1001L, 2001L, 5, 3999L, 1, "PAY-3")
                 );
         when(orderMapper.markOrderFinishedAsAdmin("O202603040003", 4, 5)).thenReturn(1);
 
@@ -200,10 +187,7 @@ class OrderCommandServiceTest {
     @Test
     void shouldRejectPayWhenIdempotencyKeyConflictsOrder() {
         when(orderMapper.findOrderByOrderNo("O202603040004"))
-                .thenReturn(new OrderRecord(
-                        13L, "O202603040004", 1001L, 2001L, 1, 1999L, 1,
-                        null, null, null, null, null, null, null, null, 0, null, null
-                ));
+                .thenReturn(orderRecord(13L, "O202603040004", 1001L, 2001L, 1, 1999L, 1, null));
         when(orderMapper.findOperateIdempotency(1001L, "PAY", "idem-pay-conflict"))
                 .thenReturn(new OrderOperateIdempotencyRecord(1001L, "PAY", "idem-pay-conflict", "O-OTHER"));
 
@@ -215,10 +199,7 @@ class OrderCommandServiceTest {
     @Test
     void shouldPayOrderByBalance() {
         when(orderMapper.findOrderByOrderNo("O202603050001"))
-                .thenReturn(new OrderRecord(
-                        14L, "O202603050001", 1001L, 2001L, 1, 2399L, 1,
-                        null, null, null, null, null, null, null, null, 0, null, null
-                ));
+                .thenReturn(orderRecord(14L, "O202603050001", 1001L, 2001L, 1, 2399L, 1, null));
         when(orderMapper.findOperateIdempotency(1001L, "PAY", "idem-balance-pay-1")).thenReturn(null);
         when(paymentServiceClient.reserveOrderPayment("O202603050001", 1001L, 2001L, 2399L, 1001L, List.of("ROLE_USER")))
                 .thenReturn(new ReserveBalancePaymentSnapshot("O202603050001", "P-001", "RESERVED", false));
@@ -237,10 +218,7 @@ class OrderCommandServiceTest {
     @Test
     void shouldSettleBalanceEscrowWhenBuyerConfirmReceipt() {
         when(orderMapper.findOrderByOrderNo("O202603050002"))
-                .thenReturn(new OrderRecord(
-                        15L, "O202603050002", 1001L, 2001L, 4, 3999L, 1,
-                        "P-002", null, null, null, null, null, null, null, 0, null, null
-                ));
+                .thenReturn(orderRecord(15L, "O202603050002", 1001L, 2001L, 4, 3999L, 1, "P-002"));
         when(orderMapper.markOrderFinishedByBuyer("O202603050002", 1001L, 4, 5)).thenReturn(1);
         when(orderMapper.findPaymentModeByOrderNo("O202603050002")).thenReturn("BALANCE_ESCROW");
         when(paymentServiceClient.settleOrderPayment("O202603050002", "BUYER", 1001L, 1001L, List.of("ROLE_USER")))
@@ -263,6 +241,40 @@ class OrderCommandServiceTest {
                 "desc",
                 "ON_SALE",
                 List.of(new ProductSkuSnapshot(skuId, skuNo, "sku", "{}", priceCent, 100))
+        );
+    }
+
+    private OrderRecord orderRecord(Long id,
+                                    String orderNo,
+                                    Long buyerUserId,
+                                    Long sellerUserId,
+                                    Integer status,
+                                    Long totalAmountCent,
+                                    Integer itemCount,
+                                    String paymentNo) {
+        return new OrderRecord(
+                id,
+                orderNo,
+                buyerUserId,
+                sellerUserId,
+                status,
+                totalAmountCent,
+                itemCount,
+                paymentNo,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                (LocalDateTime) null,
+                (LocalDateTime) null
         );
     }
 }

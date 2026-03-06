@@ -2,6 +2,7 @@ package moe.hhm.shiori.payment.controller;
 
 import moe.hhm.shiori.common.security.GatewaySignUtils;
 import moe.hhm.shiori.common.security.GatewaySignVerifyFilter;
+import moe.hhm.shiori.payment.dto.internal.RefundOrderPaymentResponse;
 import moe.hhm.shiori.payment.dto.internal.ReserveOrderPaymentResponse;
 import moe.hhm.shiori.payment.dto.internal.SettleOrderPaymentResponse;
 import moe.hhm.shiori.payment.dto.internal.ReleaseOrderPaymentResponse;
@@ -24,7 +25,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "security.gateway-sign.internal-secret=test-gateway-sign-secret-32-bytes-0001",
         "security.gateway-sign.max-skew-seconds=300",
         "payment.internal-api.token=test-order-payment-internal-token-000000000001",
-        "payment.internal-api.require-token=true"
+        "payment.internal-api.require-token=true",
+        "payment.outbox.enabled=false",
+        "payment.mq.enabled=false",
+        "payment.reconcile.enabled=false"
 })
 @AutoConfigureMockMvc
 class InternalPaymentOrderControllerTest {
@@ -141,6 +145,26 @@ class InternalPaymentOrderControllerTest {
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.orderNo").value("O003"))
                 .andExpect(jsonPath("$.data.status").value("SETTLED"));
+    }
+
+    @Test
+    void shouldAllowRefundWhenInternalTokenAndRoleValid() throws Exception {
+        when(paymentService.refundOrderPayment("O004", "R004", "SYSTEM", 9001L, "manual"))
+                .thenReturn(new RefundOrderPaymentResponse("O004", "R004", "P004", "SUCCEEDED", false));
+
+        HttpHeaders headers = signedHeaders("POST", "/api/payment/internal/orders/O004/refund", null, "1001", INTERNAL_ROLE);
+        headers.set(InternalPaymentOrderController.HEADER_INTERNAL_TOKEN, INTERNAL_TOKEN);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        mockMvc.perform(post("/api/payment/internal/orders/O004/refund")
+                        .headers(headers)
+                        .content("""
+                                {"refundNo":"R004","operatorType":"SYSTEM","operatorUserId":9001,"reason":"manual"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.orderNo").value("O004"))
+                .andExpect(jsonPath("$.data.refundStatus").value("SUCCEEDED"));
     }
 
     private HttpHeaders signedHeaders(String method, String path, String rawQuery, String userId, String roles) {

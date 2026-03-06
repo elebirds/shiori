@@ -6,6 +6,8 @@ import moe.hhm.shiori.common.error.CommonErrorCode;
 import moe.hhm.shiori.common.exception.BizException;
 import moe.hhm.shiori.common.security.GatewaySignUtils;
 import moe.hhm.shiori.payment.config.InternalApiProperties;
+import moe.hhm.shiori.payment.dto.internal.RefundOrderPaymentRequest;
+import moe.hhm.shiori.payment.dto.internal.RefundOrderPaymentResponse;
 import moe.hhm.shiori.payment.dto.internal.ReleaseOrderPaymentRequest;
 import moe.hhm.shiori.payment.dto.internal.ReleaseOrderPaymentResponse;
 import moe.hhm.shiori.payment.dto.internal.ReserveOrderPaymentRequest;
@@ -71,6 +73,18 @@ public class InternalPaymentOrderController {
         CurrentUserSupport.requireUserId(authentication);
         String reason = request == null ? null : request.reason();
         return paymentService.releaseOrderPayment(orderNo, reason);
+    }
+
+    @PostMapping("/{orderNo}/refund")
+    public RefundOrderPaymentResponse refund(@PathVariable String orderNo,
+                                             @Valid @RequestBody RefundOrderPaymentRequest request,
+                                             Authentication authentication,
+                                             HttpServletRequest httpServletRequest) {
+        validateInternalToken(httpServletRequest);
+        validateInternalCaller(authentication);
+        CurrentUserSupport.requireUserId(authentication);
+        return paymentService.refundOrderPayment(orderNo, request.refundNo(), request.operatorType(),
+                request.operatorUserId(), request.reason());
     }
 
     private void validateInternalToken(HttpServletRequest request) {

@@ -89,6 +89,19 @@ class PaymentServiceClientTest {
     }
 
     @Test
+    void shouldMapRefundPendingFundsToOrderRefundPendingFunds() {
+        Result<Object> failure = new Result<>(
+                PaymentErrorCode.PAYMENT_REFUND_PENDING_FUNDS.code(),
+                PaymentErrorCode.PAYMENT_REFUND_PENDING_FUNDS.message(),
+                null,
+                System.currentTimeMillis()
+        );
+        BizException ex = client.mapRemoteFailure(HttpStatus.CONFLICT.value(), failure);
+        assertThat(ex.getErrorCode().code()).isEqualTo(OrderErrorCode.ORDER_REFUND_PENDING_FUNDS.code());
+        assertThat(ex.getHttpStatus()).isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    @Test
     void shouldMapTimeoutRuntimeToPaymentTimeout() {
         ResourceAccessException runtimeEx = new ResourceAccessException("timeout", new SocketTimeoutException("timeout"));
         BizException ex = client.mapRuntimeException(runtimeEx);

@@ -13,6 +13,7 @@ import {
   getOrderTimelineV2,
   getOrderReviewContextV2,
   getSellerOrderDetailV2,
+  type OrderRefundStatus,
   type OrderStatus,
   type OrderReviewUpsertRequest,
   type OrderTimelineItemResponse,
@@ -96,6 +97,13 @@ const ORDER_STATUS_TEXT: Record<OrderStatus, string> = {
   CANCELED: '已取消',
 }
 
+const REFUND_STATUS_TEXT: Record<OrderRefundStatus, string> = {
+  REQUESTED: '待审核',
+  REJECTED: '已拒绝',
+  PENDING_FUNDS: '待补款',
+  SUCCEEDED: '已退款',
+}
+
 function formatMoney(priceCent: number): string {
   return `¥ ${(priceCent / 100).toFixed(2)}`
 }
@@ -113,6 +121,29 @@ function formatTime(raw?: string): string {
 
 function statusText(status: OrderStatus): string {
   return ORDER_STATUS_TEXT[status] || status
+}
+
+function refundStatusText(status?: OrderRefundStatus): string {
+  if (!status) {
+    return '-'
+  }
+  return REFUND_STATUS_TEXT[status] || status
+}
+
+function refundStatusClass(status?: OrderRefundStatus): string {
+  if (status === 'REQUESTED') {
+    return 'bg-amber-100 text-amber-700'
+  }
+  if (status === 'SUCCEEDED') {
+    return 'bg-emerald-100 text-emerald-700'
+  }
+  if (status === 'PENDING_FUNDS') {
+    return 'bg-rose-100 text-rose-700'
+  }
+  if (status === 'REJECTED') {
+    return 'bg-stone-200 text-stone-700'
+  }
+  return 'bg-stone-100 text-stone-700'
 }
 
 function transitionText(item: OrderTimelineItemResponse): string {
@@ -197,13 +228,25 @@ async function submitReview(payload: OrderReviewUpsertRequest): Promise<void> {
             <h1 class="font-display text-2xl text-stone-900">卖家订单 {{ detail.orderNo }}</h1>
             <p class="mt-1 text-sm text-stone-600">创建于 {{ formatTime(detail.createdAt) }}</p>
           </div>
-          <span class="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-700">{{ statusText(detail.status) }}</span>
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-700">{{ statusText(detail.status) }}</span>
+            <span
+              v-if="detail.refundStatus"
+              class="rounded-full px-3 py-1 text-xs font-semibold"
+              :class="refundStatusClass(detail.refundStatus)"
+            >
+              退款{{ refundStatusText(detail.refundStatus) }}
+            </span>
+          </div>
         </header>
 
         <div class="grid gap-3 rounded-xl bg-stone-50 p-4 text-sm text-stone-700 sm:grid-cols-2">
           <p>订单金额：{{ formatMoney(detail.totalAmountCent) }}</p>
           <p>支付时间：{{ formatTime(detail.paidAt) }}</p>
           <p>支付方式：余额支付</p>
+          <p v-if="detail.refundNo">退款单号：{{ detail.refundNo }}</p>
+          <p v-if="detail.refundNo">退款金额：{{ formatMoney(detail.refundAmountCent || 0) }}</p>
+          <p v-if="detail.refundNo">退款更新时间：{{ formatTime(detail.refundUpdatedAt) }}</p>
         </div>
 
         <section>

@@ -11,6 +11,10 @@ public class OrderEntity {
     private Long totalAmountCent;
     private Integer itemCount;
     private String paymentNo;
+    private String refundStatus;
+    private String refundNo;
+    private Long refundAmountCent;
+    private LocalDateTime refundUpdatedAt;
     private String cancelReason;
     private LocalDateTime timeoutAt;
     private LocalDateTime paidAt;
@@ -81,6 +85,38 @@ public class OrderEntity {
 
     public void setPaymentNo(String paymentNo) {
         this.paymentNo = paymentNo;
+    }
+
+    public String getRefundStatus() {
+        return refundStatus;
+    }
+
+    public void setRefundStatus(String refundStatus) {
+        this.refundStatus = refundStatus;
+    }
+
+    public String getRefundNo() {
+        return refundNo;
+    }
+
+    public void setRefundNo(String refundNo) {
+        this.refundNo = refundNo;
+    }
+
+    public Long getRefundAmountCent() {
+        return refundAmountCent;
+    }
+
+    public void setRefundAmountCent(Long refundAmountCent) {
+        this.refundAmountCent = refundAmountCent;
+    }
+
+    public LocalDateTime getRefundUpdatedAt() {
+        return refundUpdatedAt;
+    }
+
+    public void setRefundUpdatedAt(LocalDateTime refundUpdatedAt) {
+        this.refundUpdatedAt = refundUpdatedAt;
     }
 
     public String getCancelReason() {

@@ -13,11 +13,19 @@ const navItems = [
   { path: '/products', label: '商品管理' },
   { path: '/orders', label: '订单管理' },
   { path: '/order-reviews', label: '评价治理' },
+  { path: '/orders/refunds', label: '退款管理' },
+  { path: '/payments/ledger', label: '资金核对' },
   { path: '/payments/cdks', label: '支付/CDK' },
   { path: '/chat-governance', label: '聊天治理' },
 ]
 
 const username = computed(() => authStore.user?.username || '管理员')
+const activePath = computed(() => {
+  const matched = navItems
+    .filter((item) => route.path === item.path || route.path.startsWith(`${item.path}/`))
+    .sort((a, b) => b.path.length - a.path.length)[0]
+  return matched?.path || ''
+})
 
 async function onLogout() {
   await authStore.logoutSession()
@@ -39,7 +47,7 @@ async function onLogout() {
             :key="item.path"
             :to="item.path"
             class="rounded-md px-3 py-2 text-sm font-medium transition"
-            :class="route.path.startsWith(item.path) ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'"
+            :class="activePath === item.path ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'"
           >
             {{ item.label }}
           </RouterLink>

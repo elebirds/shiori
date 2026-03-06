@@ -10,15 +10,18 @@ import moe.hhm.shiori.common.security.authz.PermissionGuard;
 import moe.hhm.shiori.order.dto.CancelOrderRequest;
 import moe.hhm.shiori.order.dto.CreateOrderRequest;
 import moe.hhm.shiori.order.dto.CreateOrderResponse;
+import moe.hhm.shiori.order.dto.CreateOrderRefundRequest;
 import moe.hhm.shiori.order.dto.OrderDetailResponse;
 import moe.hhm.shiori.order.dto.OrderOperateResponse;
 import moe.hhm.shiori.order.dto.OrderPageResponse;
+import moe.hhm.shiori.order.dto.OrderRefundResponse;
 import moe.hhm.shiori.order.dto.v2.ChatToOrderClickRequest;
 import moe.hhm.shiori.order.dto.v2.ConfirmReceiptRequest;
 import moe.hhm.shiori.order.dto.v2.OrderOperateResponseV2;
 import moe.hhm.shiori.order.dto.v2.OrderTimelineResponse;
 import moe.hhm.shiori.order.security.CurrentUserSupport;
 import moe.hhm.shiori.order.service.OrderCommandService;
+import moe.hhm.shiori.order.service.OrderRefundService;
 import moe.hhm.shiori.order.service.OrderService;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -40,13 +43,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class OrderV2Controller {
 
     private final OrderCommandService orderCommandService;
+    private final OrderRefundService orderRefundService;
     private final OrderService orderService;
     private final PermissionGuard permissionGuard;
 
     public OrderV2Controller(OrderCommandService orderCommandService,
+                             OrderRefundService orderRefundService,
                              OrderService orderService,
                              PermissionGuard permissionGuard) {
         this.orderCommandService = orderCommandService;
+        this.orderRefundService = orderRefundService;
         this.orderService = orderService;
         this.permissionGuard = permissionGuard;
     }
@@ -148,5 +154,25 @@ public class OrderV2Controller {
                                           Authentication authentication) {
         Long userId = CurrentUserSupport.requireUserId(authentication);
         return orderService.listOrderTimeline(userId, CurrentUserSupport.hasRoleAdmin(authentication), orderNo, page, size);
+    }
+
+    @PostMapping("/{orderNo}/refunds")
+    public OrderRefundResponse applyRefund(@PathVariable String orderNo,
+                                           @Valid @RequestBody(required = false) CreateOrderRefundRequest request,
+                                           Authentication authentication,
+                                           HttpServletRequest httpServletRequest) {
+        permissionGuard.require("order.refund.apply", httpServletRequest::getHeader);
+        Long userId = CurrentUserSupport.requireUserId(authentication);
+        String reason = request == null ? null : request.reason();
+        return orderRefundService.applyRefund(userId, orderNo, reason);
+    }
+
+    @GetMapping("/{orderNo}/refunds/latest")
+    public OrderRefundResponse latestRefund(@PathVariable String orderNo,
+                                            Authentication authentication,
+                                            HttpServletRequest httpServletRequest) {
+        permissionGuard.require("order.refund.apply", httpServletRequest::getHeader);
+        Long userId = CurrentUserSupport.requireUserId(authentication);
+        return orderRefundService.getLatestRefundForBuyer(userId, orderNo);
     }
 }

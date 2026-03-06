@@ -8,6 +8,7 @@ import moe.hhm.shiori.order.dto.v2.UserReviewItemResponse;
 import moe.hhm.shiori.order.dto.v2.UserReviewPageResponse;
 import moe.hhm.shiori.order.service.OrderCartService;
 import moe.hhm.shiori.order.service.OrderCommandService;
+import moe.hhm.shiori.order.service.OrderRefundService;
 import moe.hhm.shiori.order.service.OrderReviewService;
 import moe.hhm.shiori.order.service.OrderService;
 import org.junit.jupiter.api.Test;
@@ -55,6 +56,9 @@ class OrderReviewV2ControllerMvcTest {
 
     @MockitoBean
     private OrderReviewService orderReviewService;
+
+    @MockitoBean
+    private OrderRefundService orderRefundService;
 
     @Test
     void shouldCreateReviewWhenPermissionGranted() throws Exception {

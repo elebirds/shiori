@@ -37,6 +37,11 @@ order:
     relay-fixed-delay-ms: ${ORDER_OUTBOX_RELAY_FIXED_DELAY_MS:3000}
     relay-batch-size: ${ORDER_OUTBOX_RELAY_BATCH_SIZE:100}
     max-backoff-seconds: ${ORDER_OUTBOX_MAX_BACKOFF_SECONDS:300}
+  refund:
+    review-sla-hours: ${ORDER_REFUND_REVIEW_SLA_HOURS:48}
+    auto-approve-fixed-delay-ms: ${ORDER_REFUND_AUTO_APPROVE_FIXED_DELAY_MS:60000}
+    auto-approve-batch-size: ${ORDER_REFUND_AUTO_APPROVE_BATCH_SIZE:100}
+    retry-batch-size: ${ORDER_REFUND_RETRY_BATCH_SIZE:100}
   mq:
     enabled: ${ORDER_MQ_ENABLED:true}
     event-exchange: ${ORDER_EVENT_EXCHANGE:shiori.order.event}
@@ -49,3 +54,6 @@ order:
     timeout-delay-queue: ${ORDER_TIMEOUT_DELAY_QUEUE:q.order.timeout.delay}
     timeout-consume-queue: ${ORDER_TIMEOUT_CONSUME_QUEUE:q.order.timeout.consume}
     timeout-ttl-ms: ${ORDER_TIMEOUT_TTL_MS:900000}
+    payment-event-exchange: ${PAYMENT_EVENT_EXCHANGE:shiori.payment.event}
+    wallet-balance-changed-routing-key: ${PAYMENT_WALLET_BALANCE_CHANGED_ROUTING_KEY:wallet.balance.changed}
+    wallet-balance-changed-queue: ${ORDER_WALLET_BALANCE_CHANGED_QUEUE:q.order.wallet.balance.changed}

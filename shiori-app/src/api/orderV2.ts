@@ -1,6 +1,7 @@
 import { httpDelete, httpGet, httpPost, httpPut } from '@/api/http'
 
 export type OrderStatus = 'UNPAID' | 'PAID' | 'CANCELED' | 'DELIVERING' | 'FINISHED'
+export type OrderRefundStatus = 'REQUESTED' | 'REJECTED' | 'PENDING_FUNDS' | 'SUCCEEDED'
 
 export interface CreateOrderItem {
   productId: number
@@ -53,6 +54,10 @@ export interface OrderDetailResponse {
   paidAt?: string
   finishedAt?: string
   timeoutAt?: string
+  refundStatus?: OrderRefundStatus
+  refundNo?: string
+  refundAmountCent?: number
+  refundUpdatedAt?: string
   items: OrderItemResponse[]
   myReviewSubmitted: boolean
   counterpartyReviewSubmitted: boolean
@@ -71,6 +76,10 @@ export interface OrderSummaryResponse {
   listingId?: number
   createdAt: string
   paidAt?: string
+  refundStatus?: OrderRefundStatus
+  refundNo?: string
+  refundAmountCent?: number
+  refundUpdatedAt?: string
 }
 
 export interface OrderPageResponse {
@@ -124,6 +133,10 @@ export interface SellerOrderSummaryResponse {
   createdAt: string
   paidAt?: string
   updatedAt?: string
+  refundStatus?: OrderRefundStatus
+  refundNo?: string
+  refundAmountCent?: number
+  refundUpdatedAt?: string
 }
 
 export interface SellerOrderPageResponse {
@@ -249,6 +262,46 @@ export interface UserReviewPageResponse {
   items: UserReviewItemResponse[]
 }
 
+export interface CreateOrderRefundRequest {
+  reason?: string
+}
+
+export interface ReviewOrderRefundRequest {
+  reason?: string
+}
+
+export interface OrderRefundResponse {
+  refundNo: string
+  orderNo: string
+  status: OrderRefundStatus
+  amountCent: number
+  applyReason?: string
+  rejectReason?: string
+  reviewedByUserId?: number
+  reviewDeadlineAt?: string
+  reviewedAt?: string
+  autoApproved: boolean
+  paymentNo?: string
+  lastError?: string
+  retryCount?: number
+  createdAt: string
+  updatedAt: string
+  idempotent: boolean
+}
+
+export interface OrderRefundPageResponse {
+  total: number
+  page: number
+  size: number
+  items: OrderRefundResponse[]
+}
+
+export interface SellerRefundQuery {
+  status?: OrderRefundStatus
+  page?: number
+  size?: number
+}
+
 export interface CartSpecItemResponse {
   name: string
   value: string
@@ -319,6 +372,14 @@ export function getOrderDetailV2(orderNo: string): Promise<OrderDetailResponse> 
   return httpGet<OrderDetailResponse>(`/api/v2/order/orders/${orderNo}`)
 }
 
+export function applyOrderRefundV2(orderNo: string, payload?: CreateOrderRefundRequest): Promise<OrderRefundResponse> {
+  return httpPost<OrderRefundResponse>(`/api/v2/order/orders/${orderNo}/refunds`, payload)
+}
+
+export function getLatestOrderRefundV2(orderNo: string): Promise<OrderRefundResponse> {
+  return httpGet<OrderRefundResponse>(`/api/v2/order/orders/${orderNo}/refunds/latest`)
+}
+
 export function payOrderV2(orderNo: string, idempotencyKey?: string): Promise<OrderOperateResponse> {
   const key = idempotencyKey || buildOperateIdempotencyKey('pay', orderNo)
   return httpPost<OrderOperateResponse>(`/api/v2/order/orders/${orderNo}/pay`, undefined, {
@@ -377,6 +438,18 @@ export function listUserReviewsV2(
 
 export function listSellerOrdersV2(query: SellerOrderQuery): Promise<SellerOrderPageResponse> {
   return httpGet<SellerOrderPageResponse>('/api/v2/order/seller/orders', { params: query })
+}
+
+export function listSellerRefundsV2(query: SellerRefundQuery): Promise<OrderRefundPageResponse> {
+  return httpGet<OrderRefundPageResponse>('/api/v2/order/seller/refunds', { params: query })
+}
+
+export function approveSellerRefundV2(refundNo: string, payload?: ReviewOrderRefundRequest): Promise<OrderRefundResponse> {
+  return httpPost<OrderRefundResponse>(`/api/v2/order/seller/refunds/${refundNo}/approve`, payload)
+}
+
+export function rejectSellerRefundV2(refundNo: string, payload?: ReviewOrderRefundRequest): Promise<OrderRefundResponse> {
+  return httpPost<OrderRefundResponse>(`/api/v2/order/seller/refunds/${refundNo}/reject`, payload)
 }
 
 export function getSellerOrderDetailV2(orderNo: string): Promise<OrderDetailResponse> {

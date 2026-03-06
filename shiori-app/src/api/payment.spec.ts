@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { httpGet, httpPost } from '@/api/http'
-import { getWalletBalance, redeemCdk } from '@/api/payment'
+import { getWalletBalance, listWalletLedger, redeemCdk } from '@/api/payment'
 
 vi.mock('@/api/http', () => ({
   httpGet: vi.fn(),
@@ -30,5 +30,26 @@ describe('payment api', () => {
 
     expect(httpPost).toHaveBeenCalledTimes(1)
     expect(httpPost).toHaveBeenCalledWith('/api/v2/payment/cdks/redeem', { code: 'CDK-TEST-001' })
+  })
+
+  it('should query wallet ledger with filter params', async () => {
+    vi.mocked(httpGet).mockResolvedValue({} as never)
+
+    await listWalletLedger({
+      bizType: 'ORDER',
+      changeType: 'ORDER_REFUND_BUYER',
+      page: 3,
+      size: 15,
+    })
+
+    expect(httpGet).toHaveBeenCalledTimes(1)
+    expect(httpGet).toHaveBeenCalledWith('/api/v2/payment/wallet/ledger', {
+      params: {
+        bizType: 'ORDER',
+        changeType: 'ORDER_REFUND_BUYER',
+        page: 3,
+        size: 15,
+      },
+    })
   })
 })
