@@ -18,3 +18,14 @@ spring:
 
 server:
   port: 8082
+
+product:
+  outbox:
+    enabled: ${PRODUCT_OUTBOX_ENABLED:true}
+    relay-fixed-delay-ms: ${PRODUCT_OUTBOX_RELAY_FIXED_DELAY_MS:3000}
+    relay-batch-size: ${PRODUCT_OUTBOX_RELAY_BATCH_SIZE:100}
+    max-backoff-seconds: ${PRODUCT_OUTBOX_MAX_BACKOFF_SECONDS:300}
+  mq:
+    enabled: ${PRODUCT_MQ_ENABLED:true}
+    event-exchange: ${PRODUCT_EVENT_EXCHANGE:shiori.product.event}
+    product-published-routing-key: ${PRODUCT_PUBLISHED_ROUTING_KEY:product.published}

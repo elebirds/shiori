@@ -7,6 +7,8 @@ const ROUTE_TITLE_MAP: Record<string, string> = {
   login: '登录',
   register: '注册',
   products: '商品',
+  square: '广场',
+  'post-create': '发布帖子',
   'product-detail': '商品详情',
   orders: '我的订单',
   'order-detail': '订单详情',
@@ -53,6 +55,18 @@ const router = createRouter({
       name: 'products',
       component: () => import('@/views/ProductListView.vue'),
       meta: { public: true },
+    },
+    {
+      path: '/square',
+      name: 'square',
+      component: () => import('@/views/SquareView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/posts/new',
+      name: 'post-create',
+      component: () => import('@/views/PostCreateView.vue'),
+      meta: { requiresAuth: true },
     },
     {
       path: '/products/:id',

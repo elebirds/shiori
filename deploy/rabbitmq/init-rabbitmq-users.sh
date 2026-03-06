@@ -66,6 +66,10 @@ require_env NOTIFY_RMQ_USERNAME
 require_env NOTIFY_RMQ_PASSWORD
 require_env PAYMENT_RMQ_USERNAME
 require_env PAYMENT_RMQ_PASSWORD
+require_env PRODUCT_RMQ_USERNAME
+require_env PRODUCT_RMQ_PASSWORD
+require_env SOCIAL_RMQ_USERNAME
+require_env SOCIAL_RMQ_PASSWORD
 
 wait_for_rabbitmq
 
@@ -78,6 +82,8 @@ upsert_user "${ORDER_RMQ_USERNAME}" "${ORDER_RMQ_PASSWORD}"
 upsert_user "${USER_RMQ_USERNAME}" "${USER_RMQ_PASSWORD}"
 upsert_user "${NOTIFY_RMQ_USERNAME}" "${NOTIFY_RMQ_PASSWORD}"
 upsert_user "${PAYMENT_RMQ_USERNAME}" "${PAYMENT_RMQ_PASSWORD}"
+upsert_user "${PRODUCT_RMQ_USERNAME}" "${PRODUCT_RMQ_PASSWORD}"
+upsert_user "${SOCIAL_RMQ_USERNAME}" "${SOCIAL_RMQ_PASSWORD}"
 
 # order-service: own exchanges/queues + subscribe payment event exchange
 upsert_permissions \
@@ -106,5 +112,19 @@ upsert_permissions \
   "^(shiori[.]payment[.].*|q[.]payment[.].*)$" \
   "^(shiori[.]payment[.].*|q[.]payment[.].*)$" \
   "^(shiori[.]payment[.].*|q[.]payment[.].*)$"
+
+# product-service: publish product events
+upsert_permissions \
+  "${PRODUCT_RMQ_USERNAME}" \
+  "^(shiori[.]product[.]event)$" \
+  "^(shiori[.]product[.]event)$" \
+  "^(shiori[.]product[.]event)$"
+
+# social-service: consume product published events and own queue
+upsert_permissions \
+  "${SOCIAL_RMQ_USERNAME}" \
+  "^(shiori[.]product[.]event|shiori[.]social[.]product[.]dlx|q[.]social[.]product[.]published(?:[.]dlq)?)$" \
+  "^(shiori[.]product[.]event|shiori[.]social[.]product[.]dlx|q[.]social[.]product[.]published(?:[.]dlq)?)$" \
+  "^(shiori[.]product[.]event|shiori[.]social[.]product[.]dlx|q[.]social[.]product[.]published(?:[.]dlq)?)$"
 
 log "rabbitmq users and permissions initialized"

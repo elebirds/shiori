@@ -14,7 +14,10 @@ public enum ProductErrorCode implements ErrorCode {
     INVALID_PRODUCT_CAMPUS_CODE(40010, "商品校区编码非法"),
     INVALID_PRODUCT_SORT(40011, "商品排序参数非法"),
     INVALID_SKU_SPEC_ITEMS(40012, "SKU规格项非法"),
-    DUPLICATE_SKU_SPEC_COMBINATION(40013, "SKU规格组合重复");
+    DUPLICATE_SKU_SPEC_COMBINATION(40013, "SKU规格组合重复"),
+    POST_NOT_FOUND(40014, "帖子不存在"),
+    NO_POST_PERMISSION(40015, "无帖子操作权限"),
+    INVALID_POST_CONTENT(40016, "帖子内容非法");
 
     private final int code;
     private final String message;

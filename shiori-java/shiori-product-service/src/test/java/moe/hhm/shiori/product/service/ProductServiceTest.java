@@ -2,6 +2,8 @@ package moe.hhm.shiori.product.service;
 
 import java.util.List;
 import moe.hhm.shiori.common.exception.BizException;
+import moe.hhm.shiori.product.config.ProductMqProperties;
+import moe.hhm.shiori.product.config.ProductOutboxProperties;
 import moe.hhm.shiori.product.domain.ProductStatus;
 import moe.hhm.shiori.product.dto.CreateProductRequest;
 import moe.hhm.shiori.product.dto.ProductPageResponse;
@@ -10,7 +12,9 @@ import moe.hhm.shiori.product.dto.SpecItemInput;
 import moe.hhm.shiori.product.dto.SkuInput;
 import moe.hhm.shiori.product.dto.UpdateProductRequest;
 import moe.hhm.shiori.product.model.ProductEntity;
+import moe.hhm.shiori.product.model.ProductOutboxEventEntity;
 import moe.hhm.shiori.product.model.ProductRecord;
+import moe.hhm.shiori.product.model.ProductV2Record;
 import moe.hhm.shiori.product.model.SkuRecord;
 import moe.hhm.shiori.product.repository.ProductMapper;
 import moe.hhm.shiori.product.storage.OssObjectService;
@@ -45,7 +49,16 @@ class ProductServiceTest {
 
     @org.junit.jupiter.api.BeforeEach
     void setUp() {
-        productService = new ProductService(productMapper, ossObjectService, new SkuSpecCodec(new ObjectMapper()));
+        ProductMqProperties productMqProperties = new ProductMqProperties();
+        ProductOutboxProperties productOutboxProperties = new ProductOutboxProperties();
+        productService = new ProductService(
+                productMapper,
+                ossObjectService,
+                new SkuSpecCodec(new ObjectMapper()),
+                productMqProperties,
+                productOutboxProperties,
+                new ObjectMapper()
+        );
     }
 
     @Test
@@ -101,11 +114,30 @@ class ProductServiceTest {
                 new SkuRecord(10L, 1L, "S001", "版本:标准版", "[{\"name\":\"版本\",\"value\":\"标准版\"}]",
                         "sig-a", "版本:标准版", "{\"版本\":\"标准版\"}", 3900L, 12, 0)
         ));
+        when(productMapper.findProductV2ById(1L)).thenReturn(new ProductV2Record(
+                1L,
+                "P001",
+                1001L,
+                "Java Book",
+                "desc",
+                null,
+                "product/1001/202603/cover.jpg",
+                "TEXTBOOK",
+                "GOOD",
+                "MEETUP",
+                "main_campus",
+                ProductStatus.ON_SALE.getCode(),
+                0,
+                3900L,
+                3900L,
+                12
+        ));
 
         ProductWriteResponse response = productService.publishProduct(1L, 1001L, false);
 
         assertThat(response.status()).isEqualTo(ProductStatus.ON_SALE.name());
         verify(productMapper).updateProductStatusById(1L, ProductStatus.ON_SALE.getCode());
+        verify(productMapper).insertProductOutboxEvent(any(ProductOutboxEventEntity.class));
     }
 
     @Test

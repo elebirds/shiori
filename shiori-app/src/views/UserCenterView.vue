@@ -11,6 +11,8 @@ import {
   type ProductConditionLevel,
   type ProductTradeMode,
 } from '@/api/productV2'
+import { deletePostV2, listUserPostsV2 } from '@/api/social'
+import PostFeedCard from '@/components/PostFeedCard.vue'
 import ResultState from '@/components/ResultState.vue'
 import { useAuthStore } from '@/stores/auth'
 
@@ -26,12 +28,16 @@ const page = ref(1)
 const size = 12
 const reviewPage = ref(1)
 const reviewSize = 10
+const postPage = ref(1)
+const postSize = 10
+const deletingPostId = ref<number | null>(null)
 const routeUserNo = computed(() => String(route.params.userNo || '').trim())
 
 watch(routeUserNo, () => {
   activeTab.value = 'products'
   page.value = 1
   reviewPage.value = 1
+  postPage.value = 1
 })
 
 const profileQuery = useQuery({
@@ -81,6 +87,16 @@ const reviewQuery = useQuery({
   enabled: computed(() => activeTab.value === 'reviews' && Boolean(ownerUserId.value)),
 })
 
+const momentsQuery = useQuery({
+  queryKey: computed(() => ['user-posts-v2', ownerUserId.value, postPage.value, postSize]),
+  queryFn: () =>
+    listUserPostsV2(ownerUserId.value as number, {
+      page: postPage.value,
+      size: postSize,
+    }),
+  enabled: computed(() => Boolean(ownerUserId.value)),
+})
+
 const reviewerIds = computed(() => {
   const values = (reviewQuery.data.value?.items || []).map((item) => item.reviewerUserId).filter((item) => item > 0)
   return Array.from(new Set(values))
@@ -97,6 +113,7 @@ const profileErrorMessage = computed(() => (profileQuery.error.value instanceof 
 const productsErrorMessage = computed(() => (productsQuery.error.value instanceof Error ? productsQuery.error.value.message : ''))
 const creditErrorMessage = computed(() => (creditQuery.error.value instanceof Error ? creditQuery.error.value.message : ''))
 const reviewErrorMessage = computed(() => (reviewQuery.error.value instanceof Error ? reviewQuery.error.value.message : ''))
+const momentsErrorMessage = computed(() => (momentsQuery.error.value instanceof Error ? momentsQuery.error.value.message : ''))
 const items = computed(() => productsQuery.data.value?.items || [])
 const total = computed(() => productsQuery.data.value?.total || 0)
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / size)))
@@ -106,6 +123,9 @@ const praiseTotal = computed(() => praisePreviewQuery.data.value?.total || 0)
 const reviewItems = computed(() => reviewQuery.data.value?.items || [])
 const reviewTotal = computed(() => reviewQuery.data.value?.total || 0)
 const reviewTotalPages = computed(() => Math.max(1, Math.ceil(reviewTotal.value / reviewSize)))
+const postItems = computed(() => momentsQuery.data.value?.items || [])
+const postTotal = computed(() => momentsQuery.data.value?.total || 0)
+const postTotalPages = computed(() => Math.max(1, Math.ceil(postTotal.value / postSize)))
 const reviewerProfileMap = computed(() => {
   const map = new Map<number, { nickname: string; avatarUrl?: string; userNo: string }>()
   for (const item of reviewerProfilesQuery.data.value || []) {
@@ -141,6 +161,7 @@ const compositeGradeText = computed(() => creditProfile.value?.composite?.credit
 const sellerAvgStarText = computed(() => Number(creditProfile.value?.sellerProfile?.avgStar || 0).toFixed(1))
 const buyerAvgStarText = computed(() => Number(creditProfile.value?.buyerProfile?.avgStar || 0).toFixed(1))
 const praisePreviewComment = computed(() => praiseItems.value[0]?.comment || '暂无上墙评价')
+const currentUserId = computed(() => authStore.user?.userId || null)
 
 const isSelf = computed(() => {
   if (!authStore.isAuthenticated) {
@@ -165,8 +186,22 @@ const followMutation = useMutation({
   },
 })
 
+const deletePostMutation = useMutation({
+  mutationFn: (postId: number) => deletePostV2(postId),
+  onSuccess: async () => {
+    await queryClient.invalidateQueries({ queryKey: ['user-posts-v2', ownerUserId.value] })
+  },
+  onSettled: () => {
+    deletingPostId.value = null
+  },
+})
+
 function goEdit(): void {
   void router.push('/profile/edit')
+}
+
+function goCreatePost(): void {
+  void router.push('/posts/new')
 }
 
 async function toggleFollow(): Promise<void> {
@@ -198,6 +233,10 @@ function goDetail(productId: number): void {
   void router.push(`/products/${productId}`)
 }
 
+function goPostProduct(productId: number): void {
+  void router.push(`/products/${productId}`)
+}
+
 function goUser(userNo: string): void {
   if (!userNo) {
     return
@@ -213,7 +252,23 @@ function switchTab(tab: CenterTab): void {
   }
   if (tab === 'reviews') {
     reviewPage.value = 1
+    return
   }
+  if (tab === 'moments') {
+    postPage.value = 1
+  }
+}
+
+async function handleDeletePost(postId: number): Promise<void> {
+  if (!postId || deletePostMutation.isPending.value) {
+    return
+  }
+  const confirmed = window.confirm('确认删除这条帖子吗？')
+  if (!confirmed) {
+    return
+  }
+  deletingPostId.value = postId
+  await deletePostMutation.mutateAsync(postId)
 }
 
 function formatGender(gender?: number): string {
@@ -408,7 +463,16 @@ function reviewerMeta(userId: number): { nickname: string; avatarUrl?: string; u
           </article>
           <article class="rounded-2xl border border-stone-200 bg-white/95 p-4">
             <h2 class="text-sm font-semibold text-stone-900">我的帖子</h2>
-            <p class="mt-2 text-xs text-stone-600">帖子功能即将上线，敬请期待你的好物分享。</p>
+            <p class="mt-2 text-2xl font-semibold text-stone-900">{{ postTotal }}</p>
+            <p class="mt-1 text-xs text-stone-600">动态总数</p>
+            <button
+              v-if="isSelf"
+              type="button"
+              class="mt-3 rounded-lg border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
+              @click="goCreatePost"
+            >
+              去发帖
+            </button>
           </article>
           <article class="rounded-2xl border border-stone-200 bg-white/95 p-4">
             <h2 class="text-sm font-semibold text-stone-900">夸夸墙</h2>
@@ -591,12 +655,60 @@ function reviewerMeta(userId: number): { nickname: string; avatarUrl?: string; u
               </div>
             </ResultState>
 
-            <section
+            <ResultState
               v-else
-              class="rounded-2xl border border-dashed border-stone-300 bg-stone-50/70 px-4 py-10 text-center text-sm text-stone-600"
+              :loading="momentsQuery.isLoading.value || momentsQuery.isFetching.value"
+              :error="momentsErrorMessage"
+              :empty="!momentsQuery.isLoading.value && postItems.length === 0"
+              empty-text="暂时还没有动态"
             >
-              即将上线
-            </section>
+              <div class="space-y-3">
+                <div v-if="isSelf" class="flex justify-end">
+                  <button
+                    type="button"
+                    class="rounded-lg bg-stone-900 px-3 py-1.5 text-sm text-white transition hover:bg-stone-700"
+                    @click="goCreatePost"
+                  >
+                    写帖子
+                  </button>
+                </div>
+
+                <PostFeedCard
+                  v-for="item in postItems"
+                  :key="item.postId"
+                  :post="item"
+                  :author-profile="profile || null"
+                  :current-user-id="currentUserId"
+                  :allow-delete="isSelf"
+                  :deleting="deletePostMutation.isPending.value && deletingPostId === item.postId"
+                  @open-user="goUser"
+                  @open-product="goPostProduct"
+                  @delete="handleDeletePost"
+                />
+
+                <div class="mt-4 flex items-center justify-between rounded-2xl border border-stone-200 bg-white/90 px-4 py-3 text-sm">
+                  <span class="text-stone-600">第 {{ postPage }} / {{ postTotalPages }} 页，共 {{ postTotal }} 条</span>
+                  <div class="flex gap-2">
+                    <button
+                      type="button"
+                      class="rounded-lg border border-stone-300 px-3 py-1.5 text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      :disabled="postPage <= 1 || momentsQuery.isFetching.value"
+                      @click="postPage -= 1"
+                    >
+                      上一页
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-lg border border-stone-300 px-3 py-1.5 text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      :disabled="postPage >= postTotalPages || momentsQuery.isFetching.value"
+                      @click="postPage += 1"
+                    >
+                      下一页
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </ResultState>
           </div>
         </section>
       </div>
