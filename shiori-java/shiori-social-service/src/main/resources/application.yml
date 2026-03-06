@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: shiori-social-service
+  config:
+    import:
+      - optional:nacos:${spring.application.name}-base.yml?group=${NACOS_CONFIG_GROUP:SHIORI_DEV_DOCKER}&refreshEnabled=true
+      - optional:nacos:${spring.application.name}-secret.yml?group=${NACOS_CONFIG_GROUP:SHIORI_DEV_DOCKER}&refreshEnabled=true
+      - optional:nacos:shiori-security-base.yml?group=${NACOS_CONFIG_GROUP:SHIORI_DEV_DOCKER}&refreshEnabled=true
+      - optional:nacos:shiori-security-secret.yml?group=${NACOS_CONFIG_GROUP:SHIORI_DEV_DOCKER}&refreshEnabled=true
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_ADDR:nacos:8848}
+      config:
+        server-addr: ${NACOS_ADDR:nacos:8848}
+      username: ${NACOS_USERNAME}
+      password: ${NACOS_PASSWORD}
+  rabbitmq:
+    listener:
+      simple:
+        default-requeue-rejected: false
+
+server:
+  port: 8085
+
+social:
+  user-client:
+    service-base-url: ${SOCIAL_USER_SERVICE_BASE_URL:http://shiori-user-service}
+  mq:
+    enabled: ${SOCIAL_MQ_ENABLED:true}
+    product-event-exchange: ${PRODUCT_EVENT_EXCHANGE:shiori.product.event}
+    product-published-routing-key: ${PRODUCT_PUBLISHED_ROUTING_KEY:product.published}
+    product-published-queue: ${SOCIAL_PRODUCT_PUBLISHED_QUEUE:q.social.product.published}
+    product-published-dlx-exchange: ${SOCIAL_PRODUCT_PUBLISHED_DLX_EXCHANGE:shiori.social.product.dlx}
+    product-published-dlq-routing-key: ${SOCIAL_PRODUCT_PUBLISHED_DLQ_ROUTING_KEY:product.published.dlq}
+    product-published-dlq-queue: ${SOCIAL_PRODUCT_PUBLISHED_DLQ_QUEUE:q.social.product.published.dlq}

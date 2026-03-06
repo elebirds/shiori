@@ -58,6 +58,10 @@ spring:
               uri: lb://shiori-payment-service
               predicates:
                 - Path=/api/v2/payment/**
+            - id: social-service-v2
+              uri: lb://shiori-social-service
+              predicates:
+                - Path=/api/v2/social/**
             - id: admin-payment-service-v2
               uri: lb://shiori-payment-service
               predicates:
@@ -96,6 +100,7 @@ security:
       - /api/user/media/avatar/**
       - /api/v2/product/users/**
       - /api/v2/order/reviews/users/**
+      - /api/v2/social/users/*/posts
   authz:
     enabled: ${SECURITY_AUTHZ_ENABLED:true}
     user-service-base-url: ${SECURITY_AUTHZ_USER_SERVICE_BASE_URL:http://shiori-user-service}
