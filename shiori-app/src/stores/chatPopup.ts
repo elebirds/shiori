@@ -1,6 +1,8 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
+import { createPopupLifecycle } from '@/utils/popupLifecycle'
+
 const MERGE_WINDOW_MS = 10_000
 const AUTO_DISMISS_MS = 8_000
 const MAX_POPUP_ITEMS = 3
@@ -28,7 +30,7 @@ export interface ChatPopupItem {
 
 export const useChatPopupStore = defineStore('chat-popup', () => {
   const items = ref<ChatPopupItem[]>([])
-  const timers = new Map<string, ReturnType<typeof setTimeout>>()
+  const popupLifecycle = createPopupLifecycle(AUTO_DISMISS_MS)
 
   function enqueue(payload: ChatPopupEnqueuePayload): void {
     const now = Date.now()
@@ -75,7 +77,7 @@ export const useChatPopupStore = defineStore('chat-popup', () => {
   }
 
   function dismiss(id: string): void {
-    clearItemTimer(id)
+    popupLifecycle.clear(id)
     items.value = items.value.filter((item) => item.id !== id)
   }
 
@@ -85,15 +87,13 @@ export const useChatPopupStore = defineStore('chat-popup', () => {
     }
     const targets = items.value.filter((item) => item.conversationId === conversationId)
     for (const item of targets) {
-      clearItemTimer(item.id)
+      popupLifecycle.clear(item.id)
     }
     items.value = items.value.filter((item) => item.conversationId !== conversationId)
   }
 
   function clearAll(): void {
-    for (const id of timers.keys()) {
-      clearItemTimer(id)
-    }
+    popupLifecycle.clearAll()
     items.value = []
   }
 
@@ -103,26 +103,15 @@ export const useChatPopupStore = defineStore('chat-popup', () => {
     }
     const overflow = items.value.slice(MAX_POPUP_ITEMS)
     for (const item of overflow) {
-      clearItemTimer(item.id)
+      popupLifecycle.clear(item.id)
     }
     items.value = items.value.slice(0, MAX_POPUP_ITEMS)
   }
 
   function scheduleAutoDismiss(id: string): void {
-    clearItemTimer(id)
-    const timer = setTimeout(() => {
+    popupLifecycle.schedule(id, () => {
       dismiss(id)
-    }, AUTO_DISMISS_MS)
-    timers.set(id, timer)
-  }
-
-  function clearItemTimer(id: string): void {
-    const timer = timers.get(id)
-    if (!timer) {
-      return
-    }
-    clearTimeout(timer)
-    timers.delete(id)
+    })
   }
 
   return {
