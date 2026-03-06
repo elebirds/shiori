@@ -8,6 +8,7 @@ import moe.hhm.shiori.order.client.ProductServiceClient;
 import moe.hhm.shiori.order.client.ProductSkuSnapshot;
 import moe.hhm.shiori.order.client.NotifyChatClient;
 import moe.hhm.shiori.order.client.PaymentServiceClient;
+import moe.hhm.shiori.order.client.UserAddressSnapshot;
 import moe.hhm.shiori.order.client.UserServiceClient;
 import moe.hhm.shiori.order.client.ReserveBalancePaymentSnapshot;
 import moe.hhm.shiori.order.client.SettleBalancePaymentSnapshot;
@@ -17,6 +18,7 @@ import moe.hhm.shiori.order.dto.CreateOrderItem;
 import moe.hhm.shiori.order.dto.CreateOrderRequest;
 import moe.hhm.shiori.order.dto.CreateOrderResponse;
 import moe.hhm.shiori.order.dto.OrderOperateResponse;
+import moe.hhm.shiori.order.dto.v2.UpdateOrderFulfillmentRequest;
 import moe.hhm.shiori.order.model.OrderOperateIdempotencyRecord;
 import moe.hhm.shiori.order.model.OrderRecord;
 import moe.hhm.shiori.order.repository.OrderMapper;
@@ -246,6 +248,106 @@ class OrderCommandServiceTest {
     }
 
     @Test
+    void shouldUpdateOrderFulfillmentToDelivery() {
+        when(orderMapper.findOrderByOrderNo("O202603060001"))
+                .thenReturn(orderRecordWithFulfillment(
+                        16L,
+                        "O202603060001",
+                        1001L,
+                        2001L,
+                        1,
+                        2399L,
+                        1,
+                        null,
+                        1,
+                        1,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null
+                ));
+        when(userServiceClient.getMyAddress(101L, 1001L, List.of("ROLE_USER")))
+                .thenReturn(new UserAddressSnapshot(
+                        101L,
+                        1001L,
+                        "张三",
+                        "13800138000",
+                        "广东省",
+                        "深圳市",
+                        "南山区",
+                        "科技园 1 号",
+                        true
+                ));
+        when(orderMapper.updateOrderFulfillmentToDelivery(
+                "O202603060001",
+                1001L,
+                1,
+                101L,
+                "张三",
+                "13800138000",
+                "广东省",
+                "深圳市",
+                "南山区",
+                "科技园 1 号"
+        )).thenReturn(1);
+
+        OrderOperateResponse response = orderCommandService.updateOrderFulfillmentByBuyer(
+                1001L,
+                List.of("ROLE_USER"),
+                "O202603060001",
+                new UpdateOrderFulfillmentRequest("DELIVERY", 101L)
+        );
+
+        assertThat(response.status()).isEqualTo("UNPAID");
+        verify(orderMapper).updateOrderFulfillmentToDelivery(
+                "O202603060001",
+                1001L,
+                1,
+                101L,
+                "张三",
+                "13800138000",
+                "广东省",
+                "深圳市",
+                "南山区",
+                "科技园 1 号"
+        );
+    }
+
+    @Test
+    void shouldRejectBalancePayWhenDeliveryAddressSnapshotMissing() {
+        when(orderMapper.findOrderByOrderNo("O202603060002"))
+                .thenReturn(orderRecordWithFulfillment(
+                        17L,
+                        "O202603060002",
+                        1001L,
+                        2001L,
+                        1,
+                        3299L,
+                        1,
+                        null,
+                        0,
+                        1,
+                        "DELIVERY",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null
+                ));
+        when(orderMapper.findOperateIdempotency(1001L, "PAY", "idem-balance-pay-2")).thenReturn(null);
+
+        assertThatThrownBy(() -> orderCommandService.payOrderByBalance(1001L, "O202603060002", "idem-balance-pay-2"))
+                .isInstanceOf(BizException.class)
+                .matches(ex -> ((BizException) ex).getErrorCode().code() == 50032);
+
+        verify(paymentServiceClient, never()).reserveOrderPayment(anyString(), anyLong(), anyLong(), anyLong(), anyLong(), anyList());
+    }
+
+    @Test
     void shouldRejectConfirmReceiptWhenRefundAlreadySucceeded() {
         when(orderMapper.findOrderByOrderNo("O202603050002"))
                 .thenReturn(orderRecordWithRefund(15L, "O202603050002", 1001L, 2001L, 4, 3999L, 1, "P-002", "SUCCEEDED"));
@@ -352,6 +454,59 @@ class OrderCommandServiceTest {
                 null,
                 null,
                 null,
+                null,
+                0,
+                null,
+                null
+        );
+    }
+
+    private OrderRecord orderRecordWithFulfillment(Long id,
+                                                   String orderNo,
+                                                   Long buyerUserId,
+                                                   Long sellerUserId,
+                                                   Integer status,
+                                                   Long totalAmountCent,
+                                                   Integer itemCount,
+                                                   String paymentNo,
+                                                   Integer allowMeetup,
+                                                   Integer allowDelivery,
+                                                   String fulfillmentMode,
+                                                   Long shippingAddressId,
+                                                   String shippingReceiverName,
+                                                   String shippingReceiverPhone,
+                                                   String shippingProvince,
+                                                   String shippingCity,
+                                                   String shippingDistrict) {
+        return new OrderRecord(
+                id,
+                orderNo,
+                buyerUserId,
+                sellerUserId,
+                status,
+                totalAmountCent,
+                itemCount,
+                paymentNo,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                allowMeetup,
+                allowDelivery,
+                fulfillmentMode,
+                shippingAddressId,
+                shippingReceiverName,
+                shippingReceiverPhone,
+                shippingProvince,
+                shippingCity,
+                shippingDistrict,
                 null,
                 0,
                 null,

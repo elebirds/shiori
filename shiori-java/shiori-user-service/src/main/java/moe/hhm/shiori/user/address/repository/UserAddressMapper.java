@@ -107,6 +107,15 @@ public interface UserAddressMapper {
             """)
     long countByUserId(@Param("userId") Long userId);
 
+    @Select("""
+            SELECT COUNT(1)
+            FROM u_user_address
+            WHERE user_id = #{userId}
+              AND is_deleted = 0
+              AND is_default = 1
+            """)
+    long countDefaultByUserId(@Param("userId") Long userId);
+
     @Insert("""
             INSERT INTO u_user_address (
                 user_id,
@@ -178,6 +187,17 @@ public interface UserAddressMapper {
             """)
     int markDefaultByIdAndUserId(@Param("addressId") Long addressId,
                                  @Param("userId") Long userId);
+
+    @Update("""
+            UPDATE u_user_address
+            SET is_default = CASE WHEN id = #{addressId} THEN 1 ELSE 0 END,
+                updated_at = CURRENT_TIMESTAMP(3),
+                version = version + 1
+            WHERE user_id = #{userId}
+              AND is_deleted = 0
+            """)
+    int replaceDefaultByAddressIdAndUserId(@Param("addressId") Long addressId,
+                                           @Param("userId") Long userId);
 
     @Update("""
             UPDATE u_user_address

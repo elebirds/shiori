@@ -8,6 +8,7 @@ import moe.hhm.shiori.user.address.dto.UserAddressUpsertRequest;
 import moe.hhm.shiori.user.address.model.UserAddressEntity;
 import moe.hhm.shiori.user.address.model.UserAddressRecord;
 import moe.hhm.shiori.user.address.repository.UserAddressMapper;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,9 +37,6 @@ public class UserAddressService {
         validateRequest(request);
         boolean hasAddress = userAddressMapper.countByUserId(userId) > 0;
         boolean targetDefault = Boolean.TRUE.equals(request.isDefault()) || !hasAddress;
-        if (targetDefault) {
-            userAddressMapper.clearDefaultByUserId(userId);
-        }
 
         UserAddressEntity entity = new UserAddressEntity();
         entity.setUserId(userId);
@@ -48,8 +46,11 @@ public class UserAddressService {
         entity.setCity(requireTrimmed(request.city()));
         entity.setDistrict(requireTrimmed(request.district()));
         entity.setDetailAddress(requireTrimmed(request.detailAddress()));
-        entity.setIsDefault(targetDefault ? 1 : 0);
+        entity.setIsDefault(0);
         userAddressMapper.insert(entity);
+        if (targetDefault || userAddressMapper.countDefaultByUserId(userId) <= 0) {
+            replaceDefault(userId, entity.getId());
+        }
         return getMyAddress(userId, entity.getId());
     }
 
@@ -64,10 +65,6 @@ public class UserAddressService {
         if (!targetDefault && isDefault(existing) && userAddressMapper.countByUserId(userId) <= 1) {
             targetDefault = true;
         }
-        if (targetDefault) {
-            userAddressMapper.clearDefaultByUserId(userId);
-        }
-
         UserAddressEntity entity = new UserAddressEntity();
         entity.setId(addressId);
         entity.setUserId(userId);
@@ -77,15 +74,17 @@ public class UserAddressService {
         entity.setCity(requireTrimmed(request.city()));
         entity.setDistrict(requireTrimmed(request.district()));
         entity.setDetailAddress(requireTrimmed(request.detailAddress()));
-        entity.setIsDefault(targetDefault ? 1 : 0);
+        entity.setIsDefault(0);
 
         if (userAddressMapper.update(entity) == 0) {
             throw new BizException(UserErrorCode.ADDRESS_NOT_FOUND, HttpStatus.NOT_FOUND);
         }
-        if (!targetDefault && isDefault(existing)) {
+        if (targetDefault) {
+            replaceDefault(userId, addressId);
+        } else if (isDefault(existing)) {
             UserAddressRecord fallback = userAddressMapper.findLatestByUserIdExcluding(userId, addressId);
             if (fallback != null) {
-                userAddressMapper.markDefaultByIdAndUserId(fallback.id(), userId);
+                replaceDefault(userId, fallback.id());
             }
         }
         return getMyAddress(userId, addressId);
@@ -100,8 +99,7 @@ public class UserAddressService {
         if (isDefault(existing)) {
             UserAddressRecord fallback = userAddressMapper.findLatestByUserId(userId);
             if (fallback != null) {
-                userAddressMapper.clearDefaultByUserId(userId);
-                userAddressMapper.markDefaultByIdAndUserId(fallback.id(), userId);
+                replaceDefault(userId, fallback.id());
             }
         }
     }
@@ -109,11 +107,19 @@ public class UserAddressService {
     @Transactional(rollbackFor = Exception.class)
     public UserAddressResponse setDefault(Long userId, Long addressId) {
         requireAddress(userId, addressId);
-        userAddressMapper.clearDefaultByUserId(userId);
-        if (userAddressMapper.markDefaultByIdAndUserId(addressId, userId) == 0) {
-            throw new BizException(UserErrorCode.ADDRESS_NOT_FOUND, HttpStatus.NOT_FOUND);
-        }
+        replaceDefault(userId, addressId);
         return getMyAddress(userId, addressId);
+    }
+
+    private void replaceDefault(Long userId, Long addressId) {
+        try {
+            int affected = userAddressMapper.replaceDefaultByAddressIdAndUserId(addressId, userId);
+            if (affected <= 0) {
+                throw new BizException(UserErrorCode.ADDRESS_NOT_FOUND, HttpStatus.NOT_FOUND);
+            }
+        } catch (DuplicateKeyException ex) {
+            throw new BizException(UserErrorCode.ADDRESS_INVALID, HttpStatus.CONFLICT, "默认地址更新冲突，请重试");
+        }
     }
 
     private UserAddressRecord requireAddress(Long userId, Long addressId) {

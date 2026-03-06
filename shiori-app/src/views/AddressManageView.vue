@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 
 import ResultState from '@/components/ResultState.vue'
 import {
@@ -29,6 +29,8 @@ const form = reactive<UpsertUserAddressRequest>({
 const editingAddressId = ref<number | null>(null)
 const submitMessage = ref('')
 const submitError = ref('')
+const actionError = ref('')
+const suppressRegionSync = ref(false)
 
 const addressQuery = useQuery({
   queryKey: ['my-addresses'],
@@ -39,33 +41,50 @@ const addresses = computed(() => addressQuery.data.value || [])
 const errorMessage = computed(() => (addressQuery.error.value instanceof Error ? addressQuery.error.value.message : ''))
 
 const provinceOptions = computed(() => CN_MAINLAND_REGIONS.map((item) => item.name))
-const cityOptions = computed(() => {
-  const province = CN_MAINLAND_REGIONS.find((item) => item.name === form.province)
-  return province ? province.cities.map((item) => item.name) : []
-})
-const districtOptions = computed(() => {
-  const province = CN_MAINLAND_REGIONS.find((item) => item.name === form.province)
-  const city = province?.cities.find((item) => item.name === form.city)
-  return city ? city.districts : []
-})
+const cityOptions = computed(() => withLegacyOption(listRawCities(form.province), form.city))
+const districtOptions = computed(() => withLegacyOption(listRawDistricts(form.province, form.city), form.district))
 
 watch(
   () => form.province,
-  (value) => {
-    if (!value || !cityOptions.value.includes(form.city)) {
-      form.city = cityOptions.value[0] || ''
+  (value, oldValue) => {
+    if (suppressRegionSync.value) {
+      return
     }
-    if (!districtOptions.value.includes(form.district)) {
-      form.district = districtOptions.value[0] || ''
+    if (!value) {
+      form.city = ''
+      form.district = ''
+      return
+    }
+    if (oldValue && oldValue !== value) {
+      const nextCity = listRawCities(value)[0] || ''
+      form.city = nextCity
+      form.district = listRawDistricts(value, nextCity)[0] || ''
+      return
+    }
+    const cityCandidates = listRawCities(value)
+    if (!form.city && cityCandidates.length > 0) {
+      form.city = cityCandidates[0]
+    }
+    const districtCandidates = listRawDistricts(value, form.city)
+    if (!form.district && districtCandidates.length > 0) {
+      form.district = districtCandidates[0]
     }
   },
 )
 
 watch(
   () => form.city,
-  () => {
-    if (!districtOptions.value.includes(form.district)) {
-      form.district = districtOptions.value[0] || ''
+  (value, oldValue) => {
+    if (suppressRegionSync.value || !form.province) {
+      return
+    }
+    const districtCandidates = listRawDistricts(form.province, value)
+    if (oldValue && oldValue !== value) {
+      form.district = districtCandidates[0] || ''
+      return
+    }
+    if (!form.district && districtCandidates.length > 0) {
+      form.district = districtCandidates[0]
     }
   },
 )
@@ -101,26 +120,67 @@ const saveMutation = useMutation({
 const deleteMutation = useMutation({
   mutationFn: (addressId: number) => deleteMyAddress(addressId),
   onSuccess: async () => {
+    actionError.value = ''
+    if (editingAddressId.value != null && editingAddressId.value === addressIdPendingDelete.value) {
+      clearForm()
+    }
+    addressIdPendingDelete.value = null
     await queryClient.invalidateQueries({ queryKey: ['my-addresses'] })
+  },
+  onError: (error) => {
+    addressIdPendingDelete.value = null
+    actionError.value = error instanceof ApiBizError ? error.message : '删除地址失败'
   },
 })
 
 const defaultMutation = useMutation({
   mutationFn: (addressId: number) => setMyAddressDefault(addressId),
   onSuccess: async () => {
+    actionError.value = ''
     await queryClient.invalidateQueries({ queryKey: ['my-addresses'] })
+  },
+  onError: (error) => {
+    actionError.value = error instanceof ApiBizError ? error.message : '设置默认地址失败'
   },
 })
 
+const addressIdPendingDelete = ref<number | null>(null)
+
+function listRawCities(provinceName: string): string[] {
+  const province = CN_MAINLAND_REGIONS.find((item) => item.name === provinceName)
+  return province ? province.cities.map((item) => item.name) : []
+}
+
+function listRawDistricts(provinceName: string, cityName: string): string[] {
+  const province = CN_MAINLAND_REGIONS.find((item) => item.name === provinceName)
+  const city = province?.cities.find((item) => item.name === cityName)
+  return city ? city.districts : []
+}
+
+function withLegacyOption(options: string[], current: string): string[] {
+  if (!current) {
+    return options
+  }
+  if (options.includes(current)) {
+    return options
+  }
+  return [current, ...options]
+}
+
 function clearForm(): void {
+  suppressRegionSync.value = true
   editingAddressId.value = null
   form.receiverName = ''
   form.receiverPhone = ''
   form.province = provinceOptions.value[0] || ''
-  form.city = cityOptions.value[0] || ''
-  form.district = districtOptions.value[0] || ''
+  form.city = listRawCities(form.province)[0] || ''
+  form.district = listRawDistricts(form.province, form.city)[0] || ''
   form.detailAddress = ''
   form.isDefault = false
+  actionError.value = ''
+  void nextTick(() => {
+    suppressRegionSync.value = false
+  })
 }
 
 function editAddress(addressId: number): void {
@@ -128,6 +188,7 @@ function editAddress(addressId: number): void {
   if (!target) {
     return
   }
+  suppressRegionSync.value = true
   editingAddressId.value = addressId
   form.receiverName = target.receiverName
   form.receiverPhone = target.receiverPhone
@@ -138,6 +199,10 @@ function editAddress(addressId: number): void {
   form.isDefault = target.isDefault
   submitMessage.value = ''
   submitError.value = ''
+  actionError.value = ''
+  void nextTick(() => {
+    suppressRegionSync.value = false
+  })
 }
 
 function validateForm(): boolean {
@@ -173,10 +238,13 @@ function removeAddress(addressId: number): void {
   if (!window.confirm('确认删除该地址？')) {
     return
   }
+  actionError.value = ''
+  addressIdPendingDelete.value = addressId
   deleteMutation.mutate(addressId)
 }
 
 function markDefault(addressId: number): void {
+  actionError.value = ''
   defaultMutation.mutate(addressId)
 }
 
@@ -272,6 +340,7 @@ clearForm()
       </div>
       <p v-if="submitMessage" class="mt-2 text-sm text-emerald-600">{{ submitMessage }}</p>
       <p v-if="submitError" class="mt-2 text-sm text-rose-600">{{ submitError }}</p>
+      <p v-if="actionError" class="mt-2 text-sm text-rose-600">{{ actionError }}</p>
     </article>
 
     <ResultState
@@ -295,6 +364,7 @@ clearForm()
               <button
                 type="button"
                 class="rounded-lg border border-stone-300 px-2 py-1 text-stone-700 transition hover:bg-stone-100"
+                :disabled="saveMutation.isPending.value || deleteMutation.isPending.value || defaultMutation.isPending.value"
                 @click="editAddress(item.addressId)"
               >
                 编辑
@@ -303,6 +373,7 @@ clearForm()
                 v-if="!item.isDefault"
                 type="button"
                 class="rounded-lg border border-amber-300 px-2 py-1 text-amber-700 transition hover:bg-amber-50"
+                :disabled="saveMutation.isPending.value || deleteMutation.isPending.value || defaultMutation.isPending.value"
                 @click="markDefault(item.addressId)"
               >
                 设默认
@@ -310,6 +381,7 @@ clearForm()
               <button
                 type="button"
                 class="rounded-lg border border-rose-300 px-2 py-1 text-rose-700 transition hover:bg-rose-50"
+                :disabled="saveMutation.isPending.value || deleteMutation.isPending.value || defaultMutation.isPending.value"
                 @click="removeAddress(item.addressId)"
               >
                 删除

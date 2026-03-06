@@ -2,6 +2,9 @@ package moe.hhm.shiori.order.controller.v2;
 
 import moe.hhm.shiori.common.security.GatewaySignUtils;
 import moe.hhm.shiori.common.security.GatewaySignVerifyFilter;
+import moe.hhm.shiori.order.dto.OrderDetailResponse;
+import moe.hhm.shiori.order.dto.OrderItemResponse;
+import moe.hhm.shiori.order.dto.OrderShippingAddressResponse;
 import moe.hhm.shiori.order.dto.OrderOperateResponse;
 import moe.hhm.shiori.order.service.OrderCommandService;
 import moe.hhm.shiori.order.service.OrderCartService;
@@ -17,8 +20,11 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.List;
+
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -85,6 +91,80 @@ class OrderV2ControllerMvcTest {
         mockMvc.perform(post("/api/v2/order/orders/O001/pay").headers(headers))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value(10000));
+    }
+
+    @Test
+    void shouldUpdateOrderFulfillment() throws Exception {
+        when(orderCommandService.updateOrderFulfillmentByBuyer(
+                1001L,
+                List.of("ROLE_USER"),
+                "O001",
+                new moe.hhm.shiori.order.dto.v2.UpdateOrderFulfillmentRequest("DELIVERY", 101L)
+        )).thenReturn(new OrderOperateResponse("O001", "UNPAID", false));
+        when(orderService.getOrderDetail(1001L, false, "O001"))
+                .thenReturn(orderDetail("DELIVERY"));
+
+        HttpHeaders headers = signedHeaders("PUT", "/api/v2/order/orders/O001/fulfillment", null, "1001", "ROLE_USER");
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        mockMvc.perform(put("/api/v2/order/orders/O001/fulfillment")
+                        .headers(headers)
+                        .content("{\"fulfillmentMode\":\"DELIVERY\",\"addressId\":101}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.orderNo").value("O001"))
+                .andExpect(jsonPath("$.data.fulfillmentMode").value("DELIVERY"))
+                .andExpect(jsonPath("$.data.shippingAddress.receiverName").value("张三"));
+    }
+
+    @Test
+    void shouldReturn400WhenFulfillmentModeLengthInvalid() throws Exception {
+        HttpHeaders headers = signedHeaders("PUT", "/api/v2/order/orders/O001/fulfillment", null, "1001", "ROLE_USER");
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        mockMvc.perform(put("/api/v2/order/orders/O001/fulfillment")
+                        .headers(headers)
+                        .content("{\"fulfillmentMode\":\"A\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(10000));
+    }
+
+    private OrderDetailResponse orderDetail(String fulfillmentMode) {
+        return new OrderDetailResponse(
+                "O001",
+                1001L,
+                2001L,
+                "UNPAID",
+                2399L,
+                null,
+                null,
+                null,
+                true,
+                true,
+                fulfillmentMode,
+                new OrderShippingAddressResponse(
+                        "张三",
+                        "13800138000",
+                        "广东省",
+                        "深圳市",
+                        "南山区",
+                        "科技园 1 号"
+                ),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(new OrderItemResponse(1L, "P001", 11L, "S001", "SKU", "{}", 2399L, 1, 2399L)),
+                false,
+                false,
+                false,
+                false,
+                null
+        );
     }
 
     private HttpHeaders signedHeaders(String method, String path, String rawQuery, String userId, String roles) {
