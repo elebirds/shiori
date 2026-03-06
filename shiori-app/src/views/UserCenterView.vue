@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { followUser, getUserProfileByUserNo, getUserProfilesByUserIds, unfollowUser } from '@/api/auth'
+import { resolveProductMediaUrls } from '@/api/media'
 import { getUserCreditProfileV2, listUserPraiseWallV2, listUserReviewsV2 } from '@/api/orderV2'
 import {
   listUserProductsV2,
@@ -15,6 +16,7 @@ import {
 import { deletePostV2, listUserPostsV2 } from '@/api/social'
 import PostFeedCard from '@/components/PostFeedCard.vue'
 import ResultState from '@/components/ResultState.vue'
+import UserAvatar from '@/components/UserAvatar.vue'
 import { useProductMeta } from '@/composables/useProductMeta'
 import { useAuthStore } from '@/stores/auth'
 
@@ -126,6 +128,13 @@ const praiseTotal = computed(() => praisePreviewQuery.data.value?.total || 0)
 const reviewItems = computed(() => reviewQuery.data.value?.items || [])
 const reviewTotal = computed(() => reviewQuery.data.value?.total || 0)
 const reviewTotalPages = computed(() => Math.max(1, Math.ceil(reviewTotal.value / reviewSize)))
+const reviewImageObjectKeys = computed(() =>
+  Array.from(
+    new Set(
+      reviewItems.value.flatMap((item) => normalizeReviewImageObjectKeys(item.imageObjectKeys)).filter((item) => item),
+    ),
+  ),
+)
 const postItems = computed(() => momentsQuery.data.value?.items || [])
 const postTotal = computed(() => momentsQuery.data.value?.total || 0)
 const postTotalPages = computed(() => Math.max(1, Math.ceil(postTotal.value / postSize)))
@@ -147,6 +156,7 @@ const displayBio = computed(() => profile.value?.bio || '这个人很神秘，�
 const followerCount = computed(() => profile.value?.followerCount ?? 0)
 const followingCount = computed(() => profile.value?.followingCount ?? 0)
 const followedByCurrentUser = computed(() => Boolean(profile.value?.followedByCurrentUser))
+const lastActiveText = computed(() => formatRecentActive(profile.value?.lastActiveAt))
 const tags = computed(() => {
   const values: string[] = []
   values.push(formatGender(profile.value?.gender))
@@ -156,15 +166,46 @@ const tags = computed(() => {
   values.push('校园用户')
   return values.filter((value) => value.length > 0)
 })
-const compositeScoreText = computed(() => {
-  const score = creditProfile.value?.composite?.compositeScore100
-  return score == null ? '--' : String(score)
-})
 const compositeGradeText = computed(() => creditProfile.value?.composite?.creditGrade || 'NEW')
+const compositeReputationText = computed(() => {
+  const reviewCount = Number(creditProfile.value?.composite?.totalReviewCount || 0)
+  const avgStar = Number(creditProfile.value?.composite?.compositeAvgStar || 0)
+  if (reviewCount <= 0 || avgStar <= 0) {
+    return '暂无评价'
+  }
+  if (avgStar >= 4.8) {
+    return '好评如潮'
+  }
+  if (avgStar >= 4.5) {
+    return '特别好评'
+  }
+  if (avgStar >= 4.0) {
+    return '多半好评'
+  }
+  if (avgStar >= 3.5) {
+    return '褒贬不一'
+  }
+  if (avgStar >= 3.0) {
+    return '多半差评'
+  }
+  return '差评如潮'
+})
 const sellerAvgStarText = computed(() => Number(creditProfile.value?.sellerProfile?.avgStar || 0).toFixed(1))
 const buyerAvgStarText = computed(() => Number(creditProfile.value?.buyerProfile?.avgStar || 0).toFixed(1))
 const praisePreviewComment = computed(() => praiseItems.value[0]?.comment || '暂无上墙评价')
 const currentUserId = computed(() => authStore.user?.userId || null)
+
+const reviewImageUrlsQuery = useQuery({
+  queryKey: computed(() => ['user-review-image-urls', reviewImageObjectKeys.value.join(',')]),
+  queryFn: async () => {
+    if (reviewImageObjectKeys.value.length === 0) {
+      return {} as Record<string, string>
+    }
+    const response = await resolveProductMediaUrls(reviewImageObjectKeys.value)
+    return response.urls || {}
+  },
+  enabled: computed(() => reviewImageObjectKeys.value.length > 0),
+})
 
 const isSelf = computed(() => {
   if (!authStore.isAuthenticated) {
@@ -201,10 +242,6 @@ const deletePostMutation = useMutation({
 
 function goEdit(): void {
   void router.push('/profile/edit')
-}
-
-function goAddresses(): void {
-  void router.push('/profile/addresses')
 }
 
 function goCreatePost(): void {
@@ -351,7 +388,7 @@ function formatPositiveRate(rate?: number): string {
 }
 
 function formatReviewRole(role?: string): string {
-  return role === 'BUYER' ? '来自买家' : '来自卖家'
+  return role === 'BUYER' ? '买家评价' : '卖家评价'
 }
 
 function formatReviewTime(raw?: string): string {
@@ -375,6 +412,56 @@ function reviewerMeta(userId: number): { nickname: string; avatarUrl?: string; u
     userNo: String(userId),
   }
 }
+
+function normalizeReviewImageObjectKeys(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw.map((item) => String(item || '').trim()).filter((item) => item.length > 0)
+  }
+  if (typeof raw !== 'string') {
+    return []
+  }
+  const trimmed = raw.trim()
+  if (!trimmed) {
+    return []
+  }
+  try {
+    const parsed = JSON.parse(trimmed)
+    if (!Array.isArray(parsed)) {
+      return []
+    }
+    return parsed.map((item) => String(item || '').trim()).filter((item) => item.length > 0)
+  } catch {
+    return []
+  }
+}
+
+function reviewImageUrlOf(objectKey: string): string {
+  return reviewImageUrlsQuery.data.value?.[objectKey] || ''
+}
+
+function formatRecentActive(raw?: string): string {
+  if (!raw) {
+    return '最近未上线'
+  }
+  const parsed = new Date(raw)
+  if (Number.isNaN(parsed.getTime())) {
+    return '最近来过'
+  }
+  const deltaMs = Date.now() - parsed.getTime()
+  if (deltaMs < 2 * 60 * 1000) {
+    return '刚刚来过'
+  }
+  if (deltaMs < 60 * 60 * 1000) {
+    return `${Math.max(1, Math.floor(deltaMs / (60 * 1000)))} 分钟前`
+  }
+  if (deltaMs < 24 * 60 * 60 * 1000) {
+    return `${Math.floor(deltaMs / (60 * 60 * 1000))} 小时前`
+  }
+  if (deltaMs < 7 * 24 * 60 * 60 * 1000) {
+    return `${Math.floor(deltaMs / (24 * 60 * 60 * 1000))} 天前`
+  }
+  return parsed.toLocaleDateString('zh-CN')
+}
 </script>
 
 <template>
@@ -390,10 +477,14 @@ function reviewerMeta(userId: number): { nickname: string; avatarUrl?: string; u
           <div class="pointer-events-none absolute inset-0 bg-gradient-to-br from-lime-300/35 via-emerald-200/20 to-amber-200/25"></div>
           <div class="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
             <div class="flex min-w-0 items-center gap-4">
-              <div class="h-20 w-20 overflow-hidden rounded-full border border-white/80 bg-stone-100 shadow-sm sm:h-24 sm:w-24">
-                <img v-if="profile?.avatarUrl" :src="profile.avatarUrl" alt="avatar" class="h-full w-full object-cover" />
-                <div v-else class="flex h-full w-full items-center justify-center text-xs text-stone-500">暂无头像</div>
-              </div>
+              <UserAvatar
+                :src="profile?.avatarUrl"
+                :name="displayNickname"
+                size-class="h-20 w-20 sm:h-24 sm:w-24"
+                fallback-size-class="h-8 w-8"
+                class="border-white/80 shadow-sm"
+                show-initial
+              />
               <div class="min-w-0">
                 <p class="line-clamp-1 text-xl font-semibold text-stone-900 sm:text-2xl">{{ displayNickname }}</p>
                 <p class="mt-1 text-sm text-stone-600">@{{ displayUsername }}</p>
@@ -413,13 +504,6 @@ function reviewerMeta(userId: number): { nickname: string; avatarUrl?: string; u
                 @click="goEdit"
               >
                 编辑资料
-              </button>
-              <button
-                type="button"
-                class="rounded-xl border border-stone-300 bg-white/90 px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
-                @click="goAddresses"
-              >
-                收货地址
               </button>
             </div>
             <button
@@ -457,7 +541,7 @@ function reviewerMeta(userId: number): { nickname: string; avatarUrl?: string; u
               <p class="text-xs text-stone-600">关注</p>
             </button>
             <div class="rounded-xl bg-white/70 px-3 py-2">
-              <p class="text-lg font-semibold text-stone-900">刚刚来过</p>
+              <p class="text-lg font-semibold text-stone-900">{{ lastActiveText }}</p>
               <p class="text-xs text-stone-600">最近访问</p>
             </div>
           </div>
@@ -468,10 +552,9 @@ function reviewerMeta(userId: number): { nickname: string; avatarUrl?: string; u
             <h2 class="text-sm font-semibold text-stone-900">信用档案</h2>
             <p v-if="creditErrorMessage" class="mt-2 text-xs text-rose-600">{{ creditErrorMessage }}</p>
             <template v-else>
-              <p class="mt-2 text-2xl font-semibold text-stone-900">{{ compositeScoreText }}</p>
-              <p class="mt-1 text-xs text-stone-600">综合分 / 等级 {{ compositeGradeText }}</p>
+              <p class="mt-2 text-lg font-semibold text-stone-900">{{ compositeReputationText }} / 等级 {{ compositeGradeText }}</p>
               <p class="mt-2 text-xs text-stone-600">
-                卖家 {{ sellerAvgStarText }} 星 · 买家 {{ buyerAvgStarText }} 星
+                买家 {{ buyerAvgStarText }} 星 · 卖家 {{ sellerAvgStarText }} 星
               </p>
             </template>
           </article>
@@ -479,14 +562,6 @@ function reviewerMeta(userId: number): { nickname: string; avatarUrl?: string; u
             <h2 class="text-sm font-semibold text-stone-900">我的帖子</h2>
             <p class="mt-2 text-2xl font-semibold text-stone-900">{{ postTotal }}</p>
             <p class="mt-1 text-xs text-stone-600">动态总数</p>
-            <button
-              v-if="isSelf"
-              type="button"
-              class="mt-3 rounded-lg border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
-              @click="goCreatePost"
-            >
-              去发帖
-            </button>
           </article>
           <article class="rounded-2xl border border-stone-200 bg-white/95 p-4">
             <h2 class="text-sm font-semibold text-stone-900">夸夸墙</h2>
@@ -604,17 +679,17 @@ function reviewerMeta(userId: number): { nickname: string; avatarUrl?: string; u
                 >
                   <div class="flex items-start justify-between gap-3">
                     <button type="button" class="flex min-w-0 items-center gap-3 text-left" @click="goUser(reviewerMeta(item.reviewerUserId).userNo)">
-                      <div class="h-11 w-11 overflow-hidden rounded-full border border-stone-200 bg-stone-100">
-                        <img
-                          v-if="reviewerMeta(item.reviewerUserId).avatarUrl"
-                          :src="reviewerMeta(item.reviewerUserId).avatarUrl"
-                          alt="avatar"
-                          class="h-full w-full object-cover"
-                        />
-                        <div v-else class="flex h-full w-full items-center justify-center text-xs text-stone-500">暂无头像</div>
-                      </div>
+                      <UserAvatar
+                        :src="reviewerMeta(item.reviewerUserId).avatarUrl"
+                        :name="reviewerMeta(item.reviewerUserId).nickname"
+                        size-class="h-11 w-11"
+                        fallback-size-class="h-4 w-4"
+                        show-initial
+                      />
                       <div class="min-w-0">
-                        <p class="line-clamp-1 text-sm font-semibold text-stone-900">{{ reviewerMeta(item.reviewerUserId).nickname }}</p>
+                        <p class="line-clamp-1 text-sm font-semibold text-stone-900">
+                          {{ (item.reviewerRole === 'BUYER' ? '买家' : '卖家') + ' · ' + reviewerMeta(item.reviewerUserId).nickname }}
+                        </p>
                         <p class="mt-0.5 text-xs text-stone-500">{{ formatReviewRole(item.reviewerRole) }} · {{ formatReviewTime(item.createdAt) }}</p>
                       </div>
                     </button>
@@ -622,6 +697,18 @@ function reviewerMeta(userId: number): { nickname: string; avatarUrl?: string; u
                   </div>
 
                   <p class="mt-3 text-sm text-stone-700">{{ item.comment || '该评价未公开评论' }}</p>
+                  <div v-if="normalizeReviewImageObjectKeys(item.imageObjectKeys).length > 0" class="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                    <article
+                      v-for="imageKey in normalizeReviewImageObjectKeys(item.imageObjectKeys)"
+                      :key="`${item.reviewId}-${imageKey}`"
+                      class="aspect-square overflow-hidden rounded-lg border border-stone-200 bg-stone-100"
+                    >
+                      <img v-if="reviewImageUrlOf(imageKey)" :src="reviewImageUrlOf(imageKey)" alt="评价图片" class="h-full w-full object-cover" />
+                      <div v-else class="flex h-full items-center justify-center px-2 text-center text-[11px] text-stone-500">
+                        {{ reviewImageUrlsQuery.isFetching.value ? '图片加载中...' : '图片不可用' }}
+                      </div>
+                    </article>
+                  </div>
                   <div class="mt-2 flex flex-wrap gap-2 text-xs text-stone-600">
                     <span class="rounded-full bg-stone-100 px-2 py-1">沟通 {{ item.communicationStar }}</span>
                     <span class="rounded-full bg-stone-100 px-2 py-1">及时 {{ item.timelinessStar }}</span>
@@ -643,7 +730,7 @@ function reviewerMeta(userId: number): { nickname: string; avatarUrl?: string; u
                 </article>
                 <article class="rounded-xl border border-stone-200 bg-white p-3 text-sm">
                   <p class="text-xs text-stone-500">综合信用</p>
-                  <p class="mt-1 font-semibold text-stone-900">{{ compositeScoreText }} 分</p>
+                  <p class="mt-1 font-semibold text-stone-900">{{ compositeReputationText }}</p>
                   <p class="mt-1 text-xs text-stone-600">等级 {{ compositeGradeText }}</p>
                 </article>
               </div>

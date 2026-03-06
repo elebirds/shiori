@@ -18,7 +18,8 @@ public interface UserProfileMapper {
                    gender,
                    birth_date AS birthDate,
                    bio,
-                   avatar_url AS avatarUrl
+                   avatar_url AS avatarUrl,
+                   last_login_at AS lastLoginAt
             FROM u_user
             WHERE id = #{userId}
               AND is_deleted = 0
@@ -34,7 +35,8 @@ public interface UserProfileMapper {
                    gender,
                    birth_date AS birthDate,
                    bio,
-                   avatar_url AS avatarUrl
+                   avatar_url AS avatarUrl,
+                   last_login_at AS lastLoginAt
             FROM u_user
             WHERE user_no = #{userNo}
               AND is_deleted = 0
@@ -51,7 +53,8 @@ public interface UserProfileMapper {
                    gender,
                    birth_date AS birthDate,
                    bio,
-                   avatar_url AS avatarUrl
+                   avatar_url AS avatarUrl,
+                   last_login_at AS lastLoginAt
             FROM u_user
             WHERE is_deleted = 0
               AND id IN
@@ -89,4 +92,18 @@ public interface UserProfileMapper {
             """)
     int updateAvatarByUserId(@Param("userId") Long userId,
                              @Param("avatarUrl") String avatarUrl);
+
+    @Update("""
+            UPDATE u_user
+            SET last_login_at = CURRENT_TIMESTAMP(3),
+                updated_at = CURRENT_TIMESTAMP(3)
+            WHERE id = #{userId}
+              AND is_deleted = 0
+              AND (
+                last_login_at IS NULL
+                OR TIMESTAMPDIFF(SECOND, last_login_at, CURRENT_TIMESTAMP(3)) >= #{minIntervalSeconds}
+              )
+            """)
+    int touchLastActiveByUserId(@Param("userId") Long userId,
+                                @Param("minIntervalSeconds") int minIntervalSeconds);
 }

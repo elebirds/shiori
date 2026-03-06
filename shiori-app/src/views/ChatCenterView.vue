@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore, type ChatIncomingMessageEvent, type ChatMessageVM } from '@/stores/chat'
 import { recordChatToOrderClickV2 } from '@/api/orderV2'
+import UserAvatar from '@/components/UserAvatar.vue'
 import { formatMessagePreview, parseProductCardContent, parseTradeStatusCardContent } from '@/utils/chatCards'
 
 const route = useRoute()
@@ -50,9 +51,7 @@ const activeConversation = computed(() => {
 })
 
 const selfDisplayName = computed(() => authStore.profile?.nickname || authStore.user?.username || '我')
-const selfAvatarUrl = computed(() => authStore.profile?.avatarUrl || '')
 const peerDisplayName = computed(() => activeConversation.value?.peerProfile?.nickname || '对方')
-const peerAvatarUrl = computed(() => activeConversation.value?.peerProfile?.avatarUrl || '')
 
 const canLoadOlder = computed(() => {
   const conversationId = activeConversationId.value
@@ -245,17 +244,15 @@ function isMine(senderId: number): boolean {
   return senderId === authStore.user?.userId
 }
 
-function resolveAvatarUrl(senderId: number): string {
-  return isMine(senderId) ? selfAvatarUrl.value : peerAvatarUrl.value
+function resolveSenderAvatarUrl(senderId: number): string {
+  if (isMine(senderId)) {
+    return authStore.profile?.avatarUrl || ''
+  }
+  return activeConversation.value?.peerProfile?.avatarUrl || ''
 }
 
-function resolveAvatarFallback(senderId: number): string {
-  const source = isMine(senderId) ? selfDisplayName.value : peerDisplayName.value
-  const normalized = source.trim()
-  if (!normalized) {
-    return isMine(senderId) ? '我' : '聊'
-  }
-  return normalized.slice(0, 1)
+function resolveSenderDisplayName(senderId: number): string {
+  return isMine(senderId) ? selfDisplayName.value : peerDisplayName.value
 }
 
 async function selectConversation(conversationId: number): Promise<void> {
@@ -425,13 +422,13 @@ function jumpToLatest(): void {
           @click="selectConversation(item.conversationId)"
         >
           <div class="flex items-start gap-3">
-            <img
-              v-if="item.peerProfile?.avatarUrl"
-              :src="item.peerProfile.avatarUrl"
-              alt="avatar"
-              class="h-10 w-10 rounded-full border border-stone-200 object-cover"
+            <UserAvatar
+              :src="item.peerProfile?.avatarUrl"
+              :name="item.peerProfile?.nickname || ('用户 ' + item.peerUserId)"
+              size-class="h-10 w-10"
+              fallback-size-class="h-4 w-4"
+              show-initial
             />
-            <div v-else class="flex h-10 w-10 items-center justify-center rounded-full border border-stone-200 bg-stone-100 text-xs text-stone-500">头像</div>
             <div class="min-w-0 flex-1">
               <div class="flex items-center justify-between gap-2">
                 <p class="truncate text-sm font-semibold text-stone-900">{{ item.peerProfile?.nickname || ('用户 ' + item.peerUserId) }}</p>
@@ -493,15 +490,15 @@ function jumpToLatest(): void {
               >
                 <div
                   v-if="!isMine(entry.message?.senderId || 0)"
-                  class="chat-avatar flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-stone-200 bg-white text-xs font-semibold text-stone-600"
+                  class="chat-avatar"
                 >
-                  <img
-                    v-if="resolveAvatarUrl(entry.message?.senderId || 0)"
-                    :src="resolveAvatarUrl(entry.message?.senderId || 0)"
-                    alt="avatar"
-                    class="h-full w-full object-cover"
+                  <UserAvatar
+                    :src="resolveSenderAvatarUrl(entry.message?.senderId || 0)"
+                    :name="resolveSenderDisplayName(entry.message?.senderId || 0)"
+                    size-class="h-9 w-9"
+                    fallback-size-class="h-4 w-4"
+                    show-initial
                   />
-                  <span v-else>{{ resolveAvatarFallback(entry.message?.senderId || 0) }}</span>
                 </div>
 
                 <div class="flex max-w-[78%] flex-col" :class="isMine(entry.message?.senderId || 0) ? 'items-end' : 'items-start'">
@@ -548,15 +545,15 @@ function jumpToLatest(): void {
 
                 <div
                   v-if="isMine(entry.message?.senderId || 0)"
-                  class="chat-avatar flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-stone-200 bg-stone-900 text-xs font-semibold text-white"
+                  class="chat-avatar"
                 >
-                  <img
-                    v-if="resolveAvatarUrl(entry.message?.senderId || 0)"
-                    :src="resolveAvatarUrl(entry.message?.senderId || 0)"
-                    alt="avatar"
-                    class="h-full w-full object-cover"
+                  <UserAvatar
+                    :src="resolveSenderAvatarUrl(entry.message?.senderId || 0)"
+                    :name="resolveSenderDisplayName(entry.message?.senderId || 0)"
+                    size-class="h-9 w-9"
+                    fallback-size-class="h-4 w-4"
+                    show-initial
                   />
-                  <span v-else>{{ resolveAvatarFallback(entry.message?.senderId || 0) }}</span>
                 </div>
               </article>
             </template>

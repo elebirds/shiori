@@ -6,6 +6,7 @@ import 'vue-advanced-cropper/dist/style.css'
 
 import { getAccessToken } from '@/api/http'
 import ResultState from '@/components/ResultState.vue'
+import UserAvatar from '@/components/UserAvatar.vue'
 import { ApiBizError } from '@/types/result'
 import { useAuthStore } from '@/stores/auth'
 
@@ -224,10 +225,7 @@ onBeforeUnmount(() => {
           <h2 class="text-base font-semibold text-stone-900">资料信息</h2>
 
           <div class="mt-4 flex items-center gap-4">
-            <div class="h-16 w-16 overflow-hidden rounded-full border border-stone-200 bg-stone-100">
-              <img v-if="avatarPreviewUrl" :src="avatarPreviewUrl" alt="avatar" class="h-full w-full object-cover" />
-              <div v-else class="flex h-full w-full items-center justify-center text-xs text-stone-500">暂无头像</div>
-            </div>
+            <UserAvatar :src="avatarPreviewUrl" :name="profileForm.nickname" size-class="h-16 w-16" fallback-size-class="h-7 w-7" show-initial />
             <label class="rounded-xl border border-stone-300 px-3 py-2 text-sm text-stone-700 transition hover:border-amber-500">
               选择头像
               <input type="file" accept="image/png,image/jpeg,image/webp" class="hidden" @change="onAvatarSelected" />

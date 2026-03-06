@@ -3,6 +3,7 @@ import { computed } from 'vue'
 
 import type { PublicUserProfile } from '@/api/auth'
 import type { PostV2ItemResponse } from '@/api/social'
+import UserAvatar from '@/components/UserAvatar.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -108,15 +109,13 @@ function formatPriceRange(minPriceCent?: number, maxPriceCent?: number): string 
           :disabled="!authorUserNo"
           @click="handleOpenUser"
         >
-          <span class="h-9 w-9 overflow-hidden rounded-full border border-stone-200 bg-stone-100">
-            <img
-              v-if="authorProfile?.avatarUrl"
-              :src="authorProfile.avatarUrl"
-              alt="avatar"
-              class="h-full w-full object-cover"
-            />
-            <span v-else class="flex h-full w-full items-center justify-center text-xs text-stone-500">头像</span>
-          </span>
+          <UserAvatar
+            :src="authorProfile?.avatarUrl"
+            :name="authorName"
+            size-class="h-9 w-9"
+            fallback-size-class="h-4 w-4"
+            show-initial
+          />
           <span class="min-w-0">
             <span class="block line-clamp-1 text-sm font-semibold text-stone-900 group-hover:underline">{{ authorName }}</span>
             <span class="block text-xs text-stone-500">@{{ authorUserNo || post.authorUserId }}</span>

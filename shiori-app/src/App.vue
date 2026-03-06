@@ -2,6 +2,7 @@
 import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
+import { pingMyActive } from '@/api/auth'
 import AppHeader from '@/components/AppHeader.vue'
 import ChatPopupStack from '@/components/ChatPopupStack.vue'
 import NotifyPopupStack from '@/components/NotifyPopupStack.vue'
@@ -18,6 +19,11 @@ let audioContext: AudioContext | null = null
 let lastSoundAt = 0
 
 const CHAT_SOUND_MIN_INTERVAL_MS = 2_000
+const ACTIVE_PING_MIN_INTERVAL_MS = 5 * 60 * 1000
+let lastActivePingAt = 0
+let activePingTimer: number | null = null
+let activePingInFlight = false
+let activeListenersBound = false
 
 function shouldShowChatPopup(event: ChatIncomingMessageEvent): boolean {
   const route = router.currentRoute.value
@@ -96,6 +102,68 @@ function playChatPopupSound(): void {
   }
 }
 
+function bindActiveListeners(): void {
+  if (activeListenersBound) {
+    return
+  }
+  window.addEventListener('focus', handleForegroundActive)
+  document.addEventListener('visibilitychange', handleForegroundActive)
+  activeListenersBound = true
+}
+
+function unbindActiveListeners(): void {
+  if (!activeListenersBound) {
+    return
+  }
+  window.removeEventListener('focus', handleForegroundActive)
+  document.removeEventListener('visibilitychange', handleForegroundActive)
+  activeListenersBound = false
+}
+
+function startActivePingTimer(): void {
+  stopActivePingTimer()
+  activePingTimer = window.setInterval(() => {
+    if (document.visibilityState !== 'visible') {
+      return
+    }
+    void reportActive()
+  }, ACTIVE_PING_MIN_INTERVAL_MS)
+}
+
+function stopActivePingTimer(): void {
+  if (activePingTimer == null) {
+    return
+  }
+  window.clearInterval(activePingTimer)
+  activePingTimer = null
+}
+
+function handleForegroundActive(): void {
+  if (document.visibilityState !== 'visible') {
+    return
+  }
+  void reportActive()
+}
+
+async function reportActive(force = false): Promise<void> {
+  if (!authStore.isAuthenticated || activePingInFlight) {
+    return
+  }
+  const now = Date.now()
+  if (!force && now - lastActivePingAt < ACTIVE_PING_MIN_INTERVAL_MS) {
+    return
+  }
+  activePingInFlight = true
+  try {
+    await pingMyActive()
+    lastActivePingAt = Date.now()
+  } catch {
+    // ignore transient active ping failures
+  } finally {
+    activePingInFlight = false
+  }
+}
+
 onMounted(() => {
   unlistenIncoming = chatStore.registerIncomingMessageListener(handleIncomingMessage)
 })
@@ -105,7 +173,15 @@ watch(
   (authed) => {
     if (!authed) {
       chatPopupStore.clearAll()
+      stopActivePingTimer()
+      unbindActiveListeners()
+      lastActivePingAt = 0
+      activePingInFlight = false
+      return
     }
+    bindActiveListeners()
+    startActivePingTimer()
+    void reportActive(true)
   },
   { immediate: true },
 )
@@ -119,6 +195,8 @@ onBeforeUnmount(() => {
     void audioContext.close()
     audioContext = null
   }
+  stopActivePingTimer()
+  unbindActiveListeners()
   chatPopupStore.clearAll()
 })
 </script>

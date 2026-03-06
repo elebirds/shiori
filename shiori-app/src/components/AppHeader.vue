@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { getAccessToken } from '@/api/http'
 import { redeemCdk } from '@/api/payment'
+import UserAvatar from '@/components/UserAvatar.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
 import { useNotifyStore } from '@/stores/notify'
@@ -325,10 +326,7 @@ onBeforeUnmount(() => {
 
           <div v-if="!isMobileLayout" ref="menuRef" class="relative flex items-center gap-2">
             <span class="relative h-8 w-8">
-              <span class="flex h-8 w-8 overflow-hidden rounded-full border border-stone-200 bg-stone-100">
-                <img v-if="avatarPreviewUrl" :src="avatarPreviewUrl" alt="avatar" class="h-full w-full object-cover" />
-                <span v-else class="flex h-full w-full items-center justify-center text-xs text-stone-500">头像</span>
-              </span>
+              <UserAvatar :src="avatarPreviewUrl" :name="profileNickname" size-class="h-8 w-8" fallback-size-class="h-4 w-4" />
             </span>
             <span class="hidden leading-tight sm:block">
               <span class="block text-sm font-medium text-stone-900">{{ profileNickname }}</span>
@@ -405,12 +403,11 @@ onBeforeUnmount(() => {
           <RouterLink
             v-else
             to="/profile"
-            class="relative flex h-8 w-8 overflow-hidden rounded-full border border-stone-200 bg-stone-100"
+            class="relative"
             aria-label="个人中心"
             title="个人中心"
           >
-            <img v-if="avatarPreviewUrl" :src="avatarPreviewUrl" alt="avatar" class="h-full w-full object-cover" />
-            <span v-else class="flex h-full w-full items-center justify-center text-xs text-stone-500">头像</span>
+            <UserAvatar :src="avatarPreviewUrl" :name="profileNickname" size-class="h-8 w-8" fallback-size-class="h-4 w-4" />
           </RouterLink>
         </template>
 

@@ -1,6 +1,7 @@
 package moe.hhm.shiori.user.profile.controller;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import moe.hhm.shiori.common.error.UserErrorCode;
 import moe.hhm.shiori.common.exception.BizException;
 import moe.hhm.shiori.common.mvc.GlobalExceptionHandler;
@@ -30,6 +31,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -130,7 +132,8 @@ class UserProfileControllerMvcTest {
                         "hello",
                         10L,
                         20L,
-                        false
+                        false,
+                        LocalDateTime.of(2026, 3, 7, 9, 30, 0)
                 )
         );
 
@@ -158,7 +161,8 @@ class UserProfileControllerMvcTest {
                                 "hello",
                                 null,
                                 null,
-                                false
+                                false,
+                                LocalDateTime.of(2026, 3, 7, 9, 20, 0)
                         ),
                         new PublicUserProfileResponse(
                                 2L,
@@ -171,7 +175,8 @@ class UserProfileControllerMvcTest {
                                 "hi",
                                 null,
                                 null,
-                                false
+                                false,
+                                LocalDateTime.of(2026, 3, 7, 9, 10, 0)
                         )
                 )
         );
@@ -215,6 +220,18 @@ class UserProfileControllerMvcTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.avatarUrl").value("/api/user/media/avatar/avatar_1_202603_abc.jpg"));
+    }
+
+    @Test
+    void shouldPingMyActive() throws Exception {
+        mockMvc.perform(post("/api/user/me/active-ping")
+                        .principal(new UsernamePasswordAuthenticationToken(
+                                "1", "N/A", java.util.List.of(new SimpleGrantedAuthority("ROLE_USER"))
+                        )))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0));
+
+        verify(userProfileService).pingActive(1L);
     }
 
     @Test

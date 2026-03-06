@@ -1,5 +1,7 @@
 package moe.hhm.shiori.user.profile.dto;
 
+import java.time.LocalDateTime;
+
 public record PublicUserProfileResponse(
         Long userId,
         String userNo,
@@ -11,6 +13,7 @@ public record PublicUserProfileResponse(
         String bio,
         Long followerCount,
         Long followingCount,
-        Boolean followedByCurrentUser
+        Boolean followedByCurrentUser,
+        LocalDateTime lastActiveAt
 ) {
 }

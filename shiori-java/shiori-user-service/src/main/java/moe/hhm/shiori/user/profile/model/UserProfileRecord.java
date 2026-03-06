@@ -1,6 +1,7 @@
 package moe.hhm.shiori.user.profile.model;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 public record UserProfileRecord(
         Long userId,
@@ -10,6 +11,7 @@ public record UserProfileRecord(
         Integer gender,
         LocalDate birthDate,
         String bio,
-        String avatarUrl
+        String avatarUrl,
+        LocalDateTime lastLoginAt
 ) {
 }

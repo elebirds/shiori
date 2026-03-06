@@ -1,6 +1,7 @@
 package moe.hhm.shiori.user.profile.service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import moe.hhm.shiori.common.exception.BizException;
 import moe.hhm.shiori.user.follow.service.UserFollowService;
 import moe.hhm.shiori.user.profile.config.UserAvatarStorageProperties;
@@ -55,7 +56,8 @@ class UserProfileServiceTest {
                         2,
                         LocalDate.of(2000, 1, 2),
                         "hello",
-                        "avatar_1_202603_xxx.jpg"
+                        "avatar_1_202603_xxx.jpg",
+                        null
                 )
         );
 
@@ -72,6 +74,7 @@ class UserProfileServiceTest {
 
     @Test
     void shouldGetPublicProfileByUserNo() {
+        LocalDateTime lastActiveAt = LocalDateTime.of(2026, 3, 7, 10, 30, 0);
         when(userProfileMapper.findByUserNo("U202603030001")).thenReturn(
                 new UserProfileRecord(
                         1L,
@@ -81,7 +84,8 @@ class UserProfileServiceTest {
                         2,
                         LocalDate.of(2000, 1, 2),
                         "hello",
-                        "avatar_1_202603_xxx.jpg"
+                        "avatar_1_202603_xxx.jpg",
+                        lastActiveAt
                 )
         );
         when(userFollowService.getFollowStats(1L, null)).thenReturn(
@@ -98,6 +102,7 @@ class UserProfileServiceTest {
         assertThat(response.followerCount()).isEqualTo(6L);
         assertThat(response.followingCount()).isEqualTo(9L);
         assertThat(response.followedByCurrentUser()).isFalse();
+        assertThat(response.lastActiveAt()).isEqualTo(lastActiveAt);
     }
 
     @Test
@@ -112,7 +117,8 @@ class UserProfileServiceTest {
                                 1,
                                 LocalDate.of(2001, 1, 1),
                                 "hi",
-                                "avatar_2.jpg"
+                                "avatar_2.jpg",
+                                null
                         ),
                         new UserProfileRecord(
                                 1L,
@@ -122,7 +128,8 @@ class UserProfileServiceTest {
                                 2,
                                 LocalDate.of(2000, 1, 2),
                                 "hello",
-                                "avatar_1.jpg"
+                                "avatar_1.jpg",
+                                null
                         )
                 )
         );
@@ -139,10 +146,10 @@ class UserProfileServiceTest {
         LocalDate birthDate = LocalDate.of(2001, 6, 1);
         when(userProfileMapper.findByUserId(1L))
                 .thenReturn(new UserProfileRecord(
-                        1L, "U202603030001", "alice", "Alice", 0, null, null, "avatar_old.jpg"
+                        1L, "U202603030001", "alice", "Alice", 0, null, null, "avatar_old.jpg", null
                 ))
                 .thenReturn(new UserProfileRecord(
-                        1L, "U202603030001", "alice", "AliceNew", 1, birthDate, "new bio", "avatar_old.jpg"
+                        1L, "U202603030001", "alice", "AliceNew", 1, birthDate, "new bio", "avatar_old.jpg", null
                 ));
 
         UserProfileResponse response = userProfileService.updateMyProfile(
@@ -158,7 +165,7 @@ class UserProfileServiceTest {
     @Test
     void shouldUploadAvatar() {
         when(userProfileMapper.findByUserId(1L)).thenReturn(new UserProfileRecord(
-                1L, "U202603030001", "alice", "Alice", 0, null, null, null
+                1L, "U202603030001", "alice", "Alice", 0, null, null, null, null
         ));
         when(userAvatarStorageService.uploadAvatar(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.any()))
                 .thenReturn("avatar_1_202603_abc.jpg");
@@ -171,9 +178,16 @@ class UserProfileServiceTest {
     }
 
     @Test
+    void shouldPingActive() {
+        userProfileService.pingActive(1L);
+
+        verify(userProfileMapper).touchLastActiveByUserId(1L, 120);
+    }
+
+    @Test
     void shouldRejectInvalidGender() {
         when(userProfileMapper.findByUserId(1L)).thenReturn(
-                new UserProfileRecord(1L, "U202603030001", "alice", "Alice", 0, null, null, null)
+                new UserProfileRecord(1L, "U202603030001", "alice", "Alice", 0, null, null, null, null)
         );
 
         assertThatThrownBy(() -> userProfileService.updateMyProfile(

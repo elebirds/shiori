@@ -33,6 +33,7 @@ public class UserProfileService {
     private static final int MIN_AGE = 13;
     private static final int MAX_AGE = 120;
     private static final int MAX_BATCH_USER_IDS = 100;
+    private static final int ACTIVE_TOUCH_MIN_INTERVAL_SECONDS = 120;
 
     private final UserProfileMapper userProfileMapper;
     private final UserFollowService userFollowService;
@@ -113,6 +114,13 @@ public class UserProfileService {
         return new AvatarUploadResponse(buildAvatarUrl(avatarKey));
     }
 
+    public void pingActive(Long userId) {
+        if (userId == null || userId <= 0) {
+            throw new BizException(UserErrorCode.PROFILE_INVALID, HttpStatus.BAD_REQUEST);
+        }
+        userProfileMapper.touchLastActiveByUserId(userId, ACTIVE_TOUCH_MIN_INTERVAL_SECONDS);
+    }
+
     public UserAvatarStorageService.AvatarObject loadAvatar(String avatarKey) {
         return userAvatarStorageService.loadAvatar(avatarKey);
     }
@@ -182,7 +190,8 @@ public class UserProfileService {
                 record.bio(),
                 followStats == null ? null : followStats.followerCount(),
                 followStats == null ? null : followStats.followingCount(),
-                followStats != null && followStats.followedByCurrentUser()
+                followStats != null && followStats.followedByCurrentUser(),
+                record.lastLoginAt()
         );
     }
 

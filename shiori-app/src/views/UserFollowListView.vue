@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { getUserProfileByUserNo, listUserFollowersByUserNo, listUserFollowingByUserNo } from '@/api/auth'
 import ResultState from '@/components/ResultState.vue'
+import UserAvatar from '@/components/UserAvatar.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -101,10 +102,7 @@ function goUser(userNo: string): void {
             class="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-white/95 p-4"
           >
             <button type="button" class="flex min-w-0 items-center gap-3 text-left" @click="goUser(item.userNo)">
-              <div class="h-12 w-12 overflow-hidden rounded-full border border-stone-200 bg-stone-100">
-                <img v-if="item.avatarUrl" :src="item.avatarUrl" alt="avatar" class="h-full w-full object-cover" />
-                <div v-else class="flex h-full w-full items-center justify-center text-xs text-stone-500">暂无头像</div>
-              </div>
+              <UserAvatar :src="item.avatarUrl" :name="item.nickname || item.userNo" size-class="h-12 w-12" fallback-size-class="h-5 w-5" show-initial />
               <div class="min-w-0">
                 <p class="line-clamp-1 text-sm font-semibold text-stone-900">{{ item.nickname || item.userNo }}</p>
                 <p class="mt-0.5 line-clamp-1 text-xs text-stone-500">@{{ item.userNo }}</p>

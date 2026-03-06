@@ -72,6 +72,7 @@ export interface PublicUserProfile {
   followerCount?: number
   followingCount?: number
   followedByCurrentUser?: boolean
+  lastActiveAt?: string
 }
 
 export interface FollowUserItem {
@@ -190,6 +191,10 @@ export function listUserFollowingByUserNo(
 
 export function updateMyProfile(payload: UpdateProfileRequest): Promise<UserProfile> {
   return httpPut<UserProfile>('/api/user/me', payload)
+}
+
+export function pingMyActive(): Promise<void> {
+  return httpPost<void>('/api/user/me/active-ping')
 }
 
 export async function uploadMyAvatar(file: File): Promise<AvatarUploadResponse> {

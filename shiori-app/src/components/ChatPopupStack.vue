@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 
+import UserAvatar from '@/components/UserAvatar.vue'
 import { useChatPopupStore } from '@/stores/chatPopup'
 import { formatMessagePreview } from '@/utils/chatCards'
 
@@ -28,14 +29,6 @@ function formatTime(raw: string): string {
   }
   const minute = `${date.getMinutes()}`.padStart(2, '0')
   return `${date.getHours()}:${minute}`
-}
-
-function avatarFallback(name: string): string {
-  const normalized = name.trim()
-  if (!normalized) {
-    return '聊'
-  }
-  return normalized.slice(0, 1)
 }
 
 async function openConversation(conversationId: number): Promise<void> {
@@ -66,10 +59,13 @@ function dismiss(id: string): void {
           class="flex min-w-0 flex-1 items-start gap-2 text-left"
           @click="openConversation(item.conversationId)"
         >
-          <span class="flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border border-stone-200 bg-stone-100 text-xs font-semibold text-stone-600">
-            <img v-if="item.peerAvatarUrl" :src="item.peerAvatarUrl" alt="avatar" class="h-full w-full object-cover" />
-            <span v-else>{{ avatarFallback(item.peerNickname) }}</span>
-          </span>
+          <UserAvatar
+            :src="item.peerAvatarUrl"
+            :name="item.peerNickname"
+            size-class="h-9 w-9"
+            fallback-size-class="h-4 w-4"
+            show-initial
+          />
           <span class="min-w-0 flex-1">
             <span class="flex items-center justify-between gap-2">
               <span class="truncate text-sm font-semibold text-stone-900">{{ item.peerNickname || `会话 ${item.conversationId}` }}</span>

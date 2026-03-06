@@ -60,6 +60,12 @@ public class UserProfileController {
         return userProfileService.updateMyProfile(userId, request);
     }
 
+    @PostMapping("/me/active-ping")
+    public void pingMyActive(Authentication authentication) {
+        Long userId = CurrentUserSupport.requireUserId(authentication);
+        userProfileService.pingActive(userId);
+    }
+
     @PostMapping(value = "/media/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public AvatarUploadResponse uploadMyAvatar(@RequestPart("file") MultipartFile file,
                                                Authentication authentication) {
