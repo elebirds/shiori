@@ -1,15 +1,8 @@
 <script setup lang="ts">
-import { useMutation, useQuery } from '@tanstack/vue-query'
-import { computed, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useQuery } from '@tanstack/vue-query'
+import { computed, reactive } from 'vue'
 
-import { getWalletBalance, listWalletLedger, redeemCdk } from '@/api/payment'
-import { resolvePaymentErrorMessage } from '@/utils/paymentError'
-
-const router = useRouter()
-const cdkCode = ref('')
-const redeemMessage = ref('')
-const redeemError = ref('')
+import { getWalletBalance, listWalletLedger } from '@/api/payment'
 
 const ledgerDraft = reactive({
   bizType: '',
@@ -58,21 +51,6 @@ const ledgerQuery = useQuery({
       createdFrom: ledgerApplied.createdFrom || undefined,
       createdTo: ledgerApplied.createdTo || undefined,
     }),
-})
-
-const redeemMutation = useMutation({
-  mutationFn: () => redeemCdk({ code: cdkCode.value.trim() }),
-  onSuccess: async (response) => {
-    redeemError.value = ''
-    redeemMessage.value = `兑换成功，已入账 ${formatMoney(response.redeemAmountCent)}`
-    cdkCode.value = ''
-    await walletQuery.refetch()
-    await ledgerQuery.refetch()
-  },
-  onError: (error) => {
-    redeemMessage.value = ''
-    redeemError.value = resolvePaymentErrorMessage(error, 'CDK 兑换失败，请稍后重试')
-  },
 })
 
 const wallet = computed(() => {
@@ -149,16 +127,6 @@ function clearLedgerFilter(): void {
   ledgerDraft.createdTo = ''
   applyLedgerFilter()
 }
-
-function handleRedeem(): void {
-  redeemMessage.value = ''
-  redeemError.value = ''
-  if (!cdkCode.value.trim()) {
-    redeemError.value = '请输入 CDK 兑换码'
-    return
-  }
-  redeemMutation.mutate()
-}
 </script>
 
 <template>
@@ -169,7 +137,7 @@ function handleRedeem(): void {
     >
       <p class="text-xs uppercase tracking-[0.26em] text-blue-100/90">钱包中心</p>
       <h1 class="mt-2 font-display text-3xl tracking-wide">余额钱包</h1>
-      <p class="mt-2 text-sm text-blue-50/90">用于订单余额支付、退款回流与 CDK 充值，资金流水支持按业务号与变更类型检索。</p>
+      <p class="mt-2 text-sm text-blue-50/90">用于订单余额支付与退款回流，资金流水支持按业务号与变更类型检索。</p>
     </header>
 
     <div v-if="walletQuery.isLoading.value" class="rounded-2xl border border-blue-100 bg-[var(--shiori-pay-surface)] p-6 text-sm text-[var(--shiori-pay-mute)]">
@@ -199,38 +167,7 @@ function handleRedeem(): void {
         </article>
       </div>
 
-      <div class="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-        <article class="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
-          <h2 class="text-lg font-semibold text-[var(--shiori-pay-ink)]">CDK 快捷兑换</h2>
-          <p class="mt-1 text-sm text-[var(--shiori-pay-mute)]">输入管理员发放的 CDK 后立即入账可用余额。</p>
-          <div class="mt-4 flex flex-col gap-3 sm:flex-row">
-            <input
-              v-model.trim="cdkCode"
-              type="text"
-              maxlength="128"
-              placeholder="请输入 CDK 兑换码"
-              class="h-11 flex-1 rounded-xl border border-blue-200 px-3 text-sm text-[var(--shiori-pay-ink)] outline-none transition focus:border-[var(--shiori-pay-blue-600)] focus:ring-2 focus:ring-[var(--shiori-pay-blue-500)]/20"
-            />
-            <button
-              type="button"
-              class="h-11 rounded-xl bg-[var(--shiori-pay-blue-700)] px-5 text-sm font-medium text-white transition hover:bg-[var(--shiori-pay-blue-800)] disabled:cursor-not-allowed disabled:opacity-65"
-              :disabled="redeemMutation.isPending.value"
-              @click="handleRedeem"
-            >
-              {{ redeemMutation.isPending.value ? '兑换中...' : '立即兑换' }}
-            </button>
-          </div>
-          <p v-if="redeemMessage" class="mt-3 text-sm text-emerald-600">{{ redeemMessage }}</p>
-          <p v-if="redeemError" class="mt-3 text-sm text-rose-600">{{ redeemError }}</p>
-          <button
-            type="button"
-            class="mt-4 rounded-xl border border-blue-200 px-4 py-2 text-sm text-[var(--shiori-pay-blue-700)] transition hover:bg-blue-50"
-            @click="router.push('/orders')"
-          >
-            去查看订单与退款状态
-          </button>
-        </article>
-
+      <div>
         <article class="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
           <h2 class="text-lg font-semibold text-[var(--shiori-pay-ink)]">资金流水</h2>
 

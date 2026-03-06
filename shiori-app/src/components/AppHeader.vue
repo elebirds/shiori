@@ -3,9 +3,11 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getAccessToken } from '@/api/http'
+import { redeemCdk } from '@/api/payment'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
 import { useNotifyStore } from '@/stores/notify'
+import { resolvePaymentErrorMessage } from '@/utils/paymentError'
 
 const router = useRouter()
 const route = useRoute()
@@ -17,6 +19,11 @@ const busy = ref(false)
 const dropdownOpen = ref(false)
 const mobileMenuOpen = ref(false)
 const isMobileLayout = ref(false)
+const cdkDialogOpen = ref(false)
+const cdkCode = ref('')
+const cdkMessage = ref('')
+const cdkError = ref('')
+const cdkSubmitting = ref(false)
 const menuRef = ref<HTMLElement | null>(null)
 const avatarPreviewUrl = ref('')
 let avatarBlobUrl: string | null = null
@@ -139,6 +146,43 @@ function closeMobileMenu(): void {
   mobileMenuOpen.value = false
 }
 
+function openCdkDialog(): void {
+  cdkDialogOpen.value = true
+  cdkMessage.value = ''
+  cdkError.value = ''
+  cdkCode.value = ''
+  closeDropdown()
+  closeMobileMenu()
+}
+
+function closeCdkDialog(): void {
+  if (cdkSubmitting.value) {
+    return
+  }
+  cdkDialogOpen.value = false
+}
+
+async function handleCdkRedeem(): Promise<void> {
+  cdkMessage.value = ''
+  cdkError.value = ''
+  const code = cdkCode.value.trim()
+  if (!code) {
+    cdkError.value = '请输入 CDK 兑换码'
+    return
+  }
+
+  cdkSubmitting.value = true
+  try {
+    const response = await redeemCdk({ code })
+    cdkCode.value = ''
+    cdkMessage.value = `兑换成功，已入账 ¥ ${(response.redeemAmountCent / 100).toFixed(2)}`
+  } catch (error) {
+    cdkError.value = resolvePaymentErrorMessage(error, 'CDK 兑换失败，请稍后重试')
+  } finally {
+    cdkSubmitting.value = false
+  }
+}
+
 function handleDocumentClick(event: MouseEvent): void {
   if (!menuRef.value) {
     return
@@ -169,6 +213,7 @@ watch(
   () => {
     closeDropdown()
     closeMobileMenu()
+    cdkDialogOpen.value = false
   },
 )
 
@@ -305,13 +350,13 @@ onBeforeUnmount(() => {
               >
                 个人中心
               </RouterLink>
-              <RouterLink
-                to="/profile/edit"
-                class="block px-3 py-2 text-sm text-stone-700 transition hover:bg-stone-100"
-                @click="closeDropdown"
+              <button
+                type="button"
+                class="block w-full px-3 py-2 text-left text-sm text-stone-700 transition hover:bg-stone-100"
+                @click="openCdkDialog"
               >
-                编辑资料
-              </RouterLink>
+                CDK 兑换
+              </button>
               <RouterLink
                 to="/notifications"
                 class="flex items-center justify-between px-3 py-2 text-sm text-stone-700 transition hover:bg-stone-100"
@@ -323,26 +368,6 @@ onBeforeUnmount(() => {
                   class="rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white"
                 >
                   {{ notifyStore.unreadCount > 99 ? '99+' : notifyStore.unreadCount }}
-                </span>
-              </RouterLink>
-              <RouterLink
-                to="/wallet"
-                class="block px-3 py-2 text-sm text-stone-700 transition hover:bg-stone-100"
-                @click="closeDropdown"
-              >
-                钱包
-              </RouterLink>
-              <RouterLink
-                to="/chat"
-                class="flex items-center justify-between px-3 py-2 text-sm text-stone-700 transition hover:bg-stone-100"
-                @click="closeDropdown"
-              >
-                <span>聊天</span>
-                <span
-                  v-if="chatStore.chatUnreadMessageCount > 0"
-                  class="rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white"
-                >
-                  {{ chatStore.chatUnreadMessageCount > 99 ? '99+' : chatStore.chatUnreadMessageCount }}
                 </span>
               </RouterLink>
               <RouterLink
@@ -470,13 +495,13 @@ onBeforeUnmount(() => {
               >
                 个人中心
               </RouterLink>
-              <RouterLink
-                to="/profile/edit"
-                class="block rounded-lg px-3 py-2 text-sm text-stone-700 transition hover:bg-stone-100"
-                @click="closeMobileMenu"
+              <button
+                type="button"
+                class="block w-full rounded-lg px-3 py-2 text-left text-sm text-stone-700 transition hover:bg-stone-100"
+                @click="openCdkDialog"
               >
-                编辑资料
-              </RouterLink>
+                CDK 兑换
+              </button>
               <RouterLink
                 to="/notifications"
                 class="flex items-center justify-between rounded-lg px-3 py-2 text-sm text-stone-700 transition hover:bg-stone-100"
@@ -519,5 +544,56 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </aside>
+  </div>
+
+  <div v-if="cdkDialogOpen" class="fixed inset-0 z-40">
+    <button
+      type="button"
+      class="absolute inset-0 bg-stone-900/45"
+      aria-label="关闭 CDK 兑换弹窗"
+      @click="closeCdkDialog"
+    />
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <section class="w-full max-w-md rounded-2xl border border-blue-100 bg-white p-5 shadow-2xl">
+        <div class="flex items-center justify-between">
+          <h3 class="text-base font-semibold text-stone-900">CDK 兑换</h3>
+          <button
+            type="button"
+            class="flex h-8 w-8 items-center justify-center rounded-full border border-stone-300 text-stone-600 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60"
+            :disabled="cdkSubmitting"
+            aria-label="关闭"
+            @click="closeCdkDialog"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="h-4 w-4">
+              <path d="M6 6l12 12M18 6l-12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <p class="mt-2 text-sm text-stone-500">输入管理员发放的 CDK，兑换金额将直接入账可用余额。</p>
+
+        <div class="mt-4 space-y-3">
+          <input
+            v-model.trim="cdkCode"
+            type="text"
+            maxlength="128"
+            placeholder="请输入 CDK 兑换码"
+            class="h-11 w-full rounded-xl border border-blue-200 px-3 text-sm text-stone-800 outline-none transition focus:border-[var(--shiori-pay-blue-600)] focus:ring-2 focus:ring-[var(--shiori-pay-blue-500)]/20"
+            @keyup.enter="handleCdkRedeem"
+          />
+          <button
+            type="button"
+            class="h-11 w-full rounded-xl bg-[var(--shiori-pay-blue-700)] px-5 text-sm font-medium text-white transition hover:bg-[var(--shiori-pay-blue-800)] disabled:cursor-not-allowed disabled:opacity-65"
+            :disabled="cdkSubmitting"
+            @click="handleCdkRedeem"
+          >
+            {{ cdkSubmitting ? '兑换中...' : '立即兑换' }}
+          </button>
+        </div>
+
+        <p v-if="cdkMessage" class="mt-3 text-sm text-emerald-600">{{ cdkMessage }}</p>
+        <p v-if="cdkError" class="mt-3 text-sm text-rose-600">{{ cdkError }}</p>
+      </section>
+    </div>
   </div>
 </template>
