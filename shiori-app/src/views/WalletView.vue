@@ -171,10 +171,17 @@ function clearLedgerFilter(): void {
         <article class="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
           <h2 class="text-lg font-semibold text-[var(--shiori-pay-ink)]">资金流水</h2>
 
-          <div class="mt-3 grid gap-2 md:grid-cols-2">
+          <div class="mt-3 rounded-2xl border border-blue-100/90 bg-gradient-to-br from-blue-50/70 via-white to-cyan-50/40 p-4">
+            <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <p class="text-xs font-medium tracking-[0.08em] text-[var(--shiori-pay-mute)]">流水筛选</p>
+              <span class="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-[11px] text-[var(--shiori-pay-blue-700)]">
+                共 {{ ledgerTotal }} 条
+              </span>
+            </div>
+            <div class="grid gap-3 md:grid-cols-2">
             <select
               v-model="ledgerDraft.bizType"
-              class="rounded-xl border border-blue-200 px-3 py-2 text-sm outline-none transition focus:border-[var(--shiori-pay-blue-600)]"
+              class="rounded-xl border border-blue-200 bg-white/90 px-3 py-2 text-sm text-[var(--shiori-pay-ink)] shadow-sm outline-none transition focus:border-[var(--shiori-pay-blue-600)] focus:ring-2 focus:ring-blue-200"
             >
               <option value="">全部业务类型</option>
               <option value="ORDER">ORDER</option>
@@ -182,7 +189,7 @@ function clearLedgerFilter(): void {
             </select>
             <select
               v-model="ledgerDraft.changeType"
-              class="rounded-xl border border-blue-200 px-3 py-2 text-sm outline-none transition focus:border-[var(--shiori-pay-blue-600)]"
+              class="rounded-xl border border-blue-200 bg-white/90 px-3 py-2 text-sm text-[var(--shiori-pay-ink)] shadow-sm outline-none transition focus:border-[var(--shiori-pay-blue-600)] focus:ring-2 focus:ring-blue-200"
             >
               <option value="">全部变更类型</option>
               <option value="CDK_REDEEM">CDK_REDEEM</option>
@@ -196,34 +203,36 @@ function clearLedgerFilter(): void {
               v-model.trim="ledgerDraft.bizNo"
               type="text"
               placeholder="业务号（订单号/批次号）"
-              class="rounded-xl border border-blue-200 px-3 py-2 text-sm outline-none transition focus:border-[var(--shiori-pay-blue-600)]"
+              class="rounded-xl border border-blue-200 bg-white/90 px-3 py-2 text-sm text-[var(--shiori-pay-ink)] shadow-sm outline-none transition placeholder:text-stone-400 focus:border-[var(--shiori-pay-blue-600)] focus:ring-2 focus:ring-blue-200"
             />
-            <div class="flex gap-2">
+            <input
+              v-model="ledgerDraft.createdFrom"
+              type="datetime-local"
+              class="rounded-xl border border-blue-200 bg-white/90 px-3 py-2 text-sm text-[var(--shiori-pay-ink)] shadow-sm outline-none transition focus:border-[var(--shiori-pay-blue-600)] focus:ring-2 focus:ring-blue-200"
+            />
+            <input
+              v-model="ledgerDraft.createdTo"
+              type="datetime-local"
+              class="rounded-xl border border-blue-200 bg-white/90 px-3 py-2 text-sm text-[var(--shiori-pay-ink)] shadow-sm outline-none transition focus:border-[var(--shiori-pay-blue-600)] focus:ring-2 focus:ring-blue-200"
+            />
+            <div class="flex gap-2 md:col-span-2">
               <button
                 type="button"
-                class="flex-1 rounded-xl bg-[var(--shiori-pay-blue-700)] px-3 py-2 text-sm text-white transition hover:bg-[var(--shiori-pay-blue-800)]"
+                class="flex-1 rounded-xl bg-[var(--shiori-pay-blue-700)] px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-[var(--shiori-pay-blue-800)]"
                 @click="applyLedgerFilter"
               >
                 查询
               </button>
               <button
                 type="button"
-                class="rounded-xl border border-blue-200 px-3 py-2 text-sm text-[var(--shiori-pay-blue-700)] transition hover:bg-blue-50"
+                class="rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm text-[var(--shiori-pay-blue-700)] shadow-sm transition hover:bg-blue-50"
                 @click="clearLedgerFilter"
               >
                 清空
               </button>
             </div>
-            <input
-              v-model="ledgerDraft.createdFrom"
-              type="datetime-local"
-              class="rounded-xl border border-blue-200 px-3 py-2 text-sm outline-none transition focus:border-[var(--shiori-pay-blue-600)]"
-            />
-            <input
-              v-model="ledgerDraft.createdTo"
-              type="datetime-local"
-              class="rounded-xl border border-blue-200 px-3 py-2 text-sm outline-none transition focus:border-[var(--shiori-pay-blue-600)]"
-            />
+            </div>
+            <p v-if="ledgerQuery.isFetching.value" class="mt-2 text-xs text-[var(--shiori-pay-blue-700)]/90">正在刷新流水列表...</p>
           </div>
 
           <p v-if="ledgerQuery.error.value instanceof Error" class="mt-3 text-sm text-rose-600">{{ ledgerQuery.error.value.message }}</p>
@@ -241,7 +250,11 @@ function clearLedgerFilter(): void {
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="item in ledgerItems" :key="item.id" class="border-t border-blue-50 text-[var(--shiori-pay-ink)]">
+                <tr
+                  v-for="item in ledgerItems"
+                  :key="item.id"
+                  class="border-t border-blue-50 text-[var(--shiori-pay-ink)] odd:bg-white even:bg-blue-50/20"
+                >
                   <td class="px-3 py-2">{{ formatTime(item.createdAt) }}</td>
                   <td class="px-3 py-2">{{ changeTypeText(item.changeType) }}</td>
                   <td class="px-3 py-2">{{ item.bizType }} / {{ item.bizNo }}</td>
@@ -259,12 +272,17 @@ function clearLedgerFilter(): void {
             </table>
           </div>
 
-          <div class="mt-3 flex items-center justify-between text-sm">
-            <span class="text-[var(--shiori-pay-mute)]">第 {{ ledgerPager.page }} / {{ ledgerTotalPages }} 页，共 {{ ledgerTotal }} 条</span>
-            <div class="flex gap-2">
+          <div class="mt-3 flex flex-col gap-3 rounded-2xl border border-blue-200/60 bg-blue-50/40 px-3 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex flex-wrap items-center gap-2 text-[var(--shiori-pay-mute)]">
+              <span class="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs text-[var(--shiori-pay-blue-700)]">
+                第 {{ ledgerPager.page }} / {{ ledgerTotalPages }} 页
+              </span>
+              <span class="rounded-full border border-blue-200/70 bg-white/90 px-2.5 py-1 text-xs">共 {{ ledgerTotal }} 条</span>
+            </div>
+            <div class="flex gap-2 self-end sm:self-auto">
               <button
                 type="button"
-                class="rounded-lg border border-blue-200 px-3 py-1.5 text-[var(--shiori-pay-blue-700)] transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
+                class="rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-[var(--shiori-pay-blue-700)] shadow-sm transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
                 :disabled="ledgerPager.page <= 1 || ledgerQuery.isFetching.value"
                 @click="ledgerPager.page -= 1"
               >
@@ -272,7 +290,7 @@ function clearLedgerFilter(): void {
               </button>
               <button
                 type="button"
-                class="rounded-lg border border-blue-200 px-3 py-1.5 text-[var(--shiori-pay-blue-700)] transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
+                class="rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-[var(--shiori-pay-blue-700)] shadow-sm transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
                 :disabled="ledgerPager.page >= ledgerTotalPages || ledgerQuery.isFetching.value"
                 @click="ledgerPager.page += 1"
               >

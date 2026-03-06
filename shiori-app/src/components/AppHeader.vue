@@ -273,12 +273,12 @@ onBeforeUnmount(() => {
         <template v-else>
           <RouterLink
             to="/chat"
-            class="relative flex h-8 w-8 items-center justify-center rounded-full border border-stone-300 text-stone-700 transition hover:bg-stone-100"
-            active-class="bg-stone-100 text-stone-900"
+            class="relative flex h-8 w-8 items-center justify-center text-stone-700 transition duration-200 hover:-translate-y-0.5 hover:scale-105 hover:text-stone-900"
+            active-class="text-stone-900"
             aria-label="聊天"
             title="聊天"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5 transition-transform duration-200">
               <path d="M6 9a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v5a3 3 0 0 1-3 3H9l-3 2v-2.5A3 3 0 0 1 3 14V9a3 3 0 0 1 3-3z" />
             </svg>
             <span
@@ -291,12 +291,12 @@ onBeforeUnmount(() => {
 
           <RouterLink
             to="/cart"
-            class="flex h-8 w-8 items-center justify-center rounded-full border border-stone-300 text-stone-700 transition hover:bg-stone-100"
-            active-class="bg-stone-100 text-stone-900"
+            class="flex h-8 w-8 items-center justify-center text-stone-700 transition duration-200 hover:-translate-y-0.5 hover:scale-105 hover:text-stone-900"
+            active-class="text-stone-900"
             aria-label="购物车"
             title="购物车"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5 transition-transform duration-200">
               <circle cx="9" cy="19" r="1.6" />
               <circle cx="17" cy="19" r="1.6" />
               <path d="M3 5h2l2.2 9.2a1 1 0 0 0 1 .8h8.5a1 1 0 0 0 1-.8L20 8H7.1" />
