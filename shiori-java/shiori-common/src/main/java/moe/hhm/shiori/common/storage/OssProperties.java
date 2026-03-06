@@ -1,4 +1,4 @@
-package moe.hhm.shiori.social.config;
+package moe.hhm.shiori.common.storage;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 

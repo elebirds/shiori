@@ -18,7 +18,7 @@ import moe.hhm.shiori.social.model.EventConsumeLogEntity;
 import moe.hhm.shiori.social.model.PostEntity;
 import moe.hhm.shiori.social.model.PostRecord;
 import moe.hhm.shiori.social.repository.SocialPostMapper;
-import moe.hhm.shiori.social.storage.OssObjectService;
+import moe.hhm.shiori.common.storage.OssObjectService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

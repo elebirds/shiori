@@ -13,7 +13,7 @@ import moe.hhm.shiori.product.dto.ProductWriteResponse;
 import moe.hhm.shiori.product.model.ProductRecord;
 import moe.hhm.shiori.product.repository.ProductMapper;
 import moe.hhm.shiori.product.service.ProductService;
-import moe.hhm.shiori.product.storage.OssObjectService;
+import moe.hhm.shiori.common.storage.OssObjectService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

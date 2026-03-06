@@ -17,7 +17,7 @@ import moe.hhm.shiori.product.model.ProductRecord;
 import moe.hhm.shiori.product.model.ProductV2Record;
 import moe.hhm.shiori.product.model.SkuRecord;
 import moe.hhm.shiori.product.repository.ProductMapper;
-import moe.hhm.shiori.product.storage.OssObjectService;
+import moe.hhm.shiori.common.storage.OssObjectService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;

@@ -4,6 +4,7 @@ plugins {
 
 dependencies {
     implementation 'org.jsoup:jsoup:1.18.3'
+    compileOnly platform('software.amazon.awssdk:bom:2.25.67')
 
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
     compileOnly 'org.springframework.boot:spring-boot-webflux'
@@ -17,6 +18,7 @@ dependencies {
     compileOnly 'jakarta.servlet:jakarta.servlet-api'
     compileOnly 'jakarta.validation:jakarta.validation-api'
     compileOnly 'tools.jackson.core:jackson-databind'
+    compileOnly 'software.amazon.awssdk:s3'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-web'

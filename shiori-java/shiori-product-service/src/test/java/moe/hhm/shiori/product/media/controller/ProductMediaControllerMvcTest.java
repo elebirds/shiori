@@ -5,7 +5,7 @@ import moe.hhm.shiori.common.error.ProductErrorCode;
 import moe.hhm.shiori.common.exception.BizException;
 import moe.hhm.shiori.common.mvc.GlobalExceptionHandler;
 import moe.hhm.shiori.common.mvc.ResultResponseBodyAdvice;
-import moe.hhm.shiori.product.storage.OssObjectService;
+import moe.hhm.shiori.common.storage.OssObjectService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

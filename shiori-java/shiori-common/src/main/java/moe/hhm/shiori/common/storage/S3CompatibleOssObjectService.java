@@ -1,4 +1,4 @@
-package moe.hhm.shiori.product.storage;
+package moe.hhm.shiori.common.storage;
 
 import java.time.Duration;
 import java.time.LocalDate;
@@ -10,7 +10,6 @@ import java.util.Set;
 import java.util.UUID;
 import moe.hhm.shiori.common.error.ProductErrorCode;
 import moe.hhm.shiori.common.exception.BizException;
-import moe.hhm.shiori.product.config.OssProperties;
 import org.springframework.http.HttpStatus;
 import org.springframework.util.StringUtils;
 

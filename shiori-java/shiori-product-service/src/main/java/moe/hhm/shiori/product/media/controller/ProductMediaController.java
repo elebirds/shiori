@@ -6,7 +6,7 @@ import moe.hhm.shiori.product.media.dto.PresignUploadResponse;
 import moe.hhm.shiori.product.media.dto.ResolveMediaUrlsRequest;
 import moe.hhm.shiori.product.media.dto.ResolveMediaUrlsResponse;
 import moe.hhm.shiori.product.security.CurrentUserSupport;
-import moe.hhm.shiori.product.storage.OssObjectService;
+import moe.hhm.shiori.common.storage.OssObjectService;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
