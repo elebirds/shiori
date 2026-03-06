@@ -40,8 +40,8 @@ const query = useQuery({
       refundNo: refundNo.value || undefined,
       orderNo: orderNo.value || undefined,
       status: status.value || undefined,
-      buyerUserId: buyerUserId.value ? Number(buyerUserId.value) : undefined,
-      sellerUserId: sellerUserId.value ? Number(sellerUserId.value) : undefined,
+      buyerUserId: parseOptionalPositiveInt(buyerUserId.value),
+      sellerUserId: parseOptionalPositiveInt(sellerUserId.value),
     }),
 })
 
@@ -106,6 +106,18 @@ function refundStatusClass(statusText: OrderRefundStatus): string {
 function onSearch(): void {
   page.value = 1
   actionMessage.value = ''
+}
+
+function parseOptionalPositiveInt(raw: string): number | undefined {
+  const normalized = raw.trim()
+  if (!normalized) {
+    return undefined
+  }
+  const parsed = Number(normalized)
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return undefined
+  }
+  return Math.floor(parsed)
 }
 
 async function handleRetry(item: OrderRefundResponse): Promise<void> {

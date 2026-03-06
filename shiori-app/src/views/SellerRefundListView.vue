@@ -116,7 +116,7 @@ function requestReason(title: string, suggested: string): string | null {
     return null
   }
   const normalized = raw.trim()
-  return normalized || undefined
+  return normalized
 }
 
 async function handleApprove(refund: OrderRefundResponse): Promise<void> {

@@ -46,7 +46,7 @@ const ledgerQuery = useQuery({
     listAdminWalletLedgers({
       page: ledgerPage.value,
       size: ledgerSize.value,
-      userId: ledgerUserId.value ? Number(ledgerUserId.value) : undefined,
+      userId: parseOptionalPositiveInt(ledgerUserId.value),
       bizType: ledgerBizType.value || undefined,
       bizNo: ledgerBizNo.value || undefined,
       changeType: ledgerChangeType.value || undefined,
@@ -152,6 +152,18 @@ function handleLedgerSearch(): void {
 
 function handleIssueSearch(): void {
   issuePage.value = 1
+}
+
+function parseOptionalPositiveInt(raw: string): number | undefined {
+  const normalized = raw.trim()
+  if (!normalized) {
+    return undefined
+  }
+  const parsed = Number(normalized)
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return undefined
+  }
+  return Math.floor(parsed)
 }
 
 async function toAcked(item: ReconcileIssueResponse): Promise<void> {
