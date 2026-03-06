@@ -12,7 +12,6 @@ import moe.hhm.shiori.common.error.ProductErrorCode;
 import moe.hhm.shiori.common.exception.BizException;
 import moe.hhm.shiori.common.richtext.RichTextPolicies;
 import moe.hhm.shiori.common.richtext.RichTextProcessor;
-import moe.hhm.shiori.product.domain.ProductCategoryCode;
 import moe.hhm.shiori.product.domain.ProductConditionLevel;
 import moe.hhm.shiori.product.domain.ProductStatus;
 import moe.hhm.shiori.product.domain.ProductTradeMode;
@@ -48,21 +47,25 @@ public class ProductV2Service {
     private final ProductService productService;
     private final ProductMetrics productMetrics;
     private final SkuSpecCodec skuSpecCodec;
+    private final ProductMetaService productMetaService;
 
     public ProductV2Service(ProductMapper productMapper,
                             OssObjectService ossObjectService,
                             ProductService productService,
                             ProductMetrics productMetrics,
-                            SkuSpecCodec skuSpecCodec) {
+                            SkuSpecCodec skuSpecCodec,
+                            ProductMetaService productMetaService) {
         this.productMapper = productMapper;
         this.ossObjectService = ossObjectService;
         this.productService = productService;
         this.productMetrics = productMetrics;
         this.skuSpecCodec = skuSpecCodec;
+        this.productMetaService = productMetaService;
     }
 
     public ProductV2PageResponse listOnSaleProducts(String keyword,
                                                     String categoryCode,
+                                                    String subCategoryCode,
                                                     String conditionLevel,
                                                     String tradeMode,
                                                     String campusCode,
@@ -75,23 +78,24 @@ public class ProductV2Service {
         int offset = (normalizedPage - 1) * normalizedSize;
 
         String normalizedCategory = normalizeCategory(categoryCode, false);
+        String normalizedSubCategory = normalizeSubCategory(subCategoryCode, false);
         String normalizedCondition = normalizeCondition(conditionLevel, false);
         String normalizedTradeMode = normalizeTradeMode(tradeMode, false);
         String normalizedCampusCode = normalizeCampusCode(campusCode, false);
         String normalizedSortBy = normalizeSortBy(sortBy);
         String normalizedSortDir = normalizeSortDir(sortDir);
 
-        long total = productMapper.countOnSaleProductsV2(keyword, normalizedCategory, normalizedCondition,
-                normalizedTradeMode, normalizedCampusCode);
+        long total = productMapper.countOnSaleProductsV2(keyword, normalizedCategory, normalizedSubCategory,
+                normalizedCondition, normalizedTradeMode, normalizedCampusCode);
         List<ProductV2Record> records = productMapper.listOnSaleProductsV2(keyword, normalizedCategory,
-                normalizedCondition, normalizedTradeMode, normalizedCampusCode,
+                normalizedSubCategory, normalizedCondition, normalizedTradeMode, normalizedCampusCode,
                 normalizedSortBy, normalizedSortDir, normalizedSize, offset);
         if (records == null) {
             records = List.of();
         }
         List<ProductV2SummaryResponse> items = records.stream().map(this::toSummaryResponse).toList();
-        productMetrics.incQuery(buildFilterCombo(keyword, normalizedCategory, normalizedCondition, normalizedTradeMode,
-                normalizedCampusCode, normalizedSortBy));
+        productMetrics.incQuery(buildFilterCombo(keyword, normalizedCategory, normalizedSubCategory,
+                normalizedCondition, normalizedTradeMode, normalizedCampusCode, normalizedSortBy));
         return new ProductV2PageResponse(total, normalizedPage, normalizedSize, items);
     }
 
@@ -99,6 +103,7 @@ public class ProductV2Service {
                                                 String keyword,
                                                 String status,
                                                 String categoryCode,
+                                                String subCategoryCode,
                                                 String conditionLevel,
                                                 String tradeMode,
                                                 String campusCode,
@@ -111,6 +116,7 @@ public class ProductV2Service {
         int offset = (normalizedPage - 1) * normalizedSize;
         Integer statusCode = parseStatusCode(status);
         String normalizedCategory = normalizeCategory(categoryCode, false);
+        String normalizedSubCategory = normalizeSubCategory(subCategoryCode, false);
         String normalizedCondition = normalizeCondition(conditionLevel, false);
         String normalizedTradeMode = normalizeTradeMode(tradeMode, false);
         String normalizedCampusCode = normalizeCampusCode(campusCode, false);
@@ -118,23 +124,25 @@ public class ProductV2Service {
         String normalizedSortDir = normalizeSortDir(sortDir);
 
         long total = productMapper.countProductsByOwnerV2(ownerUserId, keyword, statusCode, normalizedCategory,
-                normalizedCondition, normalizedTradeMode, normalizedCampusCode);
+                normalizedSubCategory, normalizedCondition, normalizedTradeMode, normalizedCampusCode);
         List<ProductV2Record> records = productMapper.listProductsByOwnerV2(ownerUserId, keyword, statusCode,
-                normalizedCategory, normalizedCondition, normalizedTradeMode, normalizedCampusCode,
+                normalizedCategory, normalizedSubCategory, normalizedCondition, normalizedTradeMode,
+                normalizedCampusCode,
                 normalizedSortBy, normalizedSortDir, normalizedSize, offset);
         if (records == null) {
             records = List.of();
         }
 
         List<ProductV2SummaryResponse> items = records.stream().map(this::toSummaryResponse).toList();
-        productMetrics.incQuery(buildFilterCombo(keyword, normalizedCategory, normalizedCondition, normalizedTradeMode,
-                normalizedCampusCode, normalizedSortBy));
+        productMetrics.incQuery(buildFilterCombo(keyword, normalizedCategory, normalizedSubCategory,
+                normalizedCondition, normalizedTradeMode, normalizedCampusCode, normalizedSortBy));
         return new ProductV2PageResponse(total, normalizedPage, normalizedSize, items);
     }
 
     public ProductV2PageResponse listOnSaleProductsByOwner(Long ownerUserId,
                                                             String keyword,
                                                             String categoryCode,
+                                                            String subCategoryCode,
                                                             String conditionLevel,
                                                             String tradeMode,
                                                             String campusCode,
@@ -146,6 +154,7 @@ public class ProductV2Service {
         int normalizedSize = normalizeSize(size);
         int offset = (normalizedPage - 1) * normalizedSize;
         String normalizedCategory = normalizeCategory(categoryCode, false);
+        String normalizedSubCategory = normalizeSubCategory(subCategoryCode, false);
         String normalizedCondition = normalizeCondition(conditionLevel, false);
         String normalizedTradeMode = normalizeTradeMode(tradeMode, false);
         String normalizedCampusCode = normalizeCampusCode(campusCode, false);
@@ -154,16 +163,17 @@ public class ProductV2Service {
         int onSaleStatus = ProductStatus.ON_SALE.getCode();
 
         long total = productMapper.countProductsByOwnerV2(ownerUserId, keyword, onSaleStatus, normalizedCategory,
-                normalizedCondition, normalizedTradeMode, normalizedCampusCode);
+                normalizedSubCategory, normalizedCondition, normalizedTradeMode, normalizedCampusCode);
         List<ProductV2Record> records = productMapper.listProductsByOwnerV2(ownerUserId, keyword, onSaleStatus,
-                normalizedCategory, normalizedCondition, normalizedTradeMode, normalizedCampusCode,
+                normalizedCategory, normalizedSubCategory, normalizedCondition, normalizedTradeMode,
+                normalizedCampusCode,
                 normalizedSortBy, normalizedSortDir, normalizedSize, offset);
         if (records == null) {
             records = List.of();
         }
         List<ProductV2SummaryResponse> items = records.stream().map(this::toSummaryResponse).toList();
-        productMetrics.incQuery(buildFilterCombo(keyword, normalizedCategory, normalizedCondition, normalizedTradeMode,
-                normalizedCampusCode, normalizedSortBy));
+        productMetrics.incQuery(buildFilterCombo(keyword, normalizedCategory, normalizedSubCategory,
+                normalizedCondition, normalizedTradeMode, normalizedCampusCode, normalizedSortBy));
         return new ProductV2PageResponse(total, normalizedPage, normalizedSize, items);
     }
 
@@ -171,6 +181,7 @@ public class ProductV2Service {
                                                       String status,
                                                       Long ownerUserId,
                                                       String categoryCode,
+                                                      String subCategoryCode,
                                                       String conditionLevel,
                                                       String tradeMode,
                                                       String campusCode,
@@ -183,6 +194,7 @@ public class ProductV2Service {
         int offset = (normalizedPage - 1) * normalizedSize;
         Integer statusCode = parseStatusCode(status);
         String normalizedCategory = normalizeCategory(categoryCode, false);
+        String normalizedSubCategory = normalizeSubCategory(subCategoryCode, false);
         String normalizedCondition = normalizeCondition(conditionLevel, false);
         String normalizedTradeMode = normalizeTradeMode(tradeMode, false);
         String normalizedCampusCode = normalizeCampusCode(campusCode, false);
@@ -190,16 +202,17 @@ public class ProductV2Service {
         String normalizedSortDir = normalizeSortDir(sortDir);
 
         long total = productMapper.countProductsForAdminV2(keyword, statusCode, ownerUserId, normalizedCategory,
-                normalizedCondition, normalizedTradeMode, normalizedCampusCode);
+                normalizedSubCategory, normalizedCondition, normalizedTradeMode, normalizedCampusCode);
         List<ProductV2Record> records = productMapper.listProductsForAdminV2(keyword, statusCode, ownerUserId,
-                normalizedCategory, normalizedCondition, normalizedTradeMode, normalizedCampusCode,
+                normalizedCategory, normalizedSubCategory, normalizedCondition, normalizedTradeMode,
+                normalizedCampusCode,
                 normalizedSortBy, normalizedSortDir, normalizedSize, offset);
         if (records == null) {
             records = List.of();
         }
         List<ProductV2SummaryResponse> items = records.stream().map(this::toSummaryResponse).toList();
-        productMetrics.incQuery(buildFilterCombo(keyword, normalizedCategory, normalizedCondition, normalizedTradeMode,
-                normalizedCampusCode, normalizedSortBy));
+        productMetrics.incQuery(buildFilterCombo(keyword, normalizedCategory, normalizedSubCategory,
+                normalizedCondition, normalizedTradeMode, normalizedCampusCode, normalizedSortBy));
         return new ProductV2PageResponse(total, normalizedPage, normalizedSize, items);
     }
 
@@ -234,9 +247,11 @@ public class ProductV2Service {
         assertCoverObjectKey(request.coverObjectKey());
         String normalizedDetailHtml = sanitizeDetailHtmlForStore(request.detailHtml());
         String categoryCode = normalizeCategory(request.categoryCode(), true);
+        String subCategoryCode = normalizeSubCategory(request.subCategoryCode(), true);
         String conditionLevel = normalizeCondition(request.conditionLevel(), true);
         String tradeMode = normalizeTradeMode(request.tradeMode(), true);
         String campusCode = normalizeCampusCode(request.campusCode(), true);
+        productMetaService.ensureSelectionEnabledForCreate(categoryCode, subCategoryCode, campusCode);
 
         ProductEntity entity = new ProductEntity();
         entity.setProductNo(generateProductNo());
@@ -246,6 +261,7 @@ public class ProductV2Service {
         entity.setDetailHtml(normalizedDetailHtml);
         entity.setCoverObjectKey(request.coverObjectKey());
         entity.setCategoryCode(categoryCode);
+        entity.setSubCategoryCode(subCategoryCode);
         entity.setConditionLevel(conditionLevel);
         entity.setTradeMode(tradeMode);
         entity.setCampusCode(campusCode);
@@ -275,9 +291,18 @@ public class ProductV2Service {
         String normalizedDetailHtml = sanitizeDetailHtmlForStore(request.detailHtml());
 
         String categoryCode = normalizeCategory(request.categoryCode(), true);
+        String subCategoryCode = normalizeSubCategory(request.subCategoryCode(), true);
         String conditionLevel = normalizeCondition(request.conditionLevel(), true);
         String tradeMode = normalizeTradeMode(request.tradeMode(), true);
         String campusCode = normalizeCampusCode(request.campusCode(), true);
+        productMetaService.ensureSelectionAllowedForUpdate(
+                product.categoryCode(),
+                product.subCategoryCode(),
+                product.campusCode(),
+                categoryCode,
+                subCategoryCode,
+                campusCode
+        );
 
         productMapper.updateProductBase(
                 productId,
@@ -286,6 +311,7 @@ public class ProductV2Service {
                 normalizedDetailHtml,
                 request.coverObjectKey(),
                 categoryCode,
+                subCategoryCode,
                 conditionLevel,
                 tradeMode,
                 campusCode
@@ -376,6 +402,7 @@ public class ProductV2Service {
                 resolveCoverImageUrl(record.coverObjectKey()),
                 ProductStatus.fromCode(record.status()).name(),
                 record.categoryCode(),
+                record.subCategoryCode(),
                 record.conditionLevel(),
                 record.tradeMode(),
                 record.campusCode(),
@@ -409,6 +436,7 @@ public class ProductV2Service {
                 resolveCoverImageUrl(product.coverObjectKey()),
                 ProductStatus.fromCode(product.status()).name(),
                 product.categoryCode(),
+                product.subCategoryCode(),
                 product.conditionLevel(),
                 product.tradeMode(),
                 product.campusCode(),
@@ -503,9 +531,23 @@ public class ProductV2Service {
             }
             return null;
         }
-        String normalized = ProductCategoryCode.normalize(raw);
+        String normalized = normalizeCode(raw, 64);
         if (normalized == null) {
             throw new BizException(ProductErrorCode.INVALID_PRODUCT_CATEGORY, HttpStatus.BAD_REQUEST);
+        }
+        return normalized;
+    }
+
+    private String normalizeSubCategory(String raw, boolean required) {
+        if (!StringUtils.hasText(raw)) {
+            if (required) {
+                throw new BizException(ProductErrorCode.INVALID_PRODUCT_SUB_CATEGORY, HttpStatus.BAD_REQUEST);
+            }
+            return null;
+        }
+        String normalized = normalizeCode(raw, 64);
+        if (normalized == null) {
+            throw new BizException(ProductErrorCode.INVALID_PRODUCT_SUB_CATEGORY, HttpStatus.BAD_REQUEST);
         }
         return normalized;
     }
@@ -520,6 +562,17 @@ public class ProductV2Service {
         String normalized = ProductConditionLevel.normalize(raw);
         if (normalized == null) {
             throw new BizException(ProductErrorCode.INVALID_PRODUCT_CONDITION, HttpStatus.BAD_REQUEST);
+        }
+        return normalized;
+    }
+
+    private String normalizeCode(String raw, int maxLength) {
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
+        String normalized = raw.trim().toUpperCase();
+        if (normalized.length() > maxLength || !normalized.matches("^[A-Z0-9_]+$")) {
+            return null;
         }
         return normalized;
     }
@@ -576,6 +629,7 @@ public class ProductV2Service {
 
     private String buildFilterCombo(String keyword,
                                     String categoryCode,
+                                    String subCategoryCode,
                                     String conditionLevel,
                                     String tradeMode,
                                     String campusCode,
@@ -586,6 +640,9 @@ public class ProductV2Service {
         }
         if (StringUtils.hasText(categoryCode)) {
             flags.add("category");
+        }
+        if (StringUtils.hasText(subCategoryCode)) {
+            flags.add("subCategory");
         }
         if (StringUtils.hasText(conditionLevel)) {
             flags.add("condition");

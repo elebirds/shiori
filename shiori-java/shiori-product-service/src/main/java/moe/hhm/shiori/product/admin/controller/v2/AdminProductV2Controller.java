@@ -52,13 +52,14 @@ public class AdminProductV2Controller {
                                               @RequestParam(required = false) String status,
                                               @RequestParam(required = false) Long ownerUserId,
                                               @RequestParam(required = false) String categoryCode,
+                                              @RequestParam(required = false) String subCategoryCode,
                                               @RequestParam(required = false) String conditionLevel,
                                               @RequestParam(required = false) String tradeMode,
                                               @RequestParam(required = false) String campusCode,
                                               @RequestParam(required = false) String sortBy,
                                               @RequestParam(required = false) String sortDir) {
-        return productV2Service.listProductsForAdmin(keyword, status, ownerUserId, categoryCode, conditionLevel,
-                tradeMode, campusCode, sortBy, sortDir, page, size);
+        return productV2Service.listProductsForAdmin(keyword, status, ownerUserId, categoryCode, subCategoryCode,
+                conditionLevel, tradeMode, campusCode, sortBy, sortDir, page, size);
     }
 
     @GetMapping("/{productId}")

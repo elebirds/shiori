@@ -17,7 +17,8 @@ public enum ProductErrorCode implements ErrorCode {
     DUPLICATE_SKU_SPEC_COMBINATION(40013, "SKU规格组合重复"),
     POST_NOT_FOUND(40014, "帖子不存在"),
     NO_POST_PERMISSION(40015, "无帖子操作权限"),
-    INVALID_POST_CONTENT(40016, "帖子内容非法");
+    INVALID_POST_CONTENT(40016, "帖子内容非法"),
+    INVALID_PRODUCT_SUB_CATEGORY(40017, "商品子分类非法");
 
     private final int code;
     private final String message;

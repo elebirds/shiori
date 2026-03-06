@@ -3,6 +3,7 @@ package moe.hhm.shiori.product.security;
 import moe.hhm.shiori.common.security.GatewaySignUtils;
 import moe.hhm.shiori.common.security.GatewaySignVerifyFilter;
 import moe.hhm.shiori.product.repository.ProductMapper;
+import moe.hhm.shiori.product.repository.ProductMetaMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -30,6 +31,9 @@ class ProductServiceGatewaySignIntegrationTest {
 
     @MockitoBean
     private ProductMapper productMapper;
+
+    @MockitoBean
+    private ProductMetaMapper productMetaMapper;
 
     @Test
     void shouldReturn401WhenSignHeadersMissing() throws Exception {

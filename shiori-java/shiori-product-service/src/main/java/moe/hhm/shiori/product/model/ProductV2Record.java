@@ -9,6 +9,7 @@ public record ProductV2Record(
         String detailHtml,
         String coverObjectKey,
         String categoryCode,
+        String subCategoryCode,
         String conditionLevel,
         String tradeMode,
         String campusCode,

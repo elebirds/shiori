@@ -9,6 +9,7 @@ public record ProductV2SummaryResponse(
         String coverImageUrl,
         String status,
         String categoryCode,
+        String subCategoryCode,
         String conditionLevel,
         String tradeMode,
         String campusCode,

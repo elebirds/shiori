@@ -27,6 +27,7 @@ public class ProductManageV2Controller {
                                                 @RequestParam(required = false) String keyword,
                                                 @RequestParam(required = false) String status,
                                                 @RequestParam(required = false) String categoryCode,
+                                                @RequestParam(required = false) String subCategoryCode,
                                                 @RequestParam(required = false) String conditionLevel,
                                                 @RequestParam(required = false) String tradeMode,
                                                 @RequestParam(required = false) String campusCode,
@@ -34,8 +35,8 @@ public class ProductManageV2Controller {
                                                 @RequestParam(required = false) String sortDir,
                                                 Authentication authentication) {
         Long userId = CurrentUserSupport.requireUserId(authentication);
-        return productV2Service.listMyProducts(userId, keyword, status, categoryCode, conditionLevel, tradeMode,
-                campusCode, sortBy, sortDir, page, size);
+        return productV2Service.listMyProducts(userId, keyword, status, categoryCode, subCategoryCode,
+                conditionLevel, tradeMode, campusCode, sortBy, sortDir, page, size);
     }
 
     @GetMapping("/{productId}")

@@ -39,6 +39,12 @@ pnpm e2e
 - `/login`
 - `/users`
 - `/products`
+- `/product-meta`
 - `/orders`
+- `/order-reviews`
+- `/orders/refunds`
+- `/payments/ledger`
+- `/payments/cdks`
+- `/chat-governance`
 
 仅 `ROLE_ADMIN` 用户可登录进入后台。

@@ -4,11 +4,13 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import ResultState from '@/components/ResultState.vue'
+import { useProductMeta } from '@/composables/useProductMeta'
 import { addCartItemV2, createOrderV2, listProductReviewsV2 } from '@/api/orderV2'
 import { resolveProductMediaUrls } from '@/api/media'
 import {
   getProductDetailV2,
   type ProductCategoryCode,
+  type ProductSubCategoryCode,
   type ProductConditionLevel,
   type ProductStatus,
   type ProductTradeMode,
@@ -22,6 +24,7 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const chatStore = useChatStore()
+const { categoryNameMap, subCategoryNameMap, campusNameMap } = useProductMeta()
 
 const buying = ref(false)
 const addingCart = ref(false)
@@ -194,13 +197,11 @@ function formatPriceRange(minPriceCent?: number, maxPriceCent?: number): string 
 }
 
 function formatCategory(code: ProductCategoryCode): string {
-  const map: Record<ProductCategoryCode, string> = {
-    TEXTBOOK: '教材',
-    EXAM_MATERIAL: '考试资料',
-    NOTE: '笔记',
-    OTHER: '其他',
-  }
-  return map[code] || code
+  return categoryNameMap.value.get(code) || code
+}
+
+function formatSubCategory(code: ProductSubCategoryCode): string {
+  return subCategoryNameMap.value.get(code) || code
 }
 
 function formatCondition(code: ProductConditionLevel): string {
@@ -220,6 +221,10 @@ function formatTradeMode(code: ProductTradeMode): string {
     BOTH: '均可',
   }
   return map[code] || code
+}
+
+function formatCampus(code: string): string {
+  return campusNameMap.value.get(code) || code
 }
 
 function formatStatus(code: ProductStatus): string {
@@ -436,9 +441,10 @@ async function handleConsultSeller(): Promise<void> {
 
             <div class="mt-4 flex flex-wrap gap-2 text-xs text-stone-700">
               <span class="rounded-full bg-stone-100 px-2 py-1">{{ formatCategory(product.categoryCode) }}</span>
+              <span class="rounded-full bg-stone-100 px-2 py-1">{{ formatSubCategory(product.subCategoryCode) }}</span>
               <span class="rounded-full bg-stone-100 px-2 py-1">{{ formatCondition(product.conditionLevel) }}</span>
               <span class="rounded-full bg-stone-100 px-2 py-1">{{ formatTradeMode(product.tradeMode) }}</span>
-              <span class="rounded-full bg-stone-100 px-2 py-1">{{ product.campusCode }}</span>
+              <span class="rounded-full bg-stone-100 px-2 py-1">{{ formatCampus(product.campusCode) }}</span>
             </div>
           </div>
 

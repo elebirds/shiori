@@ -8,12 +8,14 @@ import { getUserCreditProfileV2, listUserPraiseWallV2, listUserReviewsV2 } from 
 import {
   listUserProductsV2,
   type ProductCategoryCode,
+  type ProductSubCategoryCode,
   type ProductConditionLevel,
   type ProductTradeMode,
 } from '@/api/productV2'
 import { deletePostV2, listUserPostsV2 } from '@/api/social'
 import PostFeedCard from '@/components/PostFeedCard.vue'
 import ResultState from '@/components/ResultState.vue'
+import { useProductMeta } from '@/composables/useProductMeta'
 import { useAuthStore } from '@/stores/auth'
 
 type CenterTab = 'products' | 'reviews' | 'moments'
@@ -22,6 +24,7 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const queryClient = useQueryClient()
+const { categoryNameMap, subCategoryNameMap, campusNameMap } = useProductMeta()
 
 const activeTab = ref<CenterTab>('products')
 const page = ref(1)
@@ -306,16 +309,11 @@ function formatPriceRange(minPriceCent?: number, maxPriceCent?: number): string 
 }
 
 function formatCategory(code: ProductCategoryCode): string {
-  if (code === 'TEXTBOOK') {
-    return '教材'
-  }
-  if (code === 'EXAM_MATERIAL') {
-    return '考试资料'
-  }
-  if (code === 'NOTE') {
-    return '笔记'
-  }
-  return '其他'
+  return categoryNameMap.value.get(code) || code
+}
+
+function formatSubCategory(code: ProductSubCategoryCode): string {
+  return subCategoryNameMap.value.get(code) || code
 }
 
 function formatCondition(code: ProductConditionLevel): string {
@@ -339,6 +337,10 @@ function formatTradeMode(code: ProductTradeMode): string {
     return '邮寄'
   }
   return '均可'
+}
+
+function formatCampus(code: string): string {
+  return campusNameMap.value.get(code) || code
 }
 
 function formatPositiveRate(rate?: number): string {
@@ -551,8 +553,10 @@ function reviewerMeta(userId: number): { nickname: string; avatarUrl?: string; u
 
                   <div class="mt-3 flex flex-wrap gap-1 text-xs text-stone-600">
                     <span class="rounded-full bg-stone-100 px-2 py-1">{{ formatCategory(item.categoryCode) }}</span>
+                    <span class="rounded-full bg-stone-100 px-2 py-1">{{ formatSubCategory(item.subCategoryCode) }}</span>
                     <span class="rounded-full bg-stone-100 px-2 py-1">{{ formatCondition(item.conditionLevel) }}</span>
                     <span class="rounded-full bg-stone-100 px-2 py-1">{{ formatTradeMode(item.tradeMode) }}</span>
+                    <span class="rounded-full bg-stone-100 px-2 py-1">{{ formatCampus(item.campusCode) }}</span>
                   </div>
 
                   <div class="mt-3 flex items-center justify-between text-sm">

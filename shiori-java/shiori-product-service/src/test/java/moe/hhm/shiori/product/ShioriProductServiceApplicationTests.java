@@ -1,6 +1,7 @@
 package moe.hhm.shiori.product;
 
 import moe.hhm.shiori.product.repository.ProductMapper;
+import moe.hhm.shiori.product.repository.ProductMetaMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -12,6 +13,9 @@ class ShioriProductServiceApplicationTests {
 
     @MockitoBean
     private ProductMapper productMapper;
+
+    @MockitoBean
+    private ProductMetaMapper productMetaMapper;
 
     @Test
     void contextLoads() {

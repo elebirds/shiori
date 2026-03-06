@@ -40,6 +40,9 @@ class ProductV2ServiceTest {
     @Mock
     private ProductMetrics productMetrics;
 
+    @Mock
+    private ProductMetaService productMetaService;
+
     private ProductV2Service productV2Service;
 
     @BeforeEach
@@ -49,16 +52,17 @@ class ProductV2ServiceTest {
                 ossObjectService,
                 productService,
                 productMetrics,
-                new SkuSpecCodec(new ObjectMapper())
+                new SkuSpecCodec(new ObjectMapper()),
+                productMetaService
         );
     }
 
     @Test
     void shouldListOnlyOnSaleProductsByOwner() {
         int onSaleStatus = ProductStatus.ON_SALE.getCode();
-        when(productMapper.countProductsByOwnerV2(1001L, "java", onSaleStatus, null, null, null, null))
+        when(productMapper.countProductsByOwnerV2(1001L, "java", onSaleStatus, null, null, null, null, null))
                 .thenReturn(1L);
-        when(productMapper.listProductsByOwnerV2(1001L, "java", onSaleStatus, null, null, null, null,
+        when(productMapper.listProductsByOwnerV2(1001L, "java", onSaleStatus, null, null, null, null, null,
                 "CREATED_AT", "DESC", 10, 0))
                 .thenReturn(List.of(
                         new ProductV2Record(
@@ -70,6 +74,7 @@ class ProductV2ServiceTest {
                                 null,
                                 "product/1001/202603/a.jpg",
                                 "TEXTBOOK",
+                                "TEXTBOOK_UNSPEC",
                                 "GOOD",
                                 "MEETUP",
                                 "main_campus",
@@ -83,14 +88,14 @@ class ProductV2ServiceTest {
         when(ossObjectService.presignGetUrl("product/1001/202603/a.jpg")).thenReturn("http://cdn/a.jpg");
 
         ProductV2PageResponse response = productV2Service.listOnSaleProductsByOwner(
-                1001L, "java", null, null, null, null, null, null, 1, 10
+                1001L, "java", null, null, null, null, null, null, null, 1, 10
         );
 
         assertThat(response.total()).isEqualTo(1L);
         assertThat(response.items()).hasSize(1);
         assertThat(response.items().getFirst().status()).isEqualTo(ProductStatus.ON_SALE.name());
-        verify(productMapper).countProductsByOwnerV2(1001L, "java", onSaleStatus, null, null, null, null);
-        verify(productMapper).listProductsByOwnerV2(1001L, "java", onSaleStatus, null, null, null, null,
+        verify(productMapper).countProductsByOwnerV2(1001L, "java", onSaleStatus, null, null, null, null, null);
+        verify(productMapper).listProductsByOwnerV2(1001L, "java", onSaleStatus, null, null, null, null, null,
                 "CREATED_AT", "DESC", 10, 0);
         verify(productMetrics).incQuery("keyword");
     }
@@ -113,6 +118,7 @@ class ProductV2ServiceTest {
                 """,
                 "product/1001/202603/cover.jpg",
                 "TEXTBOOK",
+                "TEXTBOOK_UNSPEC",
                 "GOOD",
                 "MEETUP",
                 "main_campus",
@@ -147,6 +153,7 @@ class ProductV2ServiceTest {
                         + "<p><img src=\"product/1001/202603/ok.jpg\" data-object-key=\"product/1001/202603/ok.jpg\" style=\"width:50%\" /></p>",
                 "product/1001/202603/cover.jpg",
                 "TEXTBOOK",
+                "TEXTBOOK_UNSPEC",
                 "GOOD",
                 "MEETUP",
                 "main_campus",
@@ -187,6 +194,7 @@ class ProductV2ServiceTest {
                 """,
                 "product/1001/202603/cover.jpg",
                 "TEXTBOOK",
+                "TEXTBOOK_UNSPEC",
                 "GOOD",
                 "MEETUP",
                 "main_campus",
@@ -210,6 +218,7 @@ class ProductV2ServiceTest {
                 "<p><img src=\"http://127.0.0.1:9000/shiori-product/product/1001/202603/legacy.jpg?temp=1\" /></p>",
                 "product/1001/202603/cover.jpg",
                 "TEXTBOOK",
+                "TEXTBOOK_UNSPEC",
                 "GOOD",
                 "MEETUP",
                 "main_campus",
@@ -245,6 +254,7 @@ class ProductV2ServiceTest {
                 "   ",
                 "product/1001/202603/cover.jpg",
                 "TEXTBOOK",
+                "TEXTBOOK_UNSPEC",
                 "GOOD",
                 "MEETUP",
                 "main_campus",

@@ -9,6 +9,7 @@ public class ProductEntity {
     private String detailHtml;
     private String coverObjectKey;
     private String categoryCode;
+    private String subCategoryCode;
     private String conditionLevel;
     private String tradeMode;
     private String campusCode;
@@ -80,6 +81,14 @@ public class ProductEntity {
 
     public String getConditionLevel() {
         return conditionLevel;
+    }
+
+    public String getSubCategoryCode() {
+        return subCategoryCode;
+    }
+
+    public void setSubCategoryCode(String subCategoryCode) {
+        this.subCategoryCode = subCategoryCode;
     }
 
     public void setConditionLevel(String conditionLevel) {

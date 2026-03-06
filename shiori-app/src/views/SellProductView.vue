@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { useMutation } from '@tanstack/vue-query'
-import { onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import RichTextEditor from '@/components/RichTextEditor.vue'
+import { useProductMeta } from '@/composables/useProductMeta'
 import { presignProductUpload, uploadByPresignedUrl } from '@/api/media'
 import {
   createProductV2,
   publishProductV2,
   type ProductCategoryCode,
+  type ProductSubCategoryCode,
   type ProductConditionLevel,
   type ProductTradeMode,
   type SpecItemInput,
@@ -30,12 +32,11 @@ interface SkuMatrixRow {
   stock: number
 }
 
-const categoryOptions: Array<{ label: string; value: ProductCategoryCode }> = [
-  { label: '教材', value: 'TEXTBOOK' },
-  { label: '考试资料', value: 'EXAM_MATERIAL' },
-  { label: '笔记', value: 'NOTE' },
-  { label: '其他', value: 'OTHER' },
-]
+const { campusOptions: metaCampusOptions, categoryOptions: metaCategoryOptions, subCategoriesByCategory } = useProductMeta()
+
+const categoryOptions = computed(() => metaCategoryOptions.value || [])
+const subCategoryOptions = computed(() => subCategoriesByCategory.value.get(form.categoryCode) || [])
+const campusOptions = computed(() => metaCampusOptions.value || [])
 
 const conditionOptions: Array<{ label: string; value: ProductConditionLevel }> = [
   { label: '全新', value: 'NEW' },
@@ -55,7 +56,8 @@ const form = reactive({
   description: '',
   detailHtml: '',
   coverObjectKey: '',
-  categoryCode: 'TEXTBOOK' as ProductCategoryCode,
+  categoryCode: '' as ProductCategoryCode,
+  subCategoryCode: '' as ProductSubCategoryCode,
   conditionLevel: 'GOOD' as ProductConditionLevel,
   tradeMode: 'MEETUP' as ProductTradeMode,
   campusCode: '',
@@ -89,6 +91,49 @@ watch(
   { deep: true, immediate: true },
 )
 
+watch(
+  categoryOptions,
+  (options) => {
+    if (!options || options.length === 0) {
+      form.categoryCode = ''
+      form.subCategoryCode = ''
+      return
+    }
+    if (!options.some((item) => item.categoryCode === form.categoryCode)) {
+      form.categoryCode = options[0]?.categoryCode || ''
+    }
+  },
+  { immediate: true },
+)
+
+watch(
+  subCategoryOptions,
+  (options) => {
+    if (!options || options.length === 0) {
+      form.subCategoryCode = ''
+      return
+    }
+    if (!options.some((item) => item.subCategoryCode === form.subCategoryCode)) {
+      form.subCategoryCode = options[0]?.subCategoryCode || ''
+    }
+  },
+  { immediate: true },
+)
+
+watch(
+  campusOptions,
+  (options) => {
+    if (!options || options.length === 0) {
+      form.campusCode = ''
+      return
+    }
+    if (!options.some((item) => item.campusCode === form.campusCode)) {
+      form.campusCode = options[0]?.campusCode || ''
+    }
+  },
+  { immediate: true },
+)
+
 const createMutation = useMutation({
   mutationFn: async () => {
     const created = await createProductV2({
@@ -97,6 +142,7 @@ const createMutation = useMutation({
       detailHtml: form.detailHtml.trim() || undefined,
       coverObjectKey: form.coverObjectKey.trim() || undefined,
       categoryCode: form.categoryCode,
+      subCategoryCode: form.subCategoryCode,
       conditionLevel: form.conditionLevel,
       tradeMode: form.tradeMode,
       campusCode: form.campusCode.trim(),
@@ -241,6 +287,12 @@ function validate(): string | null {
   if (!form.title.trim()) {
     return '商品标题不能为空'
   }
+  if (!form.categoryCode.trim()) {
+    return '分类不能为空'
+  }
+  if (!form.subCategoryCode.trim()) {
+    return '子分类不能为空'
+  }
   if (!form.campusCode.trim()) {
     return '交易校区不能为空'
   }
@@ -369,7 +421,19 @@ onUnmounted(() => {
             v-model="form.categoryCode"
             class="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2 outline-none transition focus:border-amber-500"
           >
-            <option v-for="item in categoryOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+            <option v-if="categoryOptions.length === 0" value="">暂无可用分类</option>
+            <option v-for="item in categoryOptions" :key="item.categoryCode" :value="item.categoryCode">{{ item.categoryName }}</option>
+          </select>
+        </label>
+
+        <label class="text-sm text-stone-700">
+          子分类
+          <select
+            v-model="form.subCategoryCode"
+            class="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2 outline-none transition focus:border-amber-500"
+          >
+            <option v-if="subCategoryOptions.length === 0" value="">暂无可用子分类</option>
+            <option v-for="item in subCategoryOptions" :key="item.subCategoryCode" :value="item.subCategoryCode">{{ item.subCategoryName }}</option>
           </select>
         </label>
 
@@ -395,12 +459,13 @@ onUnmounted(() => {
 
         <label class="text-sm text-stone-700">
           交易校区
-          <input
-            v-model.trim="form.campusCode"
-            type="text"
+          <select
+            v-model="form.campusCode"
             class="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2 outline-none transition focus:border-amber-500"
-            placeholder="如：主校区"
-          />
+          >
+            <option v-if="campusOptions.length === 0" value="">暂无可用校区</option>
+            <option v-for="item in campusOptions" :key="item.campusCode" :value="item.campusCode">{{ item.campusName }}</option>
+          </select>
         </label>
 
         <label class="text-sm text-stone-700 sm:col-span-2">

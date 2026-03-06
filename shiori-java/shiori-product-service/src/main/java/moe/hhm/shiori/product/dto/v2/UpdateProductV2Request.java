@@ -20,6 +20,9 @@ public record UpdateProductV2Request(
         @NotBlank(message = "分类不能为空")
         @Size(max = 64, message = "分类长度不能超过64")
         String categoryCode,
+        @NotBlank(message = "子分类不能为空")
+        @Size(max = 64, message = "子分类长度不能超过64")
+        String subCategoryCode,
         @NotBlank(message = "成色不能为空")
         @Size(max = 32, message = "成色长度不能超过32")
         String conditionLevel,

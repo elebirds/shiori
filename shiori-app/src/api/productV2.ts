@@ -20,7 +20,8 @@ export interface SkuResponse {
 }
 
 export type ProductStatus = 'DRAFT' | 'ON_SALE' | 'OFF_SHELF'
-export type ProductCategoryCode = 'TEXTBOOK' | 'EXAM_MATERIAL' | 'NOTE' | 'OTHER'
+export type ProductCategoryCode = string
+export type ProductSubCategoryCode = string
 export type ProductConditionLevel = 'NEW' | 'LIKE_NEW' | 'GOOD' | 'FAIR'
 export type ProductTradeMode = 'MEETUP' | 'DELIVERY' | 'BOTH'
 export type ProductSortBy = 'CREATED_AT' | 'MIN_PRICE' | 'MAX_PRICE'
@@ -35,6 +36,7 @@ export interface ProductV2SummaryResponse {
   coverImageUrl?: string
   status: ProductStatus
   categoryCode: ProductCategoryCode
+  subCategoryCode: ProductSubCategoryCode
   conditionLevel: ProductConditionLevel
   tradeMode: ProductTradeMode
   campusCode: string
@@ -61,6 +63,7 @@ export interface ProductV2DetailResponse {
   coverImageUrl?: string
   status: ProductStatus
   categoryCode: ProductCategoryCode
+  subCategoryCode: ProductSubCategoryCode
   conditionLevel: ProductConditionLevel
   tradeMode: ProductTradeMode
   campusCode: string
@@ -75,6 +78,7 @@ export interface ProductV2Query {
   size?: number
   keyword?: string
   categoryCode?: ProductCategoryCode
+  subCategoryCode?: ProductSubCategoryCode
   conditionLevel?: ProductConditionLevel
   tradeMode?: ProductTradeMode
   campusCode?: string
@@ -99,6 +103,7 @@ export interface ProductV2WriteRequest {
   detailHtml?: string
   coverObjectKey?: string
   categoryCode: ProductCategoryCode
+  subCategoryCode: ProductSubCategoryCode
   conditionLevel: ProductConditionLevel
   tradeMode: ProductTradeMode
   campusCode: string

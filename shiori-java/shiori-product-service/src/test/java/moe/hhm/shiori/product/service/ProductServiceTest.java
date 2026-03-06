@@ -102,7 +102,7 @@ class ProductServiceTest {
         assertThatThrownBy(() -> productService.updateProduct(1L, 1001L, false, request))
                 .isInstanceOf(BizException.class);
 
-        verify(productMapper, never()).updateProductBase(anyLong(), any(), any(), any(), any(), any(), any(), any(), any());
+        verify(productMapper, never()).updateProductBase(anyLong(), any(), any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -123,6 +123,7 @@ class ProductServiceTest {
                 null,
                 "product/1001/202603/cover.jpg",
                 "TEXTBOOK",
+                "TEXTBOOK_UNSPEC",
                 "GOOD",
                 "MEETUP",
                 "main_campus",

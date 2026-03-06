@@ -28,6 +28,12 @@ const router = createRouter({
       meta: { requiresAdmin: true },
     },
     {
+      path: '/product-meta',
+      name: 'product-meta',
+      component: () => import('@/views/ProductMetaManageView.vue'),
+      meta: { requiresAdmin: true },
+    },
+    {
       path: '/orders',
       name: 'orders',
       component: () => import('@/views/OrderManageView.vue'),

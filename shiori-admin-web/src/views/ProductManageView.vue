@@ -15,6 +15,10 @@ import {
   type ProductStatus,
   type ProductTradeMode,
 } from '@/api/adminProductV2'
+import {
+  listAdminProductMetaCampuses,
+  listAdminProductMetaCategories,
+} from '@/api/adminProductMeta'
 import { ApiBizError } from '@/types/result'
 
 const queryClient = useQueryClient()
@@ -24,6 +28,7 @@ const keyword = ref('')
 const status = ref<ProductStatus | ''>('')
 const ownerUserId = ref('')
 const categoryCode = ref<ProductCategoryCode | ''>('')
+const subCategoryCode = ref('')
 const conditionLevel = ref<ProductConditionLevel | ''>('')
 const tradeMode = ref<ProductTradeMode | ''>('')
 const campusCode = ref('')
@@ -43,6 +48,7 @@ const productsQuery = useQuery({
     status.value,
     ownerUserId.value,
     categoryCode.value,
+    subCategoryCode.value,
     conditionLevel.value,
     tradeMode.value,
     campusCode.value,
@@ -57,12 +63,60 @@ const productsQuery = useQuery({
       status: status.value || undefined,
       ownerUserId: ownerUserId.value ? Number(ownerUserId.value) : undefined,
       categoryCode: categoryCode.value || undefined,
+      subCategoryCode: subCategoryCode.value || undefined,
       conditionLevel: conditionLevel.value || undefined,
       tradeMode: tradeMode.value || undefined,
       campusCode: campusCode.value || undefined,
       sortBy: sortBy.value,
       sortDir: sortDir.value,
     }),
+})
+
+const campusesQuery = useQuery({
+  queryKey: ['admin-product-meta-campuses'],
+  queryFn: () => listAdminProductMetaCampuses(),
+  staleTime: 5 * 60 * 1000,
+})
+
+const categoriesQuery = useQuery({
+  queryKey: ['admin-product-meta-categories'],
+  queryFn: () => listAdminProductMetaCategories(),
+  staleTime: 5 * 60 * 1000,
+})
+
+const campusOptions = computed(() => campusesQuery.data.value || [])
+const categoryOptions = computed(() => categoriesQuery.data.value || [])
+const subCategoryOptions = computed(() => {
+  if (!categoryCode.value) {
+    return categoryOptions.value.flatMap((item) => item.subCategories || [])
+  }
+  return categoryOptions.value.find((item) => item.categoryCode === categoryCode.value)?.subCategories || []
+})
+
+const categoryNameMap = computed(() => {
+  const map = new Map<string, string>()
+  for (const item of categoryOptions.value) {
+    map.set(item.categoryCode, item.categoryName)
+  }
+  return map
+})
+
+const subCategoryNameMap = computed(() => {
+  const map = new Map<string, string>()
+  for (const item of categoryOptions.value) {
+    for (const sub of item.subCategories || []) {
+      map.set(sub.subCategoryCode, sub.subCategoryName)
+    }
+  }
+  return map
+})
+
+const campusNameMap = computed(() => {
+  const map = new Map<string, string>()
+  for (const item of campusOptions.value) {
+    map.set(item.campusCode, item.campusName)
+  }
+  return map
 })
 
 const detailQuery = useQuery({
@@ -78,6 +132,12 @@ watch(
     selectedIds.value = selectedIds.value.filter((id) => idSet.has(id))
   },
 )
+
+watch(categoryCode, () => {
+  if (!subCategoryOptions.value.some((item) => item.subCategoryCode === subCategoryCode.value)) {
+    subCategoryCode.value = ''
+  }
+})
 
 const offShelfMutation = useMutation({
   mutationFn: (product: AdminProductSummaryV2) => forceOffShelfV2(product.productId, '后台强制下架'),
@@ -147,6 +207,18 @@ function formatMoney(priceCent?: number): string {
   return `¥${(priceCent / 100).toFixed(2)}`
 }
 
+function formatCategory(code: string): string {
+  return categoryNameMap.value.get(code) || code
+}
+
+function formatSubCategory(code: string): string {
+  return subCategoryNameMap.value.get(code) || code
+}
+
+function formatCampus(code: string): string {
+  return campusNameMap.value.get(code) || code
+}
+
 function formatSkuSpecs(sku: { displayName: string; specItems: Array<{ name: string; value: string }> }): string {
   if (!sku.specItems || sku.specItems.length === 0) {
     return sku.displayName
@@ -174,10 +246,11 @@ function formatSkuSpecs(sku: { displayName: string; specItems: Array<{ name: str
         <input v-model="ownerUserId" placeholder="ownerUserId" class="rounded-md border border-slate-300 px-3 py-2 text-sm" />
         <select v-model="categoryCode" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
           <option value="">全部分类</option>
-          <option value="TEXTBOOK">TEXTBOOK</option>
-          <option value="EXAM_MATERIAL">EXAM_MATERIAL</option>
-          <option value="NOTE">NOTE</option>
-          <option value="OTHER">OTHER</option>
+          <option v-for="item in categoryOptions" :key="item.categoryCode" :value="item.categoryCode">{{ item.categoryName }}</option>
+        </select>
+        <select v-model="subCategoryCode" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+          <option value="">全部子分类</option>
+          <option v-for="item in subCategoryOptions" :key="item.subCategoryCode" :value="item.subCategoryCode">{{ item.subCategoryName }}</option>
         </select>
         <select v-model="conditionLevel" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
           <option value="">全部成色</option>
@@ -192,7 +265,10 @@ function formatSkuSpecs(sku: { displayName: string; specItems: Array<{ name: str
           <option value="DELIVERY">DELIVERY</option>
           <option value="BOTH">BOTH</option>
         </select>
-        <input v-model="campusCode" placeholder="campusCode" class="rounded-md border border-slate-300 px-3 py-2 text-sm" />
+        <select v-model="campusCode" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+          <option value="">全部校区</option>
+          <option v-for="item in campusOptions" :key="item.campusCode" :value="item.campusCode">{{ item.campusName }}</option>
+        </select>
         <select v-model="sortBy" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
           <option value="CREATED_AT">CREATED_AT</option>
           <option value="MIN_PRICE">MIN_PRICE</option>
@@ -243,7 +319,7 @@ function formatSkuSpecs(sku: { displayName: string; specItems: Array<{ name: str
                 </button>
                 <p class="text-xs text-slate-500">{{ product.productNo }}</p>
                 <p class="text-xs text-slate-500">
-                  {{ product.categoryCode }} / {{ product.conditionLevel }} / {{ product.tradeMode }} / {{ product.campusCode }}
+                  {{ formatCategory(product.categoryCode) }} / {{ formatSubCategory(product.subCategoryCode) }} / {{ product.conditionLevel }} / {{ product.tradeMode }} / {{ formatCampus(product.campusCode) }}
                 </p>
               </td>
               <td class="px-4 py-3">{{ product.status }}</td>
@@ -278,10 +354,10 @@ function formatSkuSpecs(sku: { displayName: string; specItems: Array<{ name: str
           <p>状态：{{ detailQuery.data.value.status }}</p>
           <p>owner：{{ detailQuery.data.value.ownerUserId }}</p>
           <p>
-            分类：{{ detailQuery.data.value.categoryCode }} / {{ detailQuery.data.value.conditionLevel }} /
+            分类：{{ formatCategory(detailQuery.data.value.categoryCode) }} / {{ formatSubCategory(detailQuery.data.value.subCategoryCode) }} / {{ detailQuery.data.value.conditionLevel }} /
             {{ detailQuery.data.value.tradeMode }}
           </p>
-          <p>校区：{{ detailQuery.data.value.campusCode }}</p>
+          <p>校区：{{ formatCampus(detailQuery.data.value.campusCode) }}</p>
           <p>价格区间：{{ formatMoney(detailQuery.data.value.minPriceCent) }} ~ {{ formatMoney(detailQuery.data.value.maxPriceCent) }}</p>
           <p>总库存：{{ detailQuery.data.value.totalStock ?? 0 }}</p>
           <p>SKU 数：{{ detailQuery.data.value.skus.length }}</p>

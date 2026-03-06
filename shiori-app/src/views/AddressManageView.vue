@@ -63,11 +63,11 @@ watch(
     }
     const cityCandidates = listRawCities(value)
     if (!form.city && cityCandidates.length > 0) {
-      form.city = cityCandidates[0]
+      form.city = cityCandidates[0] ?? ''
     }
     const districtCandidates = listRawDistricts(value, form.city)
     if (!form.district && districtCandidates.length > 0) {
-      form.district = districtCandidates[0]
+      form.district = districtCandidates[0] ?? ''
     }
   },
 )
@@ -84,7 +84,7 @@ watch(
       return
     }
     if (!form.district && districtCandidates.length > 0) {
-      form.district = districtCandidates[0]
+      form.district = districtCandidates[0] ?? ''
     }
   },
 )

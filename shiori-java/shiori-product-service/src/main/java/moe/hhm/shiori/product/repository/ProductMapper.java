@@ -29,6 +29,7 @@ public interface ProductMapper {
                 detail_html,
                 cover_object_key,
                 category_code,
+                sub_category_code,
                 condition_level,
                 trade_mode,
                 campus_code,
@@ -44,6 +45,7 @@ public interface ProductMapper {
                 #{detailHtml},
                 #{coverObjectKey},
                 #{categoryCode},
+                #{subCategoryCode},
                 #{conditionLevel},
                 #{tradeMode},
                 #{campusCode},
@@ -63,6 +65,7 @@ public interface ProductMapper {
                 detail_html = #{detailHtml},
                 cover_object_key = #{coverObjectKey},
                 category_code = #{categoryCode},
+                sub_category_code = #{subCategoryCode},
                 condition_level = #{conditionLevel},
                 trade_mode = #{tradeMode},
                 campus_code = #{campusCode},
@@ -77,6 +80,7 @@ public interface ProductMapper {
                           @Param("detailHtml") String detailHtml,
                           @Param("coverObjectKey") String coverObjectKey,
                           @Param("categoryCode") String categoryCode,
+                          @Param("subCategoryCode") String subCategoryCode,
                           @Param("conditionLevel") String conditionLevel,
                           @Param("tradeMode") String tradeMode,
                           @Param("campusCode") String campusCode);
@@ -105,6 +109,7 @@ public interface ProductMapper {
                    p.detail_html AS detailHtml,
                    p.cover_object_key AS coverObjectKey,
                    p.category_code AS categoryCode,
+                   p.sub_category_code AS subCategoryCode,
                    p.condition_level AS conditionLevel,
                    p.trade_mode AS tradeMode,
                    p.campus_code AS campusCode,
@@ -164,6 +169,7 @@ public interface ProductMapper {
                    p.detail_html AS detailHtml,
                    p.cover_object_key AS coverObjectKey,
                    p.category_code AS categoryCode,
+                   p.sub_category_code AS subCategoryCode,
                    p.condition_level AS conditionLevel,
                    p.trade_mode AS tradeMode,
                    p.campus_code AS campusCode,
@@ -238,6 +244,7 @@ public interface ProductMapper {
                    NULL AS detailHtml,
                    p.cover_object_key AS coverObjectKey,
                    p.category_code AS categoryCode,
+                   p.sub_category_code AS subCategoryCode,
                    p.condition_level AS conditionLevel,
                    p.trade_mode AS tradeMode,
                    p.campus_code AS campusCode,
@@ -266,6 +273,9 @@ public interface ProductMapper {
             <if test="categoryCode != null and categoryCode != ''">
               AND p.category_code = #{categoryCode}
             </if>
+            <if test="subCategoryCode != null and subCategoryCode != ''">
+              AND p.sub_category_code = #{subCategoryCode}
+            </if>
             <if test="conditionLevel != null and conditionLevel != ''">
               AND p.condition_level = #{conditionLevel}
             </if>
@@ -291,6 +301,7 @@ public interface ProductMapper {
             """)
     List<ProductV2Record> listOnSaleProductsV2(@Param("keyword") String keyword,
                                                @Param("categoryCode") String categoryCode,
+                                               @Param("subCategoryCode") String subCategoryCode,
                                                @Param("conditionLevel") String conditionLevel,
                                                @Param("tradeMode") String tradeMode,
                                                @Param("campusCode") String campusCode,
@@ -313,6 +324,9 @@ public interface ProductMapper {
             <if test="categoryCode != null and categoryCode != ''">
               AND p.category_code = #{categoryCode}
             </if>
+            <if test="subCategoryCode != null and subCategoryCode != ''">
+              AND p.sub_category_code = #{subCategoryCode}
+            </if>
             <if test="conditionLevel != null and conditionLevel != ''">
               AND p.condition_level = #{conditionLevel}
             </if>
@@ -326,6 +340,7 @@ public interface ProductMapper {
             """)
     long countOnSaleProductsV2(@Param("keyword") String keyword,
                                @Param("categoryCode") String categoryCode,
+                               @Param("subCategoryCode") String subCategoryCode,
                                @Param("conditionLevel") String conditionLevel,
                                @Param("tradeMode") String tradeMode,
                                @Param("campusCode") String campusCode);
@@ -389,6 +404,7 @@ public interface ProductMapper {
                    NULL AS detailHtml,
                    p.cover_object_key AS coverObjectKey,
                    p.category_code AS categoryCode,
+                   p.sub_category_code AS subCategoryCode,
                    p.condition_level AS conditionLevel,
                    p.trade_mode AS tradeMode,
                    p.campus_code AS campusCode,
@@ -420,6 +436,9 @@ public interface ProductMapper {
             <if test="categoryCode != null and categoryCode != ''">
               AND p.category_code = #{categoryCode}
             </if>
+            <if test="subCategoryCode != null and subCategoryCode != ''">
+              AND p.sub_category_code = #{subCategoryCode}
+            </if>
             <if test="conditionLevel != null and conditionLevel != ''">
               AND p.condition_level = #{conditionLevel}
             </if>
@@ -447,6 +466,7 @@ public interface ProductMapper {
                                                 @Param("keyword") String keyword,
                                                 @Param("status") Integer status,
                                                 @Param("categoryCode") String categoryCode,
+                                                @Param("subCategoryCode") String subCategoryCode,
                                                 @Param("conditionLevel") String conditionLevel,
                                                 @Param("tradeMode") String tradeMode,
                                                 @Param("campusCode") String campusCode,
@@ -472,6 +492,9 @@ public interface ProductMapper {
             <if test="categoryCode != null and categoryCode != ''">
               AND p.category_code = #{categoryCode}
             </if>
+            <if test="subCategoryCode != null and subCategoryCode != ''">
+              AND p.sub_category_code = #{subCategoryCode}
+            </if>
             <if test="conditionLevel != null and conditionLevel != ''">
               AND p.condition_level = #{conditionLevel}
             </if>
@@ -487,6 +510,7 @@ public interface ProductMapper {
                                 @Param("keyword") String keyword,
                                 @Param("status") Integer status,
                                 @Param("categoryCode") String categoryCode,
+                                @Param("subCategoryCode") String subCategoryCode,
                                 @Param("conditionLevel") String conditionLevel,
                                 @Param("tradeMode") String tradeMode,
                                 @Param("campusCode") String campusCode);
@@ -556,6 +580,7 @@ public interface ProductMapper {
                    NULL AS detailHtml,
                    p.cover_object_key AS coverObjectKey,
                    p.category_code AS categoryCode,
+                   p.sub_category_code AS subCategoryCode,
                    p.condition_level AS conditionLevel,
                    p.trade_mode AS tradeMode,
                    p.campus_code AS campusCode,
@@ -589,6 +614,9 @@ public interface ProductMapper {
             <if test="categoryCode != null and categoryCode != ''">
               AND p.category_code = #{categoryCode}
             </if>
+            <if test="subCategoryCode != null and subCategoryCode != ''">
+              AND p.sub_category_code = #{subCategoryCode}
+            </if>
             <if test="conditionLevel != null and conditionLevel != ''">
               AND p.condition_level = #{conditionLevel}
             </if>
@@ -616,6 +644,7 @@ public interface ProductMapper {
                                                  @Param("status") Integer status,
                                                  @Param("ownerUserId") Long ownerUserId,
                                                  @Param("categoryCode") String categoryCode,
+                                                 @Param("subCategoryCode") String subCategoryCode,
                                                  @Param("conditionLevel") String conditionLevel,
                                                  @Param("tradeMode") String tradeMode,
                                                  @Param("campusCode") String campusCode,
@@ -643,6 +672,9 @@ public interface ProductMapper {
             <if test="categoryCode != null and categoryCode != ''">
               AND p.category_code = #{categoryCode}
             </if>
+            <if test="subCategoryCode != null and subCategoryCode != ''">
+              AND p.sub_category_code = #{subCategoryCode}
+            </if>
             <if test="conditionLevel != null and conditionLevel != ''">
               AND p.condition_level = #{conditionLevel}
             </if>
@@ -658,6 +690,7 @@ public interface ProductMapper {
                                  @Param("status") Integer status,
                                  @Param("ownerUserId") Long ownerUserId,
                                  @Param("categoryCode") String categoryCode,
+                                 @Param("subCategoryCode") String subCategoryCode,
                                  @Param("conditionLevel") String conditionLevel,
                                  @Param("tradeMode") String tradeMode,
                                  @Param("campusCode") String campusCode);

@@ -11,6 +11,7 @@ const route = useRoute()
 const navItems = [
   { path: '/users', label: '用户管理' },
   { path: '/products', label: '商品管理' },
+  { path: '/product-meta', label: '商品元数据' },
   { path: '/orders', label: '订单管理' },
   { path: '/order-reviews', label: '评价治理' },
   { path: '/orders/refunds', label: '退款管理' },

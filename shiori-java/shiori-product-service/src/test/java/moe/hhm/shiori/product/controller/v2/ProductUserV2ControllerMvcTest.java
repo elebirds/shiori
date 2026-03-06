@@ -39,7 +39,7 @@ class ProductUserV2ControllerMvcTest {
 
     @Test
     void shouldListOnSaleProductsByOwner() throws Exception {
-        when(productV2Service.listOnSaleProductsByOwner(1001L, "java", null, null, null,
+        when(productV2Service.listOnSaleProductsByOwner(1001L, "java", null, null, null, null,
                 null, null, null, 1, 10))
                 .thenReturn(new ProductV2PageResponse(
                         1L,
@@ -54,6 +54,7 @@ class ProductUserV2ControllerMvcTest {
                                 "http://cdn/a.jpg",
                                 "ON_SALE",
                                 "TEXTBOOK",
+                                "TEXTBOOK_UNSPEC",
                                 "GOOD",
                                 "MEETUP",
                                 "main_campus",
@@ -72,7 +73,7 @@ class ProductUserV2ControllerMvcTest {
                 .andExpect(jsonPath("$.data.total").value(1))
                 .andExpect(jsonPath("$.data.items[0].status").value("ON_SALE"));
 
-        verify(productV2Service).listOnSaleProductsByOwner(1001L, "java", null, null, null,
+        verify(productV2Service).listOnSaleProductsByOwner(1001L, "java", null, null, null, null,
                 null, null, null, 1, 10);
     }
 }

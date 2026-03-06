@@ -135,6 +135,37 @@
 
 ---
 
+## 🆕 v0.8-d 商品元数据治理（校区管理员化 + 分类二级化）
+
+### 商品域（`/api/v2/product/**`）
+
+1. 商品写接口新增必填字段：`subCategoryCode`。
+2. 商品列表查询新增筛选参数：`subCategoryCode`。
+3. 商品列表/详情响应新增字段：`subCategoryCode`。
+4. 新增元数据读取接口：
+   1. `GET /api/v2/product/meta/campuses`
+   2. `GET /api/v2/product/meta/categories`（返回一级分类及其子分类树）
+
+### 管理域（`/api/v2/admin/product-meta/**`）
+
+1. 新增校区、一级分类、子分类管理接口（创建/更新/启停/排序，软删除策略）。
+2. 新增批量迁移接口：
+   1. `POST /api/v2/admin/product-meta/migrations/campuses`
+   2. `POST /api/v2/admin/product-meta/migrations/sub-categories`
+3. 新增权限码：`product.meta.manage`（网关已映射到 `/api/v2/admin/product-meta/**`）。
+
+### 数据迁移
+
+1. `shiori-product-service`：`V10__create_product_meta_tables_and_sub_category.sql`
+   1. 新表：`p_product_campus`、`p_product_category`、`p_product_sub_category`
+   2. `p_product` 新增列：`sub_category_code`
+   3. 历史数据回填：默认子分类（`*_UNSPEC`）和兜底校区（`UNKNOWN_CAMPUS`）
+2. `shiori-user-service`：`V17__add_product_meta_manage_permission.sql`
+   1. 新增权限 `product.meta.manage`
+   2. 默认授予 `ROLE_ADMIN`
+
+---
+
 ## 🆕 v0.5 个人中心与资料编辑拆分
 
 1. 路由拆分：

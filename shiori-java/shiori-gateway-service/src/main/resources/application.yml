@@ -46,6 +46,10 @@ spring:
               uri: lb://shiori-product-service
               predicates:
                 - Path=/api/v2/admin/products/**
+            - id: admin-product-meta-service-v2
+              uri: lb://shiori-product-service
+              predicates:
+                - Path=/api/v2/admin/product-meta/**
             - id: order-service-v2
               uri: lb://shiori-order-service
               predicates:
@@ -233,6 +237,9 @@ security:
       - method: POST
         path-pattern: /api/v2/admin/products/batch-off-shelf
         permission-code: product.off_shelf
+      - method: '*'
+        path-pattern: /api/v2/admin/product-meta/**
+        permission-code: product.meta.manage
       - method: POST
         path-pattern: /api/v2/product/internal/stock/**
         permission-code: product.stock.adjust

@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import ResultState from '@/components/ResultState.vue'
+import { useProductMeta } from '@/composables/useProductMeta'
 import {
   listMyProductsV2,
   offShelfProductV2,
   publishProductV2,
   type ProductCategoryCode,
+  type ProductSubCategoryCode,
   type ProductConditionLevel,
   type ProductStatus,
   type ProductTradeMode,
@@ -18,18 +20,28 @@ import { ApiBizError } from '@/types/result'
 const queryClient = useQueryClient()
 const router = useRouter()
 
+const { campusOptions, categoryOptions, subCategoriesByCategory, categoryNameMap, subCategoryNameMap, campusNameMap } = useProductMeta()
+
 const pager = reactive({
   page: 1,
   size: 10,
 })
 const keywordInput = ref('')
 const keyword = ref('')
-const campusCodeInput = ref('')
 const campusCode = ref('')
 const status = ref<'ALL' | ProductStatus>('ALL')
 const categoryCode = ref<ProductCategoryCode | ''>('')
+const subCategoryCode = ref<ProductSubCategoryCode | ''>('')
 const conditionLevel = ref<ProductConditionLevel | ''>('')
 const tradeMode = ref<ProductTradeMode | ''>('')
+
+const subCategoryOptions = computed(() => subCategoriesByCategory.value.get(categoryCode.value) || [])
+
+watch(categoryCode, () => {
+  if (!subCategoryOptions.value.some((item) => item.subCategoryCode === subCategoryCode.value)) {
+    subCategoryCode.value = ''
+  }
+})
 
 const query = useQuery({
   queryKey: computed(() => [
@@ -39,6 +51,7 @@ const query = useQuery({
     keyword.value,
     status.value,
     categoryCode.value,
+    subCategoryCode.value,
     conditionLevel.value,
     tradeMode.value,
     campusCode.value,
@@ -50,6 +63,7 @@ const query = useQuery({
       keyword: keyword.value || undefined,
       status: status.value === 'ALL' ? undefined : status.value,
       categoryCode: categoryCode.value || undefined,
+      subCategoryCode: subCategoryCode.value || undefined,
       conditionLevel: conditionLevel.value || undefined,
       tradeMode: tradeMode.value || undefined,
       campusCode: campusCode.value || undefined,
@@ -114,13 +128,6 @@ const PRODUCT_STATUS_TEXT: Record<ProductStatus, string> = {
   OFF_SHELF: '已下架',
 }
 
-const CATEGORY_TEXT: Record<ProductCategoryCode, string> = {
-  TEXTBOOK: '教材',
-  EXAM_MATERIAL: '考试资料',
-  NOTE: '笔记',
-  OTHER: '其他',
-}
-
 const CONDITION_TEXT: Record<ProductConditionLevel, string> = {
   NEW: '全新',
   LIKE_NEW: '近新',
@@ -137,17 +144,16 @@ const TRADE_MODE_TEXT: Record<ProductTradeMode, string> = {
 function applyFilter(): void {
   pager.page = 1
   keyword.value = keywordInput.value.trim()
-  campusCode.value = campusCodeInput.value.trim()
   mobileFilterOpen.value = false
 }
 
 function resetFilter(): void {
   keywordInput.value = ''
   keyword.value = ''
-  campusCodeInput.value = ''
   campusCode.value = ''
   status.value = 'ALL'
   categoryCode.value = ''
+  subCategoryCode.value = ''
   conditionLevel.value = ''
   tradeMode.value = ''
   pager.page = 1
@@ -159,7 +165,15 @@ function statusText(statusValue: ProductStatus): string {
 }
 
 function categoryText(value: ProductCategoryCode): string {
-  return CATEGORY_TEXT[value] || value
+  return categoryNameMap.value.get(value) || value
+}
+
+function subCategoryText(value: ProductSubCategoryCode): string {
+  return subCategoryNameMap.value.get(value) || value
+}
+
+function campusText(value: string): string {
+  return campusNameMap.value.get(value) || value
 }
 
 function conditionText(value: ProductConditionLevel): string {
@@ -198,6 +212,7 @@ async function handleOffShelf(productId: number): Promise<void> {
   }
 }
 </script>
+
 
 <template>
   <section class="space-y-4">
@@ -243,7 +258,10 @@ async function handleOffShelf(productId: number): Promise<void> {
         </div>
         <div class="shiori-filter-field">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="M12 21s7-5.2 7-11a7 7 0 1 0-14 0c0 5.8 7 11 7 11Z" /><circle cx="12" cy="10" r="2.5" /></svg>
-          <input v-model="campusCodeInput" type="text" class="shiori-filter-control shiori-filter-control-w-md" placeholder="交易校区" @keyup.enter="applyFilter" />
+          <select v-model="campusCode" class="shiori-filter-control shiori-filter-control-w-md">
+            <option value="">全部校区</option>
+            <option v-for="item in campusOptions" :key="item.campusCode" :value="item.campusCode">{{ item.campusName }}</option>
+          </select>
         </div>
         <div class="shiori-filter-field">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="M4 8h16M4 16h16" /></svg>
@@ -258,10 +276,14 @@ async function handleOffShelf(productId: number): Promise<void> {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
           <select v-model="categoryCode" class="shiori-filter-control shiori-filter-control-w-sm">
             <option value="">全部分类</option>
-            <option value="TEXTBOOK">教材</option>
-            <option value="EXAM_MATERIAL">考试资料</option>
-            <option value="NOTE">笔记</option>
-            <option value="OTHER">其他</option>
+            <option v-for="item in categoryOptions" :key="item.categoryCode" :value="item.categoryCode">{{ item.categoryName }}</option>
+          </select>
+        </div>
+        <div class="shiori-filter-field">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="M4 4h16v4H4zM4 10h16v10H4z" /></svg>
+          <select v-model="subCategoryCode" class="shiori-filter-control shiori-filter-control-w-sm">
+            <option value="">全部子分类</option>
+            <option v-for="item in subCategoryOptions" :key="item.subCategoryCode" :value="item.subCategoryCode">{{ item.subCategoryName }}</option>
           </select>
         </div>
         <div class="shiori-filter-field">
@@ -306,7 +328,10 @@ async function handleOffShelf(productId: number): Promise<void> {
           </div>
           <div class="shiori-filter-field w-full">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="M12 21s7-5.2 7-11a7 7 0 1 0-14 0c0 5.8 7 11 7 11Z" /><circle cx="12" cy="10" r="2.5" /></svg>
-            <input v-model="campusCodeInput" type="text" class="shiori-filter-control shiori-filter-control-w-full" placeholder="交易校区" @keyup.enter="applyFilter" />
+            <select v-model="campusCode" class="shiori-filter-control shiori-filter-control-w-full">
+              <option value="">全部校区</option>
+              <option v-for="item in campusOptions" :key="item.campusCode" :value="item.campusCode">{{ item.campusName }}</option>
+            </select>
           </div>
           <div class="shiori-filter-field w-full">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="M4 8h16M4 16h16" /></svg>
@@ -321,10 +346,14 @@ async function handleOffShelf(productId: number): Promise<void> {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
             <select v-model="categoryCode" class="shiori-filter-control shiori-filter-control-w-full">
               <option value="">全部分类</option>
-              <option value="TEXTBOOK">教材</option>
-              <option value="EXAM_MATERIAL">考试资料</option>
-              <option value="NOTE">笔记</option>
-              <option value="OTHER">其他</option>
+              <option v-for="item in categoryOptions" :key="item.categoryCode" :value="item.categoryCode">{{ item.categoryName }}</option>
+            </select>
+          </div>
+          <div class="shiori-filter-field w-full">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="M4 4h16v4H4zM4 10h16v10H4z" /></svg>
+            <select v-model="subCategoryCode" class="shiori-filter-control shiori-filter-control-w-full">
+              <option value="">全部子分类</option>
+              <option v-for="item in subCategoryOptions" :key="item.subCategoryCode" :value="item.subCategoryCode">{{ item.subCategoryName }}</option>
             </select>
           </div>
           <div class="shiori-filter-field w-full">
@@ -368,9 +397,10 @@ async function handleOffShelf(productId: number): Promise<void> {
               <p class="mt-1 text-xs text-stone-500">{{ item.productNo }}</p>
               <div class="mt-2 flex flex-wrap gap-1 text-xs text-stone-600">
                 <span class="rounded-full bg-stone-100 px-2 py-1">{{ categoryText(item.categoryCode) }}</span>
+                <span class="rounded-full bg-stone-100 px-2 py-1">{{ subCategoryText(item.subCategoryCode) }}</span>
                 <span class="rounded-full bg-stone-100 px-2 py-1">{{ conditionText(item.conditionLevel) }}</span>
                 <span class="rounded-full bg-stone-100 px-2 py-1">{{ tradeModeText(item.tradeMode) }}</span>
-                <span class="rounded-full bg-stone-100 px-2 py-1">{{ item.campusCode }}</span>
+                <span class="rounded-full bg-stone-100 px-2 py-1">{{ campusText(item.campusCode) }}</span>
               </div>
             </div>
             <div class="flex flex-wrap items-center gap-2">

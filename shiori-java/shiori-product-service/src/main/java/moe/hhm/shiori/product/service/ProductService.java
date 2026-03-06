@@ -160,6 +160,7 @@ public class ProductService {
         assertCoverObjectKey(request.coverObjectKey());
         ProductV2Record fullRecord = productMapper.findProductV2ById(productId);
         String categoryCode = fullRecord == null ? null : fullRecord.categoryCode();
+        String subCategoryCode = fullRecord == null ? null : fullRecord.subCategoryCode();
         String conditionLevel = fullRecord == null ? null : fullRecord.conditionLevel();
         String tradeMode = fullRecord == null ? null : fullRecord.tradeMode();
         String campusCode = fullRecord == null ? null : fullRecord.campusCode();
@@ -171,6 +172,7 @@ public class ProductService {
                 fullRecord == null ? null : fullRecord.detailHtml(),
                 request.coverObjectKey(),
                 categoryCode,
+                subCategoryCode,
                 conditionLevel,
                 tradeMode,
                 campusCode

@@ -1,7 +1,8 @@
 import { httpGet, httpPost } from '@/api/http'
 
 export type ProductStatus = 'DRAFT' | 'ON_SALE' | 'OFF_SHELF'
-export type ProductCategoryCode = 'TEXTBOOK' | 'EXAM_MATERIAL' | 'NOTE' | 'OTHER'
+export type ProductCategoryCode = string
+export type ProductSubCategoryCode = string
 export type ProductConditionLevel = 'NEW' | 'LIKE_NEW' | 'GOOD' | 'FAIR'
 export type ProductTradeMode = 'MEETUP' | 'DELIVERY' | 'BOTH'
 export type ProductSortBy = 'CREATED_AT' | 'MIN_PRICE' | 'MAX_PRICE'
@@ -30,6 +31,7 @@ export interface AdminProductSummaryV2 {
   coverImageUrl?: string
   status: ProductStatus
   categoryCode: ProductCategoryCode
+  subCategoryCode: ProductSubCategoryCode
   conditionLevel: ProductConditionLevel
   tradeMode: ProductTradeMode
   campusCode: string
@@ -56,6 +58,7 @@ export interface AdminProductDetailV2 {
   coverImageUrl?: string
   status: ProductStatus
   categoryCode: ProductCategoryCode
+  subCategoryCode: ProductSubCategoryCode
   conditionLevel: ProductConditionLevel
   tradeMode: ProductTradeMode
   campusCode: string
@@ -85,6 +88,7 @@ export interface AdminProductQueryV2 {
   status?: ProductStatus
   ownerUserId?: number
   categoryCode?: ProductCategoryCode
+  subCategoryCode?: ProductSubCategoryCode
   conditionLevel?: ProductConditionLevel
   tradeMode?: ProductTradeMode
   campusCode?: string

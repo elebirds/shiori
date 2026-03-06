@@ -14,6 +14,7 @@ public record ProductV2DetailResponse(
         String coverImageUrl,
         String status,
         String categoryCode,
+        String subCategoryCode,
         String conditionLevel,
         String tradeMode,
         String campusCode,

@@ -37,13 +37,14 @@ public class ProductV2Controller {
                                       @RequestParam(defaultValue = "10") int size,
                                       @RequestParam(required = false) String keyword,
                                       @RequestParam(required = false) String categoryCode,
+                                      @RequestParam(required = false) String subCategoryCode,
                                       @RequestParam(required = false) String conditionLevel,
                                       @RequestParam(required = false) String tradeMode,
                                       @RequestParam(required = false) String campusCode,
                                       @RequestParam(required = false) String sortBy,
                                       @RequestParam(required = false) String sortDir) {
-        return productV2Service.listOnSaleProducts(keyword, categoryCode, conditionLevel, tradeMode, campusCode,
-                sortBy, sortDir, page, size);
+        return productV2Service.listOnSaleProducts(keyword, categoryCode, subCategoryCode, conditionLevel, tradeMode,
+                campusCode, sortBy, sortDir, page, size);
     }
 
     @GetMapping("/{productId}")
