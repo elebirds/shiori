@@ -64,6 +64,8 @@ require_env USER_RMQ_USERNAME
 require_env USER_RMQ_PASSWORD
 require_env NOTIFY_RMQ_USERNAME
 require_env NOTIFY_RMQ_PASSWORD
+require_env PAYMENT_RMQ_USERNAME
+require_env PAYMENT_RMQ_PASSWORD
 
 wait_for_rabbitmq
 
@@ -75,13 +77,14 @@ curl -fsS -u "${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}" \
 upsert_user "${ORDER_RMQ_USERNAME}" "${ORDER_RMQ_PASSWORD}"
 upsert_user "${USER_RMQ_USERNAME}" "${USER_RMQ_PASSWORD}"
 upsert_user "${NOTIFY_RMQ_USERNAME}" "${NOTIFY_RMQ_PASSWORD}"
+upsert_user "${PAYMENT_RMQ_USERNAME}" "${PAYMENT_RMQ_PASSWORD}"
 
-# order-service: only order exchanges/queues
+# order-service: own exchanges/queues + subscribe payment event exchange
 upsert_permissions \
   "${ORDER_RMQ_USERNAME}" \
+  "^(shiori[.]order[.].*|q[.]order[.].*|shiori[.]payment[.]event)$" \
   "^(shiori[.]order[.].*|q[.]order[.].*)$" \
-  "^(shiori[.]order[.].*|q[.]order[.].*)$" \
-  "^(shiori[.]order[.].*|q[.]order[.].*)$"
+  "^(shiori[.]order[.].*|q[.]order[.].*|shiori[.]payment[.]event)$"
 
 # user-service: publish user governance events
 upsert_permissions \
@@ -96,5 +99,12 @@ upsert_permissions \
   "^(shiori[.]order[.]event|shiori[.]user[.]event|shiori[.]chat[.]event|notify[.]order[.]event|amq[.]gen.*)$" \
   "^(shiori[.]order[.]event|shiori[.]user[.]event|shiori[.]chat[.]event|notify[.]order[.]event|amq[.]gen.*)$" \
   "^(shiori[.]order[.]event|shiori[.]user[.]event|shiori[.]chat[.]event|notify[.]order[.]event|amq[.]gen.*)$"
+
+# payment-service: publish wallet and payment events
+upsert_permissions \
+  "${PAYMENT_RMQ_USERNAME}" \
+  "^(shiori[.]payment[.].*|q[.]payment[.].*)$" \
+  "^(shiori[.]payment[.].*|q[.]payment[.].*)$" \
+  "^(shiori[.]payment[.].*|q[.]payment[.].*)$"
 
 log "rabbitmq users and permissions initialized"

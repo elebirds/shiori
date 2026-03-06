@@ -471,7 +471,7 @@ docker compose run --rm nacos-config-init
 ```
 
 RabbitMQ 与 MinIO 也会通过一次性容器完成最小权限初始化：
-- `rabbitmq-auth-init`：创建 `order-service`、`user-service` 与 `notify-service` 独立账号并写入受限权限。
+- `rabbitmq-auth-init`：创建 `order-service`、`payment-service`、`user-service` 与 `notify-service` 独立账号并写入受限权限。
 - `minio-init`：创建商品桶、商品服务专用访问账号与桶级读写策略。
 
 并启动 MinIO（商品图片对象存储）：
@@ -496,6 +496,8 @@ RabbitMQ 与 MinIO 也会通过一次性容器完成最小权限初始化：
 | `ORDER_DB_PASSWORD` | 是 | `.env` | CI Secret | Secret 管理系统 | `shiori-order-service-secret.yml` |
 | `ORDER_RMQ_USERNAME` | 否（建议最小权限） | `.env` | CI Secret/变量 | Secret 管理系统 | `shiori-order-service-secret.yml` |
 | `ORDER_RMQ_PASSWORD` | 是 | `.env` | CI Secret | Secret 管理系统 | `shiori-order-service-secret.yml` |
+| `PAYMENT_RMQ_USERNAME` | 否（建议最小权限） | `.env` | CI Secret/变量 | Secret 管理系统 | `shiori-payment-service-secret.yml` |
+| `PAYMENT_RMQ_PASSWORD` | 是 | `.env` | CI Secret | Secret 管理系统 | `shiori-payment-service-secret.yml` |
 | `NOTIFY_RMQ_USERNAME` | 否（建议最小权限） | `.env` | CI Secret/变量 | Secret 管理系统 | notify 运行时环境 |
 | `NOTIFY_RMQ_PASSWORD` | 是 | `.env` | CI Secret | Secret 管理系统 | notify 运行时环境 |
 | `MINIO_PRODUCT_ACCESS_KEY` | 否（凭证标识） | `.env` | CI Secret/变量 | Secret 管理系统 | `shiori-product-service-secret.yml` |
@@ -861,6 +863,7 @@ export K6_NOTIFY_HTTP_BASE_URL=http://host.docker.internal:8090
 - `ORDER_DB_PASSWORD`
 - `RABBITMQ_DEFAULT_PASS`
 - `ORDER_RMQ_PASSWORD`
+- `PAYMENT_RMQ_PASSWORD`
 - `NOTIFY_RMQ_PASSWORD`
 - `MINIO_ROOT_PASSWORD`
 - `MINIO_PRODUCT_SECRET_KEY`
