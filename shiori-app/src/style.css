@@ -60,3 +60,189 @@ a {
 .shiori-pay-rise-delay {
   animation: shiori-pay-rise 0.6s ease-out both;
 }
+
+.shiori-filter-shell {
+  border-radius: 1.5rem;
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  background: linear-gradient(145deg, rgba(255, 251, 235, 0.85) 0%, rgba(255, 255, 255, 0.95) 52%, rgba(255, 247, 237, 0.65) 100%);
+  padding: 1.25rem;
+  box-shadow: 0 14px 28px -24px rgba(120, 53, 15, 0.38);
+}
+
+.shiori-filter-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.shiori-filter-control {
+  border-radius: 0.75rem;
+  border: 1px solid rgba(168, 162, 158, 0.75);
+  background: rgba(255, 255, 255, 0.92);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  color: #292524;
+  outline: none;
+  box-shadow: 0 2px 4px rgba(28, 25, 23, 0.04);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.shiori-filter-control::placeholder {
+  color: #a8a29e;
+}
+
+.shiori-filter-control:focus {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(252, 211, 77, 0.45);
+}
+
+.shiori-filter-primary {
+  border-radius: 0.75rem;
+  border: 0;
+  background: linear-gradient(90deg, #f59e0b 0%, #ea580c 100%);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 0.5rem 1rem;
+  box-shadow: 0 6px 16px -10px rgba(234, 88, 12, 0.65);
+  transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.shiori-filter-primary:hover {
+  filter: brightness(0.95);
+}
+
+.shiori-filter-primary:active {
+  transform: translateY(1px);
+}
+
+.shiori-filter-primary-pay {
+  background: var(--shiori-pay-blue-700);
+}
+
+.shiori-filter-primary-pay:hover {
+  background: var(--shiori-pay-blue-800);
+  filter: none;
+}
+
+.shiori-filter-secondary {
+  border-radius: 0.75rem;
+  border: 1px solid rgba(168, 162, 158, 0.75);
+  background: rgba(255, 255, 255, 0.9);
+  color: #44403c;
+  font-size: 0.875rem;
+  padding: 0.5rem 1rem;
+  box-shadow: 0 2px 4px rgba(28, 25, 23, 0.04);
+  transition: background-color 0.2s ease;
+}
+
+.shiori-filter-secondary:hover {
+  background: rgba(245, 245, 244, 0.96);
+}
+
+.shiori-filter-hint {
+  font-size: 0.75rem;
+  color: #a16207;
+}
+
+.shiori-pagebar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  background: rgba(255, 255, 255, 0.95);
+  padding: 0.75rem 1rem;
+  box-shadow: 0 10px 24px -22px rgba(120, 53, 15, 0.38);
+}
+
+.shiori-pageinfo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.shiori-pagechip {
+  border-radius: 9999px;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+}
+
+.shiori-pagechip-active {
+  background: rgba(254, 243, 199, 1);
+  color: #b45309;
+}
+
+.shiori-pagechip-mute {
+  background: rgba(245, 245, 244, 1);
+  color: #57534e;
+}
+
+.shiori-pagechip-pay {
+  border: 1px solid rgba(191, 219, 254, 0.9);
+  background: #fff;
+  color: var(--shiori-pay-blue-700);
+}
+
+.shiori-pagechip-pay-mute {
+  border: 1px solid rgba(191, 219, 254, 0.75);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--shiori-pay-mute);
+}
+
+.shiori-pageactions {
+  display: flex;
+  gap: 0.5rem;
+  align-self: flex-end;
+}
+
+.shiori-pagebtn {
+  border-radius: 0.5rem;
+  border: 1px solid rgba(168, 162, 158, 0.75);
+  background: #fff;
+  color: #44403c;
+  font-size: 0.875rem;
+  padding: 0.375rem 0.75rem;
+  box-shadow: 0 2px 4px rgba(28, 25, 23, 0.04);
+  transition: background-color 0.2s ease;
+}
+
+.shiori-pagebtn:hover {
+  background: rgba(245, 245, 244, 0.96);
+}
+
+.shiori-pagebtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.shiori-pagebtn-pay {
+  border-color: rgba(191, 219, 254, 0.9);
+  color: var(--shiori-pay-blue-700);
+}
+
+.shiori-pagebtn-pay:hover {
+  background: rgba(239, 246, 255, 0.9);
+}
+
+@media (min-width: 640px) {
+  .shiori-filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .shiori-pagebar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .shiori-pageactions {
+    align-self: auto;
+  }
+}
+
+@media (min-width: 1024px) {
+  .shiori-filter-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}

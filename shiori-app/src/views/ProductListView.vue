@@ -155,7 +155,7 @@ function formatStatus(code: ProductStatus): string {
 
 <template>
   <section class="space-y-5">
-    <div class="space-y-4 rounded-3xl border border-amber-200/60 bg-gradient-to-br from-amber-50/80 via-white to-orange-50/60 p-5 shadow-sm">
+    <div class="shiori-filter-shell space-y-4">
       <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 class="font-display text-2xl text-stone-900">商品广场</h1>
@@ -166,51 +166,51 @@ function formatStatus(code: ProductStatus): string {
         </span>
       </div>
 
-      <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div class="shiori-filter-grid">
         <input
           v-model="keywordInput"
           type="text"
-          class="rounded-xl border border-stone-300/80 bg-white/90 px-3 py-2 text-sm text-stone-800 shadow-sm outline-none transition placeholder:text-stone-400 focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
+          class="shiori-filter-control"
           placeholder="关键词"
           @keyup.enter="applyFilter"
         />
         <input
           v-model="campusCodeInput"
           type="text"
-          class="rounded-xl border border-stone-300/80 bg-white/90 px-3 py-2 text-sm text-stone-800 shadow-sm outline-none transition placeholder:text-stone-400 focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
+          class="shiori-filter-control"
           placeholder="交易校区（如主校区）"
           @keyup.enter="applyFilter"
         />
         <select
           v-model="categoryCode"
-          class="rounded-xl border border-stone-300/80 bg-white/90 px-3 py-2 text-sm text-stone-800 shadow-sm outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
+          class="shiori-filter-control"
         >
           <option value="">全部分类</option>
           <option v-for="item in categoryOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
         </select>
         <select
           v-model="conditionLevel"
-          class="rounded-xl border border-stone-300/80 bg-white/90 px-3 py-2 text-sm text-stone-800 shadow-sm outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
+          class="shiori-filter-control"
         >
           <option value="">全部成色</option>
           <option v-for="item in conditionOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
         </select>
         <select
           v-model="tradeMode"
-          class="rounded-xl border border-stone-300/80 bg-white/90 px-3 py-2 text-sm text-stone-800 shadow-sm outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
+          class="shiori-filter-control"
         >
           <option value="">全部交易方式</option>
           <option v-for="item in tradeModeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
         </select>
         <select
           v-model="sortBy"
-          class="rounded-xl border border-stone-300/80 bg-white/90 px-3 py-2 text-sm text-stone-800 shadow-sm outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
+          class="shiori-filter-control"
         >
           <option v-for="item in sortByOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
         </select>
         <select
           v-model="sortDir"
-          class="rounded-xl border border-stone-300/80 bg-white/90 px-3 py-2 text-sm text-stone-800 shadow-sm outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
+          class="shiori-filter-control"
         >
           <option value="DESC">降序</option>
           <option value="ASC">升序</option>
@@ -218,21 +218,21 @@ function formatStatus(code: ProductStatus): string {
         <div class="flex gap-2">
           <button
             type="button"
-            class="flex-1 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:from-amber-600 hover:to-orange-600"
+            class="shiori-filter-primary flex-1"
             @click="applyFilter"
           >
             筛选
           </button>
           <button
             type="button"
-            class="rounded-xl border border-stone-300/80 bg-white/90 px-4 py-2 text-sm text-stone-700 shadow-sm transition hover:bg-stone-100"
+            class="shiori-filter-secondary"
             @click="resetFilter"
           >
             重置
           </button>
         </div>
       </div>
-      <p v-if="query.isFetching.value" class="text-xs text-amber-700/90">正在刷新筛选结果...</p>
+      <p v-if="query.isFetching.value" class="shiori-filter-hint">正在刷新筛选结果...</p>
     </div>
 
     <ResultState :loading="query.isLoading.value" :error="errorMessage" :empty="!query.isLoading.value && items.length === 0" empty-text="暂无上架商品">
@@ -275,15 +275,15 @@ function formatStatus(code: ProductStatus): string {
         </article>
       </div>
 
-      <div class="flex flex-col gap-3 rounded-2xl border border-amber-200/60 bg-white/95 px-4 py-3 text-sm shadow-sm sm:flex-row sm:items-center sm:justify-between">
-        <div class="flex flex-wrap items-center gap-2 text-stone-600">
-          <span class="rounded-full bg-amber-50 px-2.5 py-1 text-xs text-amber-700">第 {{ page }} / {{ totalPages }} 页</span>
-          <span class="rounded-full bg-stone-100 px-2.5 py-1 text-xs">共 {{ total }} 条</span>
+      <div class="shiori-pagebar">
+        <div class="shiori-pageinfo">
+          <span class="shiori-pagechip shiori-pagechip-active">第 {{ page }} / {{ totalPages }} 页</span>
+          <span class="shiori-pagechip shiori-pagechip-mute">共 {{ total }} 条</span>
         </div>
-        <div class="flex gap-2 self-end sm:self-auto">
+        <div class="shiori-pageactions">
           <button
             type="button"
-            class="rounded-lg border border-stone-300/80 bg-white px-3 py-1.5 text-stone-700 shadow-sm transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60"
+            class="shiori-pagebtn"
             :disabled="page <= 1 || query.isFetching.value"
             @click="page -= 1"
           >
@@ -291,7 +291,7 @@ function formatStatus(code: ProductStatus): string {
           </button>
           <button
             type="button"
-            class="rounded-lg border border-stone-300/80 bg-white px-3 py-1.5 text-stone-700 shadow-sm transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60"
+            class="shiori-pagebtn"
             :disabled="page >= totalPages || query.isFetching.value"
             @click="page += 1"
           >
