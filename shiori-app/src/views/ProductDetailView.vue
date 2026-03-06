@@ -3,8 +3,10 @@ import { useQuery } from '@tanstack/vue-query'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import UserAvatar from '@/components/UserAvatar.vue'
 import ResultState from '@/components/ResultState.vue'
 import { useProductMeta } from '@/composables/useProductMeta'
+import { getUserProfilesByUserIds } from '@/api/auth'
 import { addCartItemV2, createOrderV2, listProductReviewsV2 } from '@/api/orderV2'
 import { resolveProductMediaUrls } from '@/api/media'
 import {
@@ -49,6 +51,50 @@ const query = useQuery({
 const product = computed(() => query.data.value)
 const errorMessage = computed(() => (query.error.value instanceof Error ? query.error.value.message : ''))
 const productReviewPageSize = 8
+const sellerUserId = computed(() => Number(product.value?.ownerUserId || 0))
+
+const sellerProfileQuery = useQuery({
+  queryKey: computed(() => ['product-seller-profile', sellerUserId.value]),
+  queryFn: async () => {
+    if (sellerUserId.value <= 0) {
+      return null
+    }
+    const profiles = await getUserProfilesByUserIds([sellerUserId.value])
+    return profiles[0] || null
+  },
+  enabled: computed(() => sellerUserId.value > 0),
+})
+
+const sellerProfile = computed(() => sellerProfileQuery.data.value || null)
+const sellerDisplayName = computed(() => {
+  if (sellerProfile.value?.nickname) {
+    return sellerProfile.value.nickname
+  }
+  if (sellerProfile.value?.username) {
+    return sellerProfile.value.username
+  }
+  if (sellerUserId.value > 0) {
+    return `用户 ${sellerUserId.value}`
+  }
+  return '未知用户'
+})
+const sellerHandle = computed(() => {
+  if (sellerProfile.value?.userNo) {
+    return `@${sellerProfile.value.userNo}`
+  }
+  if (sellerUserId.value > 0) {
+    return `@${sellerUserId.value}`
+  }
+  return '@-'
+})
+const sellerSignature = computed(() => {
+  const bio = sellerProfile.value?.bio?.trim()
+  if (bio) {
+    return bio
+  }
+  return '这个人很神秘，还没有签名'
+})
+const canOpenSellerProfile = computed(() => Boolean(sellerProfile.value?.userNo))
 
 const productReviewQuery = useQuery({
   queryKey: computed(() => ['product-reviews-v2', productId.value, productReviewPageSize]),
@@ -420,6 +466,14 @@ async function handleConsultSeller(): Promise<void> {
     creatingChat.value = false
   }
 }
+
+async function goSellerProfile(): Promise<void> {
+  const userNo = sellerProfile.value?.userNo?.trim()
+  if (!userNo) {
+    return
+  }
+  await router.push(`/u/${encodeURIComponent(userNo)}`)
+}
 </script>
 
 <template>
@@ -434,6 +488,28 @@ async function handleConsultSeller(): Promise<void> {
             </div>
 
             <h1 class="mt-4 font-display text-3xl text-stone-900">{{ product.title }}</h1>
+            <div class="mt-4 rounded-xl border border-stone-200 bg-stone-50/70 p-3">
+              <p class="text-xs tracking-wide text-stone-500">售卖人</p>
+              <button
+                type="button"
+                class="mt-2 flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition"
+                :class="canOpenSellerProfile ? 'hover:bg-stone-100' : 'cursor-default'"
+                @click="goSellerProfile"
+              >
+                <UserAvatar
+                  :src="sellerProfile?.avatarUrl"
+                  :name="sellerDisplayName"
+                  size-class="h-10 w-10"
+                  fallback-size-class="h-4 w-4"
+                  show-initial
+                />
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-xs text-stone-500">{{ sellerDisplayName }} {{ sellerHandle }}</p>
+                  <p class="mt-1 truncate text-xs text-stone-600">{{ sellerSignature }}</p>
+                </div>
+                <span v-if="canOpenSellerProfile" class="text-xs text-stone-400">查看主页</span>
+              </button>
+            </div>
             <div class="mt-2 space-y-2">
               <h2 class="text-sm font-semibold text-stone-900">商品简介</h2>
               <p class="whitespace-pre-line text-sm text-stone-700">{{ product.description || '暂无简介' }}</p>

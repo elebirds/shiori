@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/vue-query'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
+import { getUserProfilesByUserIds, type PublicUserProfile } from '@/api/auth'
 import ResultState from '@/components/ResultState.vue'
 import { useProductMeta } from '@/composables/useProductMeta'
 import {
@@ -96,6 +97,34 @@ const totalPages = computed(() => Math.max(1, Math.ceil(total.value / size)))
 const errorMessage = computed(() => (query.error.value instanceof Error ? query.error.value.message : ''))
 const mobileFilterOpen = ref(false)
 const isMobileViewport = ref(false)
+const ownerUserIds = computed(() =>
+  Array.from(
+    new Set(
+      items.value
+        .map((item) => Number(item.ownerUserId || 0))
+        .filter((item) => Number.isFinite(item) && item > 0),
+    ),
+  ),
+)
+
+const sellerProfilesQuery = useQuery({
+  queryKey: computed(() => ['product-seller-profiles', ownerUserIds.value.join(',')]),
+  queryFn: async () => {
+    if (ownerUserIds.value.length === 0) {
+      return [] as PublicUserProfile[]
+    }
+    return getUserProfilesByUserIds(ownerUserIds.value)
+  },
+  enabled: computed(() => ownerUserIds.value.length > 0),
+})
+
+const sellerProfileMap = computed(() => {
+  const map = new Map<number, PublicUserProfile>()
+  for (const profile of sellerProfilesQuery.data.value || []) {
+    map.set(profile.userId, profile)
+  }
+  return map
+})
 
 let mobileMediaQuery: MediaQueryList | null = null
 
@@ -147,6 +176,14 @@ function goDetail(productId: number): void {
   void router.push(`/products/${productId}`)
 }
 
+async function goSellerProfile(ownerUserId: number): Promise<void> {
+  const userNo = sellerProfileMap.value.get(ownerUserId)?.userNo?.trim()
+  if (!userNo) {
+    return
+  }
+  await router.push(`/u/${encodeURIComponent(userNo)}`)
+}
+
 function formatMoney(priceCent?: number): string {
   if (priceCent == null) {
     return '¥ -'
@@ -193,6 +230,16 @@ function formatStatus(code: ProductStatus): string {
     OFF_SHELF: '已下架',
   }
   return map[code] || code
+}
+
+function formatSeller(ownerUserId: number): string {
+  const profile = sellerProfileMap.value.get(ownerUserId)
+  if (!profile) {
+    return `用户 @${ownerUserId}`
+  }
+  const nickname = profile.nickname || profile.username || `用户 ${ownerUserId}`
+  const handle = profile.userNo || ownerUserId
+  return `${nickname} @${handle}`
 }
 </script>
 
@@ -384,6 +431,13 @@ function formatStatus(code: ProductStatus): string {
 
           <h2 class="mt-3 line-clamp-1 text-base font-semibold text-stone-900">{{ item.title }}</h2>
           <p class="mt-1 line-clamp-2 text-sm text-stone-600">{{ item.description || '暂无描述' }}</p>
+          <button
+            type="button"
+            class="mt-2 truncate text-xs text-stone-500 transition hover:text-stone-700"
+            @click.stop="goSellerProfile(item.ownerUserId)"
+          >
+            售卖人 {{ formatSeller(item.ownerUserId) }}
+          </button>
 
           <div class="mt-3 flex flex-wrap gap-1 text-xs text-stone-600">
             <span class="rounded-full bg-stone-100 px-2 py-1">{{ formatCategory(item.categoryCode) }}</span>

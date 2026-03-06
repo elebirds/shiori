@@ -396,6 +396,7 @@ public class ProductV2Service {
         return new ProductV2SummaryResponse(
                 record.id(),
                 record.productNo(),
+                record.ownerUserId(),
                 record.title(),
                 record.description(),
                 record.coverObjectKey(),

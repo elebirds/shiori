@@ -3,6 +3,7 @@ package moe.hhm.shiori.product.dto.v2;
 public record ProductV2SummaryResponse(
         Long productId,
         String productNo,
+        Long ownerUserId,
         String title,
         String description,
         String coverObjectKey,

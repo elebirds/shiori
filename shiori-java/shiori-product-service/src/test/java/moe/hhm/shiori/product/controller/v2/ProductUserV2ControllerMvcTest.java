@@ -48,6 +48,7 @@ class ProductUserV2ControllerMvcTest {
                         List.of(new ProductV2SummaryResponse(
                                 1L,
                                 "P001",
+                                1001L,
                                 "Java Book",
                                 "desc",
                                 "product/1001/202603/a.jpg",

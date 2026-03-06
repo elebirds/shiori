@@ -30,6 +30,7 @@ export type ProductSortDir = 'ASC' | 'DESC'
 export interface ProductV2SummaryResponse {
   productId: number
   productNo: string
+  ownerUserId: number
   title: string
   description?: string
   coverObjectKey?: string

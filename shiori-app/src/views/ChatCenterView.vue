@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
-import { useChatStore, type ChatIncomingMessageEvent, type ChatMessageVM } from '@/stores/chat'
+import { useChatStore, type ChatConversationVM, type ChatIncomingMessageEvent, type ChatMessageVM } from '@/stores/chat'
 import { recordChatToOrderClickV2 } from '@/api/orderV2'
 import UserAvatar from '@/components/UserAvatar.vue'
 import { formatMessagePreview, parseProductCardContent, parseTradeStatusCardContent } from '@/utils/chatCards'
@@ -255,6 +255,31 @@ function resolveSenderDisplayName(senderId: number): string {
   return isMine(senderId) ? selfDisplayName.value : peerDisplayName.value
 }
 
+function peerHeadlineOf(conversation?: ChatConversationVM | null): string {
+  if (!conversation) {
+    return '请选择会话'
+  }
+  const nickname = conversation.peerProfile?.nickname || `用户 ${conversation.peerUserId}`
+  const handle = conversation.peerProfile?.userNo || conversation.peerUserId
+  return `${nickname} @${handle}`
+}
+
+function peerSignatureOf(conversation?: ChatConversationVM | null): string {
+  const bio = conversation?.peerProfile?.bio?.trim()
+  if (bio) {
+    return bio
+  }
+  return '这个人很神秘，还没有签名'
+}
+
+async function openPeerProfile(conversation?: ChatConversationVM | null): Promise<void> {
+  const userNo = conversation?.peerProfile?.userNo?.trim()
+  if (!userNo) {
+    return
+  }
+  await router.push(`/u/${encodeURIComponent(userNo)}`)
+}
+
 async function selectConversation(conversationId: number): Promise<void> {
   await router.replace({
     path: '/chat',
@@ -431,10 +456,16 @@ function jumpToLatest(): void {
             />
             <div class="min-w-0 flex-1">
               <div class="flex items-center justify-between gap-2">
-                <p class="truncate text-sm font-semibold text-stone-900">{{ item.peerProfile?.nickname || ('用户 ' + item.peerUserId) }}</p>
+                <button
+                  type="button"
+                  class="truncate text-left text-xs text-stone-500 transition hover:text-stone-700"
+                  @click.stop="openPeerProfile(item)"
+                >
+                  {{ peerHeadlineOf(item) }}
+                </button>
                 <span v-if="item.hasUnread" class="rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">新</span>
               </div>
-              <p class="truncate text-xs text-stone-500">{{ item.listingTitle || ('商品 ' + item.listingId) }}</p>
+              <p class="truncate text-xs text-stone-600">{{ peerSignatureOf(item) }}</p>
               <p class="mt-1 truncate text-xs text-stone-600">{{ item.lastMessage ? resolveMessagePreview(item.lastMessage.content) : '暂无消息' }}</p>
             </div>
           </div>
@@ -458,10 +489,14 @@ function jumpToLatest(): void {
               <span aria-hidden="true">&lt;</span>
             </button>
             <div class="min-w-0">
-              <h2 class="truncate text-sm font-semibold text-stone-900">
-                {{ activeConversation?.peerProfile?.nickname || (activeConversation ? ('用户 ' + activeConversation.peerUserId) : '请选择会话') }}
-              </h2>
-              <p class="mt-1 truncate text-xs text-stone-500">{{ activeConversation?.listingTitle || '' }}</p>
+              <button
+                type="button"
+                class="truncate text-left text-xs text-stone-500 transition hover:text-stone-700"
+                @click="openPeerProfile(activeConversation)"
+              >
+                {{ peerHeadlineOf(activeConversation) }}
+              </button>
+              <p class="mt-1 truncate text-xs text-stone-600">{{ peerSignatureOf(activeConversation) }}</p>
             </div>
           </div>
           <button
