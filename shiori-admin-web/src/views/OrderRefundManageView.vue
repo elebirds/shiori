@@ -14,6 +14,11 @@ const queryClient = useQueryClient()
 
 const page = ref(1)
 const size = ref(10)
+const refundNoInput = ref('')
+const orderNoInput = ref('')
+const statusInput = ref<OrderRefundStatus | ''>('')
+const buyerUserIdInput = ref('')
+const sellerUserIdInput = ref('')
 const refundNo = ref('')
 const orderNo = ref('')
 const status = ref<OrderRefundStatus | ''>('')
@@ -106,6 +111,11 @@ function refundStatusClass(statusText: OrderRefundStatus): string {
 function onSearch(): void {
   page.value = 1
   actionMessage.value = ''
+  refundNo.value = refundNoInput.value.trim()
+  orderNo.value = orderNoInput.value.trim()
+  status.value = statusInput.value
+  buyerUserId.value = buyerUserIdInput.value.trim()
+  sellerUserId.value = sellerUserIdInput.value.trim()
 }
 
 function parseOptionalPositiveInt(raw: string): number | undefined {
@@ -142,17 +152,17 @@ async function handleRetry(item: OrderRefundResponse): Promise<void> {
 
     <div class="rounded-xl border border-slate-200 bg-white p-4">
       <div class="grid grid-cols-1 gap-3 md:grid-cols-7">
-        <input v-model="refundNo" placeholder="refundNo" class="rounded-md border border-slate-300 px-3 py-2 text-sm" />
-        <input v-model="orderNo" placeholder="orderNo" class="rounded-md border border-slate-300 px-3 py-2 text-sm" />
-        <select v-model="status" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+        <input v-model="refundNoInput" placeholder="refundNo" class="rounded-md border border-slate-300 px-3 py-2 text-sm" />
+        <input v-model="orderNoInput" placeholder="orderNo" class="rounded-md border border-slate-300 px-3 py-2 text-sm" />
+        <select v-model="statusInput" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
           <option value="">全部状态</option>
           <option value="REQUESTED">REQUESTED</option>
           <option value="PENDING_FUNDS">PENDING_FUNDS</option>
           <option value="SUCCEEDED">SUCCEEDED</option>
           <option value="REJECTED">REJECTED</option>
         </select>
-        <input v-model="buyerUserId" placeholder="buyerUserId" class="rounded-md border border-slate-300 px-3 py-2 text-sm" />
-        <input v-model="sellerUserId" placeholder="sellerUserId" class="rounded-md border border-slate-300 px-3 py-2 text-sm" />
+        <input v-model="buyerUserIdInput" placeholder="buyerUserId" class="rounded-md border border-slate-300 px-3 py-2 text-sm" />
+        <input v-model="sellerUserIdInput" placeholder="sellerUserId" class="rounded-md border border-slate-300 px-3 py-2 text-sm" />
         <button class="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white" @click="onSearch">查询</button>
       </div>
     </div>

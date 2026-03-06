@@ -15,6 +15,12 @@ const queryClient = useQueryClient()
 
 const ledgerPage = ref(1)
 const ledgerSize = ref(10)
+const ledgerUserIdInput = ref('')
+const ledgerBizTypeInput = ref('')
+const ledgerBizNoInput = ref('')
+const ledgerChangeTypeInput = ref('')
+const ledgerCreatedFromInput = ref('')
+const ledgerCreatedToInput = ref('')
 const ledgerUserId = ref('')
 const ledgerBizType = ref('')
 const ledgerBizNo = ref('')
@@ -24,6 +30,8 @@ const ledgerCreatedTo = ref('')
 
 const issuePage = ref(1)
 const issueSize = ref(10)
+const issueStatusInput = ref('')
+const issueTypeInput = ref('')
 const issueStatus = ref('')
 const issueType = ref('')
 
@@ -148,10 +156,18 @@ function issueStatusText(status: string): string {
 
 function handleLedgerSearch(): void {
   ledgerPage.value = 1
+  ledgerUserId.value = ledgerUserIdInput.value.trim()
+  ledgerBizType.value = ledgerBizTypeInput.value.trim()
+  ledgerBizNo.value = ledgerBizNoInput.value.trim()
+  ledgerChangeType.value = ledgerChangeTypeInput.value.trim()
+  ledgerCreatedFrom.value = ledgerCreatedFromInput.value
+  ledgerCreatedTo.value = ledgerCreatedToInput.value
 }
 
 function handleIssueSearch(): void {
   issuePage.value = 1
+  issueStatus.value = issueStatusInput.value.trim()
+  issueType.value = issueTypeInput.value.trim()
 }
 
 function parseOptionalPositiveInt(raw: string): number | undefined {
@@ -229,12 +245,12 @@ function ledgerRowKey(item: AdminWalletLedgerItemResponse): string {
       </div>
 
       <div class="grid grid-cols-1 gap-3 md:grid-cols-7">
-        <input v-model="ledgerUserId" placeholder="userId" class="rounded-md border border-slate-300 px-3 py-2 text-sm" />
-        <input v-model="ledgerBizType" placeholder="bizType" class="rounded-md border border-slate-300 px-3 py-2 text-sm" />
-        <input v-model="ledgerBizNo" placeholder="bizNo" class="rounded-md border border-slate-300 px-3 py-2 text-sm" />
-        <input v-model="ledgerChangeType" placeholder="changeType" class="rounded-md border border-slate-300 px-3 py-2 text-sm" />
-        <input v-model="ledgerCreatedFrom" type="datetime-local" class="rounded-md border border-slate-300 px-3 py-2 text-sm" />
-        <input v-model="ledgerCreatedTo" type="datetime-local" class="rounded-md border border-slate-300 px-3 py-2 text-sm" />
+        <input v-model="ledgerUserIdInput" placeholder="userId" class="rounded-md border border-slate-300 px-3 py-2 text-sm" />
+        <input v-model="ledgerBizTypeInput" placeholder="bizType" class="rounded-md border border-slate-300 px-3 py-2 text-sm" />
+        <input v-model="ledgerBizNoInput" placeholder="bizNo" class="rounded-md border border-slate-300 px-3 py-2 text-sm" />
+        <input v-model="ledgerChangeTypeInput" placeholder="changeType" class="rounded-md border border-slate-300 px-3 py-2 text-sm" />
+        <input v-model="ledgerCreatedFromInput" type="datetime-local" class="rounded-md border border-slate-300 px-3 py-2 text-sm" />
+        <input v-model="ledgerCreatedToInput" type="datetime-local" class="rounded-md border border-slate-300 px-3 py-2 text-sm" />
         <button class="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white" @click="handleLedgerSearch">查询</button>
       </div>
 
@@ -281,13 +297,13 @@ function ledgerRowKey(item: AdminWalletLedgerItemResponse): string {
       </div>
 
       <div class="grid grid-cols-1 gap-3 md:grid-cols-[1fr_1fr_auto]">
-        <select v-model="issueStatus" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+        <select v-model="issueStatusInput" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
           <option value="">全部状态</option>
           <option value="NEW">NEW</option>
           <option value="ACKED">ACKED</option>
           <option value="RESOLVED">RESOLVED</option>
         </select>
-        <input v-model="issueType" placeholder="issueType" class="rounded-md border border-slate-300 px-3 py-2 text-sm" />
+        <input v-model="issueTypeInput" placeholder="issueType" class="rounded-md border border-slate-300 px-3 py-2 text-sm" />
         <button class="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white" @click="handleIssueSearch">查询</button>
       </div>
 
