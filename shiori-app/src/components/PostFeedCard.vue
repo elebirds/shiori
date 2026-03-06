@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 import type { PublicUserProfile } from '@/api/auth'
 import type { PostV2ItemResponse } from '@/api/social'
+import ImageLightbox from '@/components/ImageLightbox.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 
 const props = withDefaults(
@@ -49,6 +50,7 @@ const canDelete = computed(
         props.post.sourceType === 'MANUAL',
     ),
 )
+const previewImageUrl = ref('')
 
 function handleOpenUser(): void {
   const userNo = authorUserNo.value
@@ -68,6 +70,27 @@ function handleOpenProduct(): void {
 
 function handleDelete(): void {
   emit('delete', props.post.postId)
+}
+
+function handlePostContentClick(event: MouseEvent): void {
+  const target = event.target as HTMLElement | null
+  if (!target) {
+    return
+  }
+  const image = target.closest('img') as HTMLImageElement | null
+  if (!image) {
+    return
+  }
+  const imageUrl = (image.currentSrc || image.src || '').trim()
+  if (!imageUrl) {
+    return
+  }
+  event.preventDefault()
+  previewImageUrl.value = imageUrl
+}
+
+function closeImagePreview(): void {
+  previewImageUrl.value = ''
 }
 
 function formatTime(raw: string): string {
@@ -138,7 +161,12 @@ function formatPriceRange(minPriceCent?: number, maxPriceCent?: number): string 
       </button>
     </header>
 
-    <div v-if="post.contentHtml" class="post-content text-sm text-stone-800" v-html="post.contentHtml"></div>
+    <div
+      v-if="post.contentHtml"
+      class="post-content text-sm text-stone-800"
+      v-html="post.contentHtml"
+      @click="handlePostContentClick"
+    ></div>
 
     <button
       v-if="post.relatedProduct"
@@ -165,6 +193,8 @@ function formatPriceRange(minPriceCent?: number, maxPriceCent?: number): string 
         </div>
       </div>
     </button>
+
+    <ImageLightbox :open="Boolean(previewImageUrl)" :image-url="previewImageUrl" alt="帖子图片大图" @close="closeImagePreview" />
   </article>
 </template>
 
@@ -182,6 +212,7 @@ function formatPriceRange(minPriceCent?: number, maxPriceCent?: number): string 
 .post-content :deep(img) {
   max-width: 100%;
   border-radius: 0.5rem;
+  cursor: zoom-in;
 }
 
 .post-content :deep(a) {

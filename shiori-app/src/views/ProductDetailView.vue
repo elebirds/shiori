@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/vue-query'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import ImageLightbox from '@/components/ImageLightbox.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import ResultState from '@/components/ResultState.vue'
 import { useProductMeta } from '@/composables/useProductMeta'
@@ -33,6 +34,7 @@ const addingCart = ref(false)
 const creatingChat = ref(false)
 const actionError = ref('')
 const actionMessage = ref('')
+const previewImageUrl = ref('')
 const quantity = ref(1)
 const selectedSpecs = ref<Record<string, string>>({})
 
@@ -474,6 +476,18 @@ async function goSellerProfile(): Promise<void> {
   }
   await router.push(`/u/${encodeURIComponent(userNo)}`)
 }
+
+function openImagePreview(imageUrl: string): void {
+  const normalized = imageUrl.trim()
+  if (!normalized) {
+    return
+  }
+  previewImageUrl.value = normalized
+}
+
+function closeImagePreview(): void {
+  previewImageUrl.value = ''
+}
 </script>
 
 <template>
@@ -675,12 +689,18 @@ async function goSellerProfile(): Promise<void> {
                   :key="`${item.reviewId}-${imageKey}`"
                   class="aspect-square overflow-hidden rounded-lg border border-stone-200 bg-stone-100"
                 >
-                  <img
+                  <button
                     v-if="reviewImageUrlOf(imageKey)"
-                    :src="reviewImageUrlOf(imageKey)"
-                    alt="评价图片"
-                    class="h-full w-full object-cover"
-                  />
+                    type="button"
+                    class="h-full w-full cursor-zoom-in"
+                    @click="openImagePreview(reviewImageUrlOf(imageKey))"
+                  >
+                    <img
+                      :src="reviewImageUrlOf(imageKey)"
+                      alt="评价图片"
+                      class="h-full w-full object-cover"
+                    />
+                  </button>
                   <div v-else class="flex h-full items-center justify-center px-2 text-center text-[11px] text-stone-500">
                     {{ reviewImageUrlsQuery.isFetching.value ? '图片加载中...' : '图片不可用' }}
                   </div>
@@ -691,6 +711,7 @@ async function goSellerProfile(): Promise<void> {
         </article>
       </div>
     </ResultState>
+    <ImageLightbox :open="Boolean(previewImageUrl)" :image-url="previewImageUrl" alt="评价图片大图" @close="closeImagePreview" />
   </section>
 </template>
 

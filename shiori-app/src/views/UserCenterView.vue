@@ -14,6 +14,7 @@ import {
   type ProductTradeMode,
 } from '@/api/productV2'
 import { deletePostV2, listUserPostsV2 } from '@/api/social'
+import ImageLightbox from '@/components/ImageLightbox.vue'
 import PostFeedCard from '@/components/PostFeedCard.vue'
 import ResultState from '@/components/ResultState.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
@@ -36,6 +37,7 @@ const reviewSize = 10
 const postPage = ref(1)
 const postSize = 10
 const deletingPostId = ref<number | null>(null)
+const reviewPreviewImageUrl = ref('')
 const routeUserNo = computed(() => String(route.params.userNo || '').trim())
 
 watch(routeUserNo, () => {
@@ -439,6 +441,18 @@ function reviewImageUrlOf(objectKey: string): string {
   return reviewImageUrlsQuery.data.value?.[objectKey] || ''
 }
 
+function openReviewImagePreview(imageUrl: string): void {
+  const normalized = imageUrl.trim()
+  if (!normalized) {
+    return
+  }
+  reviewPreviewImageUrl.value = normalized
+}
+
+function closeReviewImagePreview(): void {
+  reviewPreviewImageUrl.value = ''
+}
+
 function formatRecentActive(raw?: string): string {
   if (!raw) {
     return '最近未上线'
@@ -703,7 +717,14 @@ function formatRecentActive(raw?: string): string {
                       :key="`${item.reviewId}-${imageKey}`"
                       class="aspect-square overflow-hidden rounded-lg border border-stone-200 bg-stone-100"
                     >
-                      <img v-if="reviewImageUrlOf(imageKey)" :src="reviewImageUrlOf(imageKey)" alt="评价图片" class="h-full w-full object-cover" />
+                      <button
+                        v-if="reviewImageUrlOf(imageKey)"
+                        type="button"
+                        class="h-full w-full cursor-zoom-in"
+                        @click="openReviewImagePreview(reviewImageUrlOf(imageKey))"
+                      >
+                        <img :src="reviewImageUrlOf(imageKey)" alt="评价图片" class="h-full w-full object-cover" />
+                      </button>
                       <div v-else class="flex h-full items-center justify-center px-2 text-center text-[11px] text-stone-500">
                         {{ reviewImageUrlsQuery.isFetching.value ? '图片加载中...' : '图片不可用' }}
                       </div>
@@ -816,5 +837,11 @@ function formatRecentActive(raw?: string): string {
         </section>
       </div>
     </ResultState>
+    <ImageLightbox
+      :open="Boolean(reviewPreviewImageUrl)"
+      :image-url="reviewPreviewImageUrl"
+      alt="评价图片大图"
+      @close="closeReviewImagePreview"
+    />
   </section>
 </template>
