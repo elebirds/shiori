@@ -31,7 +31,15 @@ public enum OrderErrorCode implements ErrorCode {
     ORDER_REFUND_ALREADY_EXISTS(50027, "订单退款已存在"),
     ORDER_REFUND_NOT_FOUND(50028, "退款单不存在"),
     ORDER_REFUND_STATUS_INVALID(50029, "退款单状态非法"),
-    ORDER_REFUND_PENDING_FUNDS(50030, "退款挂起，等待卖家余额补足");
+    ORDER_REFUND_PENDING_FUNDS(50030, "退款挂起，等待卖家余额补足"),
+    ORDER_FULFILLMENT_NOT_SELECTED(50031, "请先选择履约方式"),
+    ORDER_SHIPPING_ADDRESS_REQUIRED(50032, "邮寄订单需选择收货地址"),
+    ORDER_ADDRESS_NOT_FOUND(50033, "收货地址不存在或无权限"),
+    ORDER_FULFILLMENT_INVALID(50034, "当前订单不支持该履约方式"),
+    ORDER_USER_UNREACHABLE(50035, "用户服务不可达"),
+    ORDER_USER_TIMEOUT(50036, "用户服务响应超时"),
+    ORDER_USER_SERVICE_ERROR(50037, "用户服务异常"),
+    ORDER_USER_RESPONSE_INVALID(50038, "用户服务响应异常");
 
     private final int code;
     private final String message;

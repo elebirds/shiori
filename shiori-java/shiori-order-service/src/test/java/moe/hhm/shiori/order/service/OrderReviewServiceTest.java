@@ -19,6 +19,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -51,7 +52,8 @@ class OrderReviewServiceTest {
                 orderMapper,
                 orderReviewMapper,
                 properties,
-                new OrderMetrics(new SimpleMeterRegistry())
+                new OrderMetrics(new SimpleMeterRegistry()),
+                new ObjectMapper()
         );
     }
 
@@ -80,7 +82,7 @@ class OrderReviewServiceTest {
         var response = orderReviewService.createReview(
                 1001L,
                 orderNo,
-                new OrderReviewUpsertRequest(4, 5, 3, "  沟通顺畅，发货及时  ")
+                new OrderReviewUpsertRequest(4, 5, 3, "  沟通顺畅，发货及时  ", null)
         );
 
         assertThat(response.reviewerRole()).isEqualTo(OrderReviewerRole.BUYER.name());
@@ -118,7 +120,7 @@ class OrderReviewServiceTest {
         var response = orderReviewService.createReview(
                 2001L,
                 orderNo,
-                new OrderReviewUpsertRequest(5, 2, 1, "买家配合")
+                new OrderReviewUpsertRequest(5, 2, 1, "买家配合", null)
         );
 
         assertThat(response.reviewerRole()).isEqualTo(OrderReviewerRole.SELLER.name());
@@ -136,7 +138,7 @@ class OrderReviewServiceTest {
         assertThatThrownBy(() -> orderReviewService.createReview(
                 1001L,
                 orderNo,
-                new OrderReviewUpsertRequest(5, 5, 5, "late")
+                new OrderReviewUpsertRequest(5, 5, 5, "late", null)
         ))
                 .isInstanceOf(BizException.class)
                 .matches(ex -> ((BizException) ex).getErrorCode().code() == 50004);
@@ -166,7 +168,7 @@ class OrderReviewServiceTest {
         assertThatThrownBy(() -> orderReviewService.updateMyReview(
                 1001L,
                 orderNo,
-                new OrderReviewUpsertRequest(4, 4, 4, "修改")
+                new OrderReviewUpsertRequest(4, 4, 4, "修改", null)
         ))
                 .isInstanceOf(BizException.class)
                 .matches(ex -> ((BizException) ex).getErrorCode().code() == 50004);
@@ -196,7 +198,7 @@ class OrderReviewServiceTest {
         assertThatThrownBy(() -> orderReviewService.updateMyReview(
                 1001L,
                 orderNo,
-                new OrderReviewUpsertRequest(4, 4, 4, "超时修改")
+                new OrderReviewUpsertRequest(4, 4, 4, "超时修改", null)
         ))
                 .isInstanceOf(BizException.class)
                 .matches(ex -> ((BizException) ex).getErrorCode().code() == 50004);
@@ -258,6 +260,7 @@ class OrderReviewServiceTest {
                                 2,
                                 BigDecimal.valueOf(2.0),
                                 "不太顺利",
+                                null,
                                 OrderReviewVisibilityStatus.VISIBLE.name(),
                                 null,
                                 null,
@@ -309,6 +312,16 @@ class OrderReviewServiceTest {
                 null,
                 null,
                 null,
+                1,
+                0,
+                "MEETUP",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 0,
                 updatedAt.minusDays(1),
                 updatedAt
@@ -337,6 +350,7 @@ class OrderReviewServiceTest {
                 credibilityStar,
                 overallStar,
                 "comment",
+                null,
                 OrderReviewVisibilityStatus.VISIBLE.name(),
                 null,
                 null,

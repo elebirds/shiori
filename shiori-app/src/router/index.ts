@@ -24,6 +24,7 @@ const ROUTE_TITLE_MAP: Record<string, string> = {
   'user-following': '关注',
   profile: '个人中心',
   'profile-edit': '编辑资料',
+  'profile-addresses': '收货地址',
   'account-security': '账号安全',
   notifications: '通知中心',
   chat: '聊天中心',
@@ -161,6 +162,12 @@ const router = createRouter({
       path: '/profile/edit',
       name: 'profile-edit',
       component: () => import('@/views/ProfileView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/profile/addresses',
+      name: 'profile-addresses',
+      component: () => import('@/views/AddressManageView.vue'),
       meta: { requiresAuth: true },
     },
     {

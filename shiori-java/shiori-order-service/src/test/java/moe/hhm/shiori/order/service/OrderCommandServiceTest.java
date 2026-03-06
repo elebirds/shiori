@@ -1,6 +1,5 @@
 package moe.hhm.shiori.order.service;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import moe.hhm.shiori.common.exception.BizException;
@@ -9,6 +8,7 @@ import moe.hhm.shiori.order.client.ProductServiceClient;
 import moe.hhm.shiori.order.client.ProductSkuSnapshot;
 import moe.hhm.shiori.order.client.NotifyChatClient;
 import moe.hhm.shiori.order.client.PaymentServiceClient;
+import moe.hhm.shiori.order.client.UserServiceClient;
 import moe.hhm.shiori.order.client.ReserveBalancePaymentSnapshot;
 import moe.hhm.shiori.order.client.SettleBalancePaymentSnapshot;
 import moe.hhm.shiori.order.config.OrderMqProperties;
@@ -46,6 +46,8 @@ class OrderCommandServiceTest {
     @Mock
     private ProductServiceClient productServiceClient;
     @Mock
+    private UserServiceClient userServiceClient;
+    @Mock
     private NotifyChatClient notifyChatClient;
     @Mock
     private PaymentServiceClient paymentServiceClient;
@@ -59,6 +61,7 @@ class OrderCommandServiceTest {
         orderCommandService = new OrderCommandService(
                 orderMapper,
                 productServiceClient,
+                userServiceClient,
                 notifyChatClient,
                 paymentServiceClient,
                 orderProperties,
@@ -295,9 +298,19 @@ class OrderCommandServiceTest {
                 null,
                 null,
                 null,
+                1,
                 0,
-                (LocalDateTime) null,
-                (LocalDateTime) null
+                "MEETUP",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                null
         );
     }
 
@@ -330,9 +343,19 @@ class OrderCommandServiceTest {
                 null,
                 null,
                 null,
+                1,
                 0,
-                (LocalDateTime) null,
-                (LocalDateTime) null
+                "MEETUP",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                null
         );
     }
 }

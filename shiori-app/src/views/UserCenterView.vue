@@ -169,6 +169,10 @@ function goEdit(): void {
   void router.push('/profile/edit')
 }
 
+function goAddresses(): void {
+  void router.push('/profile/addresses')
+}
+
 async function toggleFollow(): Promise<void> {
   if (isSelf.value || !routeUserNo.value) {
     return
@@ -345,14 +349,22 @@ function reviewerMeta(userId: number): { nickname: string; avatarUrl?: string; u
               </div>
             </div>
 
-            <button
-              v-if="isSelf"
-              type="button"
-              class="rounded-xl bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700"
-              @click="goEdit"
-            >
-              编辑
-            </button>
+            <div v-if="isSelf" class="flex flex-wrap gap-2">
+              <button
+                type="button"
+                class="rounded-xl bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700"
+                @click="goEdit"
+              >
+                编辑资料
+              </button>
+              <button
+                type="button"
+                class="rounded-xl border border-stone-300 bg-white/90 px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
+                @click="goAddresses"
+              >
+                收货地址
+              </button>
+            </div>
             <button
               v-else
               type="button"

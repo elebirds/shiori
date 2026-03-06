@@ -22,6 +22,16 @@ public class OrderEntity {
     private String bizSource;
     private Long chatConversationId;
     private Long chatListingId;
+    private Integer allowMeetup;
+    private Integer allowDelivery;
+    private String fulfillmentMode;
+    private Long shippingAddressId;
+    private String shippingReceiverName;
+    private String shippingReceiverPhone;
+    private String shippingProvince;
+    private String shippingCity;
+    private String shippingDistrict;
+    private String shippingDetailAddress;
 
     public Long getId() {
         return id;
@@ -173,5 +183,85 @@ public class OrderEntity {
 
     public void setChatListingId(Long chatListingId) {
         this.chatListingId = chatListingId;
+    }
+
+    public Integer getAllowMeetup() {
+        return allowMeetup;
+    }
+
+    public void setAllowMeetup(Integer allowMeetup) {
+        this.allowMeetup = allowMeetup;
+    }
+
+    public Integer getAllowDelivery() {
+        return allowDelivery;
+    }
+
+    public void setAllowDelivery(Integer allowDelivery) {
+        this.allowDelivery = allowDelivery;
+    }
+
+    public String getFulfillmentMode() {
+        return fulfillmentMode;
+    }
+
+    public void setFulfillmentMode(String fulfillmentMode) {
+        this.fulfillmentMode = fulfillmentMode;
+    }
+
+    public Long getShippingAddressId() {
+        return shippingAddressId;
+    }
+
+    public void setShippingAddressId(Long shippingAddressId) {
+        this.shippingAddressId = shippingAddressId;
+    }
+
+    public String getShippingReceiverName() {
+        return shippingReceiverName;
+    }
+
+    public void setShippingReceiverName(String shippingReceiverName) {
+        this.shippingReceiverName = shippingReceiverName;
+    }
+
+    public String getShippingReceiverPhone() {
+        return shippingReceiverPhone;
+    }
+
+    public void setShippingReceiverPhone(String shippingReceiverPhone) {
+        this.shippingReceiverPhone = shippingReceiverPhone;
+    }
+
+    public String getShippingProvince() {
+        return shippingProvince;
+    }
+
+    public void setShippingProvince(String shippingProvince) {
+        this.shippingProvince = shippingProvince;
+    }
+
+    public String getShippingCity() {
+        return shippingCity;
+    }
+
+    public void setShippingCity(String shippingCity) {
+        this.shippingCity = shippingCity;
+    }
+
+    public String getShippingDistrict() {
+        return shippingDistrict;
+    }
+
+    public void setShippingDistrict(String shippingDistrict) {
+        this.shippingDistrict = shippingDistrict;
+    }
+
+    public String getShippingDetailAddress() {
+        return shippingDetailAddress;
+    }
+
+    public void setShippingDetailAddress(String shippingDetailAddress) {
+        this.shippingDetailAddress = shippingDetailAddress;
     }
 }

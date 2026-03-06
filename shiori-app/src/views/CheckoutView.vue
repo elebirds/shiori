@@ -1,11 +1,19 @@
 <script setup lang="ts">
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { listMyAddresses, type UserAddress } from '@/api/auth'
 import { getWalletBalance, redeemCdk } from '@/api/payment'
-import { getOrderDetailV2, payOrderV2, type OrderStatus } from '@/api/orderV2'
+import {
+  getOrderDetailV2,
+  payOrderV2,
+  updateOrderFulfillmentV2,
+  type OrderFulfillmentMode,
+  type OrderStatus,
+} from '@/api/orderV2'
 import { useChatStore } from '@/stores/chat'
+import { ApiBizError } from '@/types/result'
 import { resolvePaymentErrorMessage } from '@/utils/paymentError'
 
 const route = useRoute()
@@ -16,6 +24,9 @@ const chatStore = useChatStore()
 const cdkCode = ref('')
 const redeemMessage = ref('')
 const redeemError = ref('')
+const fulfillmentMode = ref<OrderFulfillmentMode | ''>('')
+const selectedAddressId = ref<number | null>(null)
+const fulfillmentError = ref('')
 
 const orderNo = computed(() => String(route.params.orderNo || ''))
 const routeConversationId = computed(() => {
@@ -29,9 +40,26 @@ const orderQuery = useQuery({
   enabled: computed(() => orderNo.value.length > 0),
 })
 
+const addressQuery = useQuery({
+  queryKey: ['my-addresses'],
+  queryFn: listMyAddresses,
+  enabled: computed(() => Boolean(orderQuery.data.value?.allowDelivery)),
+})
+
 const walletQuery = useQuery({
   queryKey: ['payment-wallet-balance'],
   queryFn: () => getWalletBalance(),
+})
+
+const fulfillmentMutation = useMutation({
+  mutationFn: (payload: { fulfillmentMode: OrderFulfillmentMode; addressId?: number }) =>
+    updateOrderFulfillmentV2(orderNo.value, payload),
+  onSuccess: async () => {
+    await Promise.all([
+      orderQuery.refetch(),
+      queryClient.invalidateQueries({ queryKey: ['order-detail-v2', orderNo.value] }),
+    ])
+  },
 })
 
 const payMutation = useMutation({
@@ -61,6 +89,13 @@ const redeemMutation = useMutation({
 })
 
 const detail = computed(() => orderQuery.data.value)
+const addresses = computed(() => addressQuery.data.value || [])
+const selectedAddress = computed<UserAddress | null>(() => {
+  if (!selectedAddressId.value) {
+    return null
+  }
+  return addresses.value.find((item) => item.addressId === selectedAddressId.value) || null
+})
 const wallet = computed(() => {
   return (
     walletQuery.data.value || {
@@ -70,10 +105,25 @@ const wallet = computed(() => {
     }
   )
 })
+
 const amountCent = computed(() => detail.value?.totalAmountCent || 0)
 const balanceGapCent = computed(() => Math.max(0, amountCent.value - wallet.value.availableBalanceCent))
 const balanceEnough = computed(() => balanceGapCent.value <= 0)
-const canPay = computed(() => detail.value?.status === 'UNPAID' && balanceEnough.value)
+const fulfillmentReady = computed(() => {
+  const current = detail.value
+  if (!current || current.status !== 'UNPAID') {
+    return true
+  }
+  const mode = resolveSelectedFulfillmentMode(current)
+  if (!mode) {
+    return false
+  }
+  if (mode === 'DELIVERY') {
+    return Boolean(selectedAddressId.value && selectedAddressId.value > 0)
+  }
+  return true
+})
+const canPay = computed(() => detail.value?.status === 'UNPAID' && balanceEnough.value && fulfillmentReady.value)
 
 const ORDER_STATUS_TEXT: Record<OrderStatus, string> = {
   UNPAID: '待支付',
@@ -84,17 +134,89 @@ const ORDER_STATUS_TEXT: Record<OrderStatus, string> = {
   REFUNDED: '已退款',
 }
 
+watch(
+  [detail, addresses],
+  ([currentDetail, addressList]) => {
+    if (!currentDetail) {
+      return
+    }
+
+    if (!fulfillmentMode.value) {
+      const normalized = normalizeFulfillmentMode(currentDetail.fulfillmentMode)
+      if (normalized) {
+        fulfillmentMode.value = normalized
+      } else if (currentDetail.allowMeetup && !currentDetail.allowDelivery) {
+        fulfillmentMode.value = 'MEETUP'
+      } else if (!currentDetail.allowMeetup && currentDetail.allowDelivery) {
+        fulfillmentMode.value = 'DELIVERY'
+      }
+    }
+
+    const mode = resolveSelectedFulfillmentMode(currentDetail)
+    if (mode !== 'DELIVERY') {
+      selectedAddressId.value = null
+      return
+    }
+    if (selectedAddressId.value && addressList.some((item) => item.addressId === selectedAddressId.value)) {
+      return
+    }
+
+    if (currentDetail.shippingAddress) {
+      const matched = addressList.find((item) => isSameAddressSnapshot(item, currentDetail.shippingAddress || undefined))
+      if (matched) {
+        selectedAddressId.value = matched.addressId
+        return
+      }
+    }
+
+    const defaultAddress = addressList.find((item) => item.isDefault)
+    selectedAddressId.value = defaultAddress?.addressId || addressList[0]?.addressId || null
+  },
+  { immediate: true },
+)
+
+watch(fulfillmentMode, () => {
+  fulfillmentError.value = ''
+})
+
+function normalizeFulfillmentMode(raw?: string): OrderFulfillmentMode | '' {
+  if (raw === 'MEETUP' || raw === 'DELIVERY') {
+    return raw
+  }
+  return ''
+}
+
+function resolveSelectedFulfillmentMode(currentDetail: NonNullable<typeof detail.value>): OrderFulfillmentMode | '' {
+  const selected = normalizeFulfillmentMode(fulfillmentMode.value)
+  if (selected) {
+    return selected
+  }
+  const detailMode = normalizeFulfillmentMode(currentDetail.fulfillmentMode)
+  if (detailMode) {
+    return detailMode
+  }
+  if (currentDetail.allowMeetup && !currentDetail.allowDelivery) {
+    return 'MEETUP'
+  }
+  if (!currentDetail.allowMeetup && currentDetail.allowDelivery) {
+    return 'DELIVERY'
+  }
+  return ''
+}
+
 function statusText(status: OrderStatus): string {
   return ORDER_STATUS_TEXT[status] || status
 }
 
-const payError = computed(() => {
-  if (payMutation.error.value) {
-    return resolvePaymentErrorMessage(payMutation.error.value)
+function fulfillmentModeText(mode?: string): string {
+  if (mode === 'MEETUP') {
+    return '线下面交'
   }
-  return ''
-})
-const currentConversationId = computed(() => detail.value?.conversationId || routeConversationId.value)
+  if (mode === 'DELIVERY') {
+    return '邮寄配送'
+  }
+  return '待选择'
+}
 
 function formatMoney(priceCent: number): string {
   return `¥ ${(priceCent / 100).toFixed(2)}`
@@ -111,13 +233,83 @@ function formatTime(raw?: string): string {
   return parsed.toLocaleString('zh-CN')
 }
 
+function isSameAddressSnapshot(
+  address: UserAddress,
+  snapshot?: {
+    receiverName: string
+    receiverPhone: string
+    province: string
+    city: string
+    district: string
+    detailAddress: string
+  },
+): boolean {
+  if (!snapshot) {
+    return false
+  }
+  return (
+    address.receiverName === snapshot.receiverName &&
+    address.receiverPhone === snapshot.receiverPhone &&
+    address.province === snapshot.province &&
+    address.city === snapshot.city &&
+    address.district === snapshot.district &&
+    address.detailAddress === snapshot.detailAddress
+  )
+}
+
+function formatAddressLine(address: UserAddress): string {
+  return `${address.province} ${address.city} ${address.district} ${address.detailAddress}`
+}
+
+function resolveFulfillmentSubmitPayload(): { fulfillmentMode: OrderFulfillmentMode; addressId?: number } | null {
+  const current = detail.value
+  if (!current) {
+    return null
+  }
+
+  const mode = resolveSelectedFulfillmentMode(current)
+  if (!mode) {
+    fulfillmentError.value = '请选择履约方式'
+    return null
+  }
+
+  if (mode === 'DELIVERY') {
+    if (!selectedAddressId.value || selectedAddressId.value <= 0) {
+      fulfillmentError.value = '邮寄方式必须选择收货地址'
+      return null
+    }
+    return {
+      fulfillmentMode: 'DELIVERY',
+      addressId: selectedAddressId.value,
+    }
+  }
+
+  return {
+    fulfillmentMode: 'MEETUP',
+  }
+}
+
 async function handlePay(): Promise<void> {
-  if (!canPay.value || payMutation.isPending.value) {
+  if (!canPay.value || payMutation.isPending.value || fulfillmentMutation.isPending.value) {
     return
   }
+
+  const payload = resolveFulfillmentSubmitPayload()
+  if (!payload) {
+    return
+  }
+
+  fulfillmentError.value = ''
+  try {
+    await fulfillmentMutation.mutateAsync(payload)
+  } catch (error) {
+    fulfillmentError.value = error instanceof ApiBizError ? error.message : '保存履约方式失败，请稍后重试'
+    return
+  }
+
   try {
     await payMutation.mutateAsync()
-    const conversationId = currentConversationId.value
+    const conversationId = detail.value?.conversationId || routeConversationId.value
     if (conversationId > 0) {
       await chatStore.sendTradeStatusCard(conversationId, 'ORDER_PAID', orderNo.value)
     }
@@ -139,6 +331,13 @@ function handleRedeem(): void {
   }
   redeemMutation.mutate()
 }
+
+const payError = computed(() => {
+  if (payMutation.error.value) {
+    return resolvePaymentErrorMessage(payMutation.error.value)
+  }
+  return ''
+})
 </script>
 
 <template>
@@ -188,6 +387,70 @@ function handleRedeem(): void {
             <p>支付方式：余额支付</p>
             <p>订单金额：{{ formatMoney(detail.totalAmountCent) }}</p>
           </div>
+
+          <section class="mt-4 space-y-3 rounded-xl border border-blue-100 bg-[var(--shiori-pay-surface)] p-4">
+            <div class="flex items-center justify-between gap-2">
+              <h2 class="text-sm font-semibold text-[var(--shiori-pay-ink)]">履约方式</h2>
+              <span class="text-xs text-[var(--shiori-pay-mute)]">当前：{{ fulfillmentModeText(resolveSelectedFulfillmentMode(detail)) }}</span>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <label
+                v-if="detail.allowMeetup"
+                class="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm text-[var(--shiori-pay-ink)]"
+              >
+                <input v-model="fulfillmentMode" type="radio" value="MEETUP" />
+                线下面交
+              </label>
+              <label
+                v-if="detail.allowDelivery"
+                class="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm text-[var(--shiori-pay-ink)]"
+              >
+                <input v-model="fulfillmentMode" type="radio" value="DELIVERY" />
+                邮寄配送
+              </label>
+            </div>
+
+            <div v-if="resolveSelectedFulfillmentMode(detail) === 'DELIVERY'" class="space-y-2 rounded-lg border border-blue-100 bg-white p-3">
+              <p class="text-xs text-[var(--shiori-pay-mute)]">请选择收货地址</p>
+              <p v-if="addressQuery.isLoading.value" class="text-xs text-[var(--shiori-pay-mute)]">地址加载中...</p>
+              <p v-else-if="addressQuery.error.value instanceof Error" class="text-xs text-rose-600">{{ addressQuery.error.value.message }}</p>
+
+              <div v-else-if="addresses.length === 0" class="space-y-2 text-xs text-rose-600">
+                <p>你还没有可用地址，请先新增收货地址。</p>
+                <button
+                  type="button"
+                  class="rounded-lg border border-blue-200 px-3 py-1.5 text-[var(--shiori-pay-blue-700)] transition hover:bg-blue-50"
+                  @click="router.push('/profile/addresses')"
+                >
+                  去管理地址
+                </button>
+              </div>
+
+              <div v-else class="space-y-2">
+                <label
+                  v-for="item in addresses"
+                  :key="item.addressId"
+                  class="flex cursor-pointer items-start gap-2 rounded-lg border border-blue-100 px-3 py-2 text-sm text-[var(--shiori-pay-ink)] transition hover:border-blue-300"
+                  :class="selectedAddressId === item.addressId ? 'bg-blue-50' : 'bg-white'"
+                >
+                  <input v-model.number="selectedAddressId" type="radio" name="checkout-address" :value="item.addressId" class="mt-1" />
+                  <div class="min-w-0">
+                    <p class="font-medium">
+                      {{ item.receiverName }} {{ item.receiverPhone }}
+                      <span v-if="item.isDefault" class="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] text-amber-700">默认</span>
+                    </p>
+                    <p class="mt-1 line-clamp-2 text-xs text-[var(--shiori-pay-mute)]">{{ formatAddressLine(item) }}</p>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <p v-if="fulfillmentError" class="text-xs text-rose-600">{{ fulfillmentError }}</p>
+            <p v-if="resolveSelectedFulfillmentMode(detail) === 'DELIVERY' && selectedAddress" class="text-xs text-[var(--shiori-pay-mute)]">
+              已选地址：{{ formatAddressLine(selectedAddress) }}
+            </p>
+          </section>
 
           <div class="mt-4 overflow-hidden rounded-xl border border-blue-100">
             <table class="w-full text-left text-sm">
@@ -281,12 +544,13 @@ function handleRedeem(): void {
           <button
             type="button"
             class="h-12 rounded-xl bg-[var(--shiori-pay-blue-700)] px-6 text-sm font-semibold text-white transition hover:bg-[var(--shiori-pay-blue-800)] disabled:cursor-not-allowed disabled:opacity-65"
-            :disabled="!canPay || payMutation.isPending.value"
+            :disabled="!canPay || payMutation.isPending.value || fulfillmentMutation.isPending.value"
             @click="handlePay"
           >
-            {{ payMutation.isPending.value ? '支付处理中...' : '确认余额支付' }}
+            {{ fulfillmentMutation.isPending.value ? '保存履约信息...' : payMutation.isPending.value ? '支付处理中...' : '确认余额支付' }}
           </button>
         </div>
+        <p v-if="!fulfillmentReady && detail.status === 'UNPAID'" class="mt-3 text-sm text-rose-600">请先完善履约方式与地址后再支付。</p>
         <p v-if="payError" class="mt-3 text-sm text-rose-600">{{ payError }}</p>
       </div>
     </template>

@@ -205,6 +205,16 @@ public interface OrderMapper {
                 biz_source,
                 chat_conversation_id,
                 chat_listing_id,
+                allow_meetup,
+                allow_delivery,
+                fulfillment_mode,
+                shipping_address_id,
+                shipping_receiver_name,
+                shipping_receiver_phone,
+                shipping_province,
+                shipping_city,
+                shipping_district,
+                shipping_detail_address,
                 is_deleted,
                 version,
                 created_at,
@@ -228,6 +238,16 @@ public interface OrderMapper {
                 #{bizSource},
                 #{chatConversationId},
                 #{chatListingId},
+                #{allowMeetup},
+                #{allowDelivery},
+                #{fulfillmentMode},
+                #{shippingAddressId},
+                #{shippingReceiverName},
+                #{shippingReceiverPhone},
+                #{shippingProvince},
+                #{shippingCity},
+                #{shippingDistrict},
+                #{shippingDetailAddress},
                 0,
                 0,
                 CURRENT_TIMESTAMP(3),
@@ -357,6 +377,16 @@ public interface OrderMapper {
                    biz_source AS bizSource,
                    chat_conversation_id AS chatConversationId,
                    chat_listing_id AS chatListingId,
+                   allow_meetup AS allowMeetup,
+                   allow_delivery AS allowDelivery,
+                   fulfillment_mode AS fulfillmentMode,
+                   shipping_address_id AS shippingAddressId,
+                   shipping_receiver_name AS shippingReceiverName,
+                   shipping_receiver_phone AS shippingReceiverPhone,
+                   shipping_province AS shippingProvince,
+                   shipping_city AS shippingCity,
+                   shipping_district AS shippingDistrict,
+                   shipping_detail_address AS shippingDetailAddress,
                    is_deleted AS isDeleted,
                    created_at AS createdAt,
                    updated_at AS updatedAt
@@ -394,6 +424,16 @@ public interface OrderMapper {
                    biz_source AS bizSource,
                    chat_conversation_id AS chatConversationId,
                    chat_listing_id AS chatListingId,
+                   allow_meetup AS allowMeetup,
+                   allow_delivery AS allowDelivery,
+                   fulfillment_mode AS fulfillmentMode,
+                   shipping_address_id AS shippingAddressId,
+                   shipping_receiver_name AS shippingReceiverName,
+                   shipping_receiver_phone AS shippingReceiverPhone,
+                   shipping_province AS shippingProvince,
+                   shipping_city AS shippingCity,
+                   shipping_district AS shippingDistrict,
+                   shipping_detail_address AS shippingDetailAddress,
                    is_deleted AS isDeleted,
                    created_at AS createdAt,
                    updated_at AS updatedAt
@@ -451,6 +491,16 @@ public interface OrderMapper {
                    biz_source AS bizSource,
                    chat_conversation_id AS chatConversationId,
                    chat_listing_id AS chatListingId,
+                   allow_meetup AS allowMeetup,
+                   allow_delivery AS allowDelivery,
+                   fulfillment_mode AS fulfillmentMode,
+                   shipping_address_id AS shippingAddressId,
+                   shipping_receiver_name AS shippingReceiverName,
+                   shipping_receiver_phone AS shippingReceiverPhone,
+                   shipping_province AS shippingProvince,
+                   shipping_city AS shippingCity,
+                   shipping_district AS shippingDistrict,
+                   shipping_detail_address AS shippingDetailAddress,
                    is_deleted AS isDeleted,
                    created_at AS createdAt,
                    updated_at AS updatedAt
@@ -511,6 +561,16 @@ public interface OrderMapper {
                    biz_source AS bizSource,
                    chat_conversation_id AS chatConversationId,
                    chat_listing_id AS chatListingId,
+                   allow_meetup AS allowMeetup,
+                   allow_delivery AS allowDelivery,
+                   fulfillment_mode AS fulfillmentMode,
+                   shipping_address_id AS shippingAddressId,
+                   shipping_receiver_name AS shippingReceiverName,
+                   shipping_receiver_phone AS shippingReceiverPhone,
+                   shipping_province AS shippingProvince,
+                   shipping_city AS shippingCity,
+                   shipping_district AS shippingDistrict,
+                   shipping_detail_address AS shippingDetailAddress,
                    is_deleted AS isDeleted,
                    created_at AS createdAt,
                    updated_at AS updatedAt
@@ -586,6 +646,16 @@ public interface OrderMapper {
                    biz_source AS bizSource,
                    chat_conversation_id AS chatConversationId,
                    chat_listing_id AS chatListingId,
+                   allow_meetup AS allowMeetup,
+                   allow_delivery AS allowDelivery,
+                   fulfillment_mode AS fulfillmentMode,
+                   shipping_address_id AS shippingAddressId,
+                   shipping_receiver_name AS shippingReceiverName,
+                   shipping_receiver_phone AS shippingReceiverPhone,
+                   shipping_province AS shippingProvince,
+                   shipping_city AS shippingCity,
+                   shipping_district AS shippingDistrict,
+                   shipping_detail_address AS shippingDetailAddress,
                    is_deleted AS isDeleted,
                    created_at AS createdAt,
                    updated_at AS updatedAt
@@ -652,6 +722,55 @@ public interface OrderMapper {
                                @Param("paidAt") LocalDateTime paidAt,
                                @Param("expectStatus") Integer expectStatus,
                                @Param("paidStatus") Integer paidStatus);
+
+    @Update("""
+            UPDATE o_order
+            SET fulfillment_mode = 'MEETUP',
+                shipping_address_id = NULL,
+                shipping_receiver_name = NULL,
+                shipping_receiver_phone = NULL,
+                shipping_province = NULL,
+                shipping_city = NULL,
+                shipping_district = NULL,
+                shipping_detail_address = NULL,
+                updated_at = CURRENT_TIMESTAMP(3),
+                version = version + 1
+            WHERE order_no = #{orderNo}
+              AND buyer_user_id = #{buyerUserId}
+              AND status = #{expectStatus}
+              AND is_deleted = 0
+            """)
+    int updateOrderFulfillmentToMeetup(@Param("orderNo") String orderNo,
+                                       @Param("buyerUserId") Long buyerUserId,
+                                       @Param("expectStatus") Integer expectStatus);
+
+    @Update("""
+            UPDATE o_order
+            SET fulfillment_mode = 'DELIVERY',
+                shipping_address_id = #{shippingAddressId},
+                shipping_receiver_name = #{receiverName},
+                shipping_receiver_phone = #{receiverPhone},
+                shipping_province = #{province},
+                shipping_city = #{city},
+                shipping_district = #{district},
+                shipping_detail_address = #{detailAddress},
+                updated_at = CURRENT_TIMESTAMP(3),
+                version = version + 1
+            WHERE order_no = #{orderNo}
+              AND buyer_user_id = #{buyerUserId}
+              AND status = #{expectStatus}
+              AND is_deleted = 0
+            """)
+    int updateOrderFulfillmentToDelivery(@Param("orderNo") String orderNo,
+                                         @Param("buyerUserId") Long buyerUserId,
+                                         @Param("expectStatus") Integer expectStatus,
+                                         @Param("shippingAddressId") Long shippingAddressId,
+                                         @Param("receiverName") String receiverName,
+                                         @Param("receiverPhone") String receiverPhone,
+                                         @Param("province") String province,
+                                         @Param("city") String city,
+                                         @Param("district") String district,
+                                         @Param("detailAddress") String detailAddress);
 
     @Update("""
             UPDATE o_order

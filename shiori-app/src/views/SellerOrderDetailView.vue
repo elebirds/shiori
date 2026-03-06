@@ -147,6 +147,24 @@ function refundStatusClass(status?: OrderRefundStatus): string {
   return 'bg-stone-100 text-stone-700'
 }
 
+function fulfillmentModeText(mode?: string): string {
+  if (mode === 'MEETUP') {
+    return '线下面交'
+  }
+  if (mode === 'DELIVERY') {
+    return '邮寄配送'
+  }
+  return '待买家选择'
+}
+
+function shippingAddressText(): string {
+  if (!detail.value?.shippingAddress) {
+    return '-'
+  }
+  const shipping = detail.value.shippingAddress
+  return `${shipping.province} ${shipping.city} ${shipping.district} ${shipping.detailAddress}`
+}
+
 function transitionText(item: OrderTimelineItemResponse): string {
   return `${statusText(item.fromStatus)} -> ${statusText(item.toStatus)}`
 }
@@ -249,6 +267,17 @@ async function submitReview(payload: OrderReviewUpsertRequest): Promise<void> {
           <p v-if="detail.refundNo">退款金额：{{ formatMoney(detail.refundAmountCent || 0) }}</p>
           <p v-if="detail.refundNo">退款更新时间：{{ formatTime(detail.refundUpdatedAt) }}</p>
         </div>
+
+        <section class="rounded-xl border border-stone-200 bg-stone-50 p-4 text-sm text-stone-700">
+          <h2 class="text-base font-semibold text-stone-900">履约信息</h2>
+          <div class="mt-2 grid gap-2 sm:grid-cols-2">
+            <p>履约方式：{{ fulfillmentModeText(detail.fulfillmentMode) }}</p>
+            <template v-if="detail.fulfillmentMode === 'DELIVERY'">
+              <p>收件人：{{ detail.shippingAddress?.receiverName || '-' }} {{ detail.shippingAddress?.receiverPhone || '' }}</p>
+              <p class="sm:col-span-2">收货地址：{{ shippingAddressText() }}</p>
+            </template>
+          </div>
+        </section>
 
         <section>
           <h2 class="text-base font-semibold text-stone-900">订单明细</h2>

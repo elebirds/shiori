@@ -10,6 +10,7 @@ public record ProductDetailSnapshot(
         String description,
         String coverImageUrl,
         String status,
+        String tradeMode,
         List<ProductSkuSnapshot> skus
 ) {
     public ProductDetailSnapshot(Long productId,
@@ -19,6 +20,17 @@ public record ProductDetailSnapshot(
                                  String description,
                                  String status,
                                  List<ProductSkuSnapshot> skus) {
-        this(productId, productNo, ownerUserId, title, description, null, status, skus);
+        this(productId, productNo, ownerUserId, title, description, null, status, null, skus);
+    }
+
+    public ProductDetailSnapshot(Long productId,
+                                 String productNo,
+                                 Long ownerUserId,
+                                 String title,
+                                 String description,
+                                 String coverImageUrl,
+                                 String status,
+                                 List<ProductSkuSnapshot> skus) {
+        this(productId, productNo, ownerUserId, title, description, coverImageUrl, status, null, skus);
     }
 }

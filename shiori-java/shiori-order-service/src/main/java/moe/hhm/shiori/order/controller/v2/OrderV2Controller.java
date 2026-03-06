@@ -19,6 +19,7 @@ import moe.hhm.shiori.order.dto.v2.ChatToOrderClickRequest;
 import moe.hhm.shiori.order.dto.v2.ConfirmReceiptRequest;
 import moe.hhm.shiori.order.dto.v2.OrderOperateResponseV2;
 import moe.hhm.shiori.order.dto.v2.OrderTimelineResponse;
+import moe.hhm.shiori.order.dto.v2.UpdateOrderFulfillmentRequest;
 import moe.hhm.shiori.order.security.CurrentUserSupport;
 import moe.hhm.shiori.order.service.OrderCommandService;
 import moe.hhm.shiori.order.service.OrderRefundService;
@@ -30,6 +31,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -112,6 +114,22 @@ public class OrderV2Controller {
         permissionGuard.require("order.pay", httpServletRequest::getHeader);
         Long userId = CurrentUserSupport.requireUserId(authentication);
         return orderCommandService.payOrderByBalance(userId, orderNo, idempotencyKey.trim());
+    }
+
+    @PutMapping("/{orderNo}/fulfillment")
+    public OrderDetailResponse updateFulfillment(@PathVariable String orderNo,
+                                                 @Valid @RequestBody UpdateOrderFulfillmentRequest request,
+                                                 Authentication authentication,
+                                                 HttpServletRequest httpServletRequest) {
+        permissionGuard.require("order.pay", httpServletRequest::getHeader);
+        Long userId = CurrentUserSupport.requireUserId(authentication);
+        orderCommandService.updateOrderFulfillmentByBuyer(
+                userId,
+                CurrentUserSupport.resolveRoles(authentication),
+                orderNo,
+                request
+        );
+        return orderService.getOrderDetail(userId, false, orderNo);
     }
 
     @PostMapping("/{orderNo}/cancel")

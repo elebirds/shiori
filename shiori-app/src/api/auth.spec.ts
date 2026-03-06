@@ -1,7 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { httpDelete, httpGet, httpPost } from '@/api/http'
-import { followUser, listUserFollowersByUserNo, listUserFollowingByUserNo, unfollowUser } from '@/api/auth'
+import { httpDelete, httpGet, httpPost, httpPut } from '@/api/http'
+import {
+  createMyAddress,
+  deleteMyAddress,
+  followUser,
+  listMyAddresses,
+  listUserFollowersByUserNo,
+  listUserFollowingByUserNo,
+  setMyAddressDefault,
+  unfollowUser,
+  updateMyAddress,
+} from '@/api/auth'
 
 vi.mock('@/api/http', () => ({
   httpGet: vi.fn(),
@@ -14,6 +24,7 @@ describe('auth follow api', () => {
   beforeEach(() => {
     vi.mocked(httpGet).mockReset()
     vi.mocked(httpPost).mockReset()
+    vi.mocked(httpPut).mockReset()
     vi.mocked(httpDelete).mockReset()
   })
 
@@ -47,5 +58,56 @@ describe('auth follow api', () => {
     expect(httpGet).toHaveBeenNthCalledWith(2, '/api/user/profiles/U202603060001/following', {
       params: { page: 3, size: 10 },
     })
+  })
+
+  it('should call my address apis', async () => {
+    vi.mocked(httpGet).mockResolvedValue([] as never)
+    vi.mocked(httpPost).mockResolvedValue({} as never)
+    vi.mocked(httpPut).mockResolvedValue({} as never)
+    vi.mocked(httpDelete).mockResolvedValue(undefined as never)
+
+    await listMyAddresses()
+    await createMyAddress({
+      receiverName: '张三',
+      receiverPhone: '13800138000',
+      province: '广东省',
+      city: '深圳市',
+      district: '南山区',
+      detailAddress: '科技园 1 号',
+      isDefault: true,
+    })
+    await updateMyAddress(101, {
+      receiverName: '李四',
+      receiverPhone: '13900139000',
+      province: '北京市',
+      city: '北京市',
+      district: '海淀区',
+      detailAddress: '中关村 2 号',
+      isDefault: false,
+    })
+    await setMyAddressDefault(101)
+    await deleteMyAddress(101)
+
+    expect(httpGet).toHaveBeenCalledWith('/api/user/me/addresses')
+    expect(httpPost).toHaveBeenNthCalledWith(1, '/api/user/me/addresses', {
+      receiverName: '张三',
+      receiverPhone: '13800138000',
+      province: '广东省',
+      city: '深圳市',
+      district: '南山区',
+      detailAddress: '科技园 1 号',
+      isDefault: true,
+    })
+    expect(httpPut).toHaveBeenCalledWith('/api/user/me/addresses/101', {
+      receiverName: '李四',
+      receiverPhone: '13900139000',
+      province: '北京市',
+      city: '北京市',
+      district: '海淀区',
+      detailAddress: '中关村 2 号',
+      isDefault: false,
+    })
+    expect(httpPost).toHaveBeenNthCalledWith(2, '/api/user/me/addresses/101/default')
+    expect(httpDelete).toHaveBeenCalledWith('/api/user/me/addresses/101')
   })
 })

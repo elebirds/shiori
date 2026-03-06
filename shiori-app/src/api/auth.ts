@@ -101,6 +101,30 @@ export interface AvatarUploadResponse {
   avatarUrl: string
 }
 
+export interface UserAddress {
+  addressId: number
+  userId: number
+  receiverName: string
+  receiverPhone: string
+  province: string
+  city: string
+  district: string
+  detailAddress: string
+  isDefault: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface UpsertUserAddressRequest {
+  receiverName: string
+  receiverPhone: string
+  province: string
+  city: string
+  district: string
+  detailAddress: string
+  isDefault?: boolean
+}
+
 export interface SimpleSuccessResponse {
   success: boolean
 }
@@ -172,4 +196,28 @@ export async function uploadMyAvatar(file: File): Promise<AvatarUploadResponse> 
   const formData = new FormData()
   formData.append('file', file)
   return httpPost<AvatarUploadResponse>('/api/user/media/avatar', formData)
+}
+
+export function listMyAddresses(): Promise<UserAddress[]> {
+  return httpGet<UserAddress[]>('/api/user/me/addresses')
+}
+
+export function getMyAddress(addressId: number): Promise<UserAddress> {
+  return httpGet<UserAddress>(`/api/user/me/addresses/${addressId}`)
+}
+
+export function createMyAddress(payload: UpsertUserAddressRequest): Promise<UserAddress> {
+  return httpPost<UserAddress>('/api/user/me/addresses', payload)
+}
+
+export function updateMyAddress(addressId: number, payload: UpsertUserAddressRequest): Promise<UserAddress> {
+  return httpPut<UserAddress>(`/api/user/me/addresses/${addressId}`, payload)
+}
+
+export function deleteMyAddress(addressId: number): Promise<void> {
+  return httpDelete<void>(`/api/user/me/addresses/${addressId}`)
+}
+
+export function setMyAddressDefault(addressId: number): Promise<UserAddress> {
+  return httpPost<UserAddress>(`/api/user/me/addresses/${addressId}/default`)
 }

@@ -27,6 +27,8 @@ order:
     comment-max-length: ${ORDER_REVIEW_COMMENT_MAX_LENGTH:280}
   product-client:
     service-base-url: ${ORDER_PRODUCT_SERVICE_BASE_URL:http://shiori-product-service}
+  user-client:
+    service-base-url: ${ORDER_USER_SERVICE_BASE_URL:http://shiori-user-service}
   payment-client:
     service-base-url: ${ORDER_PAYMENT_SERVICE_BASE_URL:http://shiori-payment-service}
     internal-token: ${ORDER_PAYMENT_INTERNAL_TOKEN:}

@@ -2,6 +2,7 @@ import { httpDelete, httpGet, httpPost, httpPut } from '@/api/http'
 
 export type OrderStatus = 'UNPAID' | 'PAID' | 'CANCELED' | 'DELIVERING' | 'FINISHED' | 'REFUNDED'
 export type OrderRefundStatus = 'REQUESTED' | 'REJECTED' | 'PENDING_FUNDS' | 'SUCCEEDED'
+export type OrderFulfillmentMode = 'MEETUP' | 'DELIVERY'
 
 export interface CreateOrderItem {
   productId: number
@@ -50,6 +51,17 @@ export interface OrderDetailResponse {
   source?: string
   conversationId?: number
   listingId?: number
+  allowMeetup: boolean
+  allowDelivery: boolean
+  fulfillmentMode?: OrderFulfillmentMode
+  shippingAddress?: {
+    receiverName: string
+    receiverPhone: string
+    province: string
+    city: string
+    district: string
+    detailAddress: string
+  }
   createdAt: string
   paidAt?: string
   finishedAt?: string
@@ -95,6 +107,11 @@ export interface CancelOrderRequest {
 
 export interface ConfirmReceiptRequest {
   reason?: string
+}
+
+export interface UpdateOrderFulfillmentRequest {
+  fulfillmentMode: OrderFulfillmentMode
+  addressId?: number
 }
 
 export interface OrderTransitionRequest {
@@ -167,6 +184,7 @@ export interface OrderReviewUpsertRequest {
   timelinessStar: number
   credibilityStar: number
   comment?: string
+  imageObjectKeys?: string[]
 }
 
 export interface OrderReviewItemResponse {
@@ -180,6 +198,7 @@ export interface OrderReviewItemResponse {
   credibilityStar: number
   overallStar: number
   comment?: string
+  imageObjectKeys?: string[]
   visibilityStatus: 'VISIBLE' | 'HIDDEN_BY_ADMIN'
   visibilityReason?: string
   visibilityOperatorUserId?: number
@@ -232,6 +251,7 @@ export interface PraiseWallItemResponse {
   credibilityStar: number
   overallStar: number
   comment?: string
+  imageObjectKeys?: string[]
   createdAt: string
 }
 
@@ -252,7 +272,29 @@ export interface UserReviewItemResponse {
   credibilityStar: number
   overallStar: number
   comment?: string
+  imageObjectKeys?: string[]
   createdAt: string
+}
+
+export interface ProductReviewItemResponse {
+  reviewId: number
+  orderNo: string
+  reviewerUserId: number
+  reviewerRole: 'BUYER' | 'SELLER'
+  communicationStar: number
+  timelinessStar: number
+  credibilityStar: number
+  overallStar: number
+  comment?: string
+  imageObjectKeys?: string[]
+  createdAt: string
+}
+
+export interface ProductReviewPageResponse {
+  total: number
+  page: number
+  size: number
+  items: ProductReviewItemResponse[]
 }
 
 export interface UserReviewPageResponse {
@@ -389,6 +431,13 @@ export function payOrderV2(orderNo: string, idempotencyKey?: string): Promise<Or
   })
 }
 
+export function updateOrderFulfillmentV2(
+  orderNo: string,
+  payload: UpdateOrderFulfillmentRequest,
+): Promise<OrderDetailResponse> {
+  return httpPut<OrderDetailResponse>(`/api/v2/order/orders/${orderNo}/fulfillment`, payload)
+}
+
 export function cancelOrderV2(orderNo: string, payload?: CancelOrderRequest, idempotencyKey?: string): Promise<OrderOperateResponse> {
   const key = idempotencyKey || buildOperateIdempotencyKey('cancel', orderNo)
   return httpPost<OrderOperateResponse>(`/api/v2/order/orders/${orderNo}/cancel`, payload, {
@@ -434,6 +483,13 @@ export function listUserReviewsV2(
   query?: { page?: number; size?: number },
 ): Promise<UserReviewPageResponse> {
   return httpGet<UserReviewPageResponse>(`/api/v2/order/reviews/users/${userId}/reviews`, { params: query })
+}
+
+export function listProductReviewsV2(
+  productId: number,
+  query?: { page?: number; size?: number },
+): Promise<ProductReviewPageResponse> {
+  return httpGet<ProductReviewPageResponse>(`/api/v2/order/reviews/products/${productId}`, { params: query })
 }
 
 export function listSellerOrdersV2(query: SellerOrderQuery): Promise<SellerOrderPageResponse> {

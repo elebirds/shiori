@@ -17,6 +17,8 @@ import moe.hhm.shiori.order.client.ProductDetailSnapshot;
 import moe.hhm.shiori.order.client.ProductSpecItemSnapshot;
 import moe.hhm.shiori.order.client.ProductServiceClient;
 import moe.hhm.shiori.order.client.ProductSkuSnapshot;
+import moe.hhm.shiori.order.client.UserAddressSnapshot;
+import moe.hhm.shiori.order.client.UserServiceClient;
 import moe.hhm.shiori.order.client.NotifyChatClient;
 import moe.hhm.shiori.order.client.ChatConversationSnapshot;
 import moe.hhm.shiori.order.client.PaymentServiceClient;
@@ -33,6 +35,7 @@ import moe.hhm.shiori.order.dto.CreateOrderRequest;
 import moe.hhm.shiori.order.dto.CreateOrderResponse;
 import moe.hhm.shiori.order.dto.OrderOperateResponse;
 import moe.hhm.shiori.order.dto.v2.ChatToOrderClickRequest;
+import moe.hhm.shiori.order.dto.v2.UpdateOrderFulfillmentRequest;
 import moe.hhm.shiori.order.event.EventEnvelope;
 import moe.hhm.shiori.order.event.OrderCanceledPayload;
 import moe.hhm.shiori.order.event.OrderCreatedPayload;
@@ -78,6 +81,7 @@ public class OrderCommandService {
 
     private final OrderMapper orderMapper;
     private final ProductServiceClient productServiceClient;
+    private final UserServiceClient userServiceClient;
     private final NotifyChatClient notifyChatClient;
     private final PaymentServiceClient paymentServiceClient;
     private final OrderProperties orderProperties;
@@ -87,6 +91,7 @@ public class OrderCommandService {
 
     public OrderCommandService(OrderMapper orderMapper,
                                ProductServiceClient productServiceClient,
+                               UserServiceClient userServiceClient,
                                NotifyChatClient notifyChatClient,
                                PaymentServiceClient paymentServiceClient,
                                OrderProperties orderProperties,
@@ -95,6 +100,7 @@ public class OrderCommandService {
                                OrderMetrics orderMetrics) {
         this.orderMapper = orderMapper;
         this.productServiceClient = productServiceClient;
+        this.userServiceClient = userServiceClient;
         this.notifyChatClient = notifyChatClient;
         this.paymentServiceClient = paymentServiceClient;
         this.orderProperties = orderProperties;
@@ -124,6 +130,17 @@ public class OrderCommandService {
         validateChatSourceContext(buyerUserId, roles, normalizedSource, chatConversationId, lines);
         long totalAmountCent = lines.stream().mapToLong(PreparedOrderLine::subtotalCent).sum();
         int itemCount = lines.stream().mapToInt(PreparedOrderLine::quantity).sum();
+        boolean allowMeetup = lines.stream().allMatch(PreparedOrderLine::allowMeetup);
+        boolean allowDelivery = lines.stream().allMatch(PreparedOrderLine::allowDelivery);
+        if (!allowMeetup && !allowDelivery) {
+            throw new BizException(OrderErrorCode.ORDER_FULFILLMENT_INVALID, HttpStatus.BAD_REQUEST);
+        }
+        String initialFulfillmentMode = null;
+        if (allowMeetup && !allowDelivery) {
+            initialFulfillmentMode = "MEETUP";
+        } else if (!allowMeetup) {
+            initialFulfillmentMode = "DELIVERY";
+        }
         String orderNo = generateOrderNo();
         LocalDateTime timeoutAt = LocalDateTime.now().plusMinutes(orderProperties.getTimeoutMinutes());
 
@@ -163,6 +180,9 @@ public class OrderCommandService {
                     normalizedSource,
                     chatConversationId,
                     chatListingId,
+                    allowMeetup,
+                    allowDelivery,
+                    initialFulfillmentMode,
                     lines
             );
             appendOrderCreatedOutbox(orderNo, buyerUserId, lines.getFirst().sellerUserId(), totalAmountCent, itemCount);
@@ -192,6 +212,65 @@ public class OrderCommandService {
     }
 
     @Transactional(rollbackFor = Exception.class)
+    public OrderOperateResponse updateOrderFulfillmentByBuyer(Long buyerUserId,
+                                                              List<String> roles,
+                                                              String orderNo,
+                                                              UpdateOrderFulfillmentRequest request) {
+        OrderRecord order = requireOrder(orderNo);
+        ensureBuyer(order, buyerUserId);
+        if (OrderStatus.fromCode(order.status()) != OrderStatus.UNPAID) {
+            throw new BizException(OrderErrorCode.ORDER_STATUS_INVALID, HttpStatus.CONFLICT);
+        }
+        if (request == null || !StringUtils.hasText(request.fulfillmentMode())) {
+            throw new BizException(OrderErrorCode.ORDER_FULFILLMENT_INVALID, HttpStatus.BAD_REQUEST);
+        }
+        String mode = request.fulfillmentMode().trim().toUpperCase();
+        if ("MEETUP".equals(mode)) {
+            if (!isAllowMeetup(order)) {
+                throw new BizException(OrderErrorCode.ORDER_FULFILLMENT_INVALID, HttpStatus.BAD_REQUEST);
+            }
+            int affected = orderMapper.updateOrderFulfillmentToMeetup(
+                    orderNo,
+                    buyerUserId,
+                    OrderStatus.UNPAID.getCode()
+            );
+            if (affected == 0) {
+                throw new BizException(OrderErrorCode.ORDER_STATUS_INVALID, HttpStatus.CONFLICT);
+            }
+            return new OrderOperateResponse(orderNo, OrderStatus.UNPAID.name(), false);
+        }
+        if ("DELIVERY".equals(mode)) {
+            if (!isAllowDelivery(order)) {
+                throw new BizException(OrderErrorCode.ORDER_FULFILLMENT_INVALID, HttpStatus.BAD_REQUEST);
+            }
+            if (request.addressId() == null || request.addressId() <= 0) {
+                throw new BizException(OrderErrorCode.ORDER_SHIPPING_ADDRESS_REQUIRED, HttpStatus.BAD_REQUEST);
+            }
+            UserAddressSnapshot address = userServiceClient.getMyAddress(request.addressId(), buyerUserId, roles);
+            if (address == null || !buyerUserId.equals(address.userId())) {
+                throw new BizException(OrderErrorCode.ORDER_ADDRESS_NOT_FOUND, HttpStatus.BAD_REQUEST);
+            }
+            int affected = orderMapper.updateOrderFulfillmentToDelivery(
+                    orderNo,
+                    buyerUserId,
+                    OrderStatus.UNPAID.getCode(),
+                    address.addressId(),
+                    address.receiverName(),
+                    address.receiverPhone(),
+                    address.province(),
+                    address.city(),
+                    address.district(),
+                    address.detailAddress()
+            );
+            if (affected == 0) {
+                throw new BizException(OrderErrorCode.ORDER_STATUS_INVALID, HttpStatus.CONFLICT);
+            }
+            return new OrderOperateResponse(orderNo, OrderStatus.UNPAID.name(), false);
+        }
+        throw new BizException(OrderErrorCode.ORDER_FULFILLMENT_INVALID, HttpStatus.BAD_REQUEST);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
     public OrderOperateResponse payOrderByBalance(Long buyerUserId, String orderNo, String idempotencyKey) {
         String normalizedIdempotencyKey = requireIdempotencyKey(idempotencyKey);
         OrderRecord order = requireOrder(orderNo);
@@ -216,6 +295,7 @@ public class OrderCommandService {
         if (status != OrderStatus.UNPAID) {
             throw new BizException(OrderErrorCode.ORDER_STATUS_INVALID, HttpStatus.CONFLICT);
         }
+        ensureFulfillmentReadyForPay(order);
 
         ReserveBalancePaymentSnapshot reserved = paymentServiceClient.reserveOrderPayment(
                 orderNo,
@@ -311,6 +391,7 @@ public class OrderCommandService {
         if (status != OrderStatus.UNPAID) {
             throw new BizException(OrderErrorCode.ORDER_STATUS_INVALID, HttpStatus.CONFLICT);
         }
+        ensureFulfillmentReadyForPay(order);
 
         int affected;
         try {
@@ -450,6 +531,7 @@ public class OrderCommandService {
         OrderRecord order = requireOrder(orderNo);
         ensureSeller(order, sellerUserId);
         ensureOrderNotRefunded(order);
+        ensureShippingAddressReadyForDelivery(order);
         String normalizedReason = resolveDeliverReason(reason, false);
 
         OrderStatus status = OrderStatus.fromCode(order.status());
@@ -521,6 +603,7 @@ public class OrderCommandService {
     public OrderOperateResponse deliverOrderAsAdmin(Long operatorUserId, String orderNo, String reason) {
         OrderRecord before = requireOrder(orderNo);
         ensureOrderNotRefunded(before);
+        ensureShippingAddressReadyForDelivery(before);
         String normalizedReason = resolveDeliverReason(reason, true);
 
         OrderStatus status = OrderStatus.fromCode(before.status());
@@ -666,6 +749,9 @@ public class OrderCommandService {
                               String source,
                               Long conversationId,
                               Long listingId,
+                              boolean allowMeetup,
+                              boolean allowDelivery,
+                              String fulfillmentMode,
                               List<PreparedOrderLine> lines) {
         OrderEntity orderEntity = new OrderEntity();
         orderEntity.setOrderNo(orderNo);
@@ -678,6 +764,9 @@ public class OrderCommandService {
         orderEntity.setBizSource(source);
         orderEntity.setChatConversationId(conversationId);
         orderEntity.setChatListingId(listingId);
+        orderEntity.setAllowMeetup(allowMeetup ? 1 : 0);
+        orderEntity.setAllowDelivery(allowDelivery ? 1 : 0);
+        orderEntity.setFulfillmentMode(fulfillmentMode);
         orderMapper.insertOrder(orderEntity);
 
         if (orderEntity.getId() == null) {
@@ -758,6 +847,7 @@ public class OrderCommandService {
             }
             String skuName = resolveSkuName(sku);
             String specJson = resolveSpecJson(sku);
+            TradeCapability capability = resolveTradeCapability(product.tradeMode());
 
             lines.add(new PreparedOrderLine(
                     item.productId(),
@@ -769,7 +859,9 @@ public class OrderCommandService {
                     sku.priceCent(),
                     item.quantity(),
                     subtotal,
-                    product.ownerUserId()
+                    product.ownerUserId(),
+                    capability.allowMeetup(),
+                    capability.allowDelivery()
             ));
         }
 
@@ -1125,6 +1217,94 @@ public class OrderCommandService {
         }
     }
 
+    private void ensureFulfillmentReadyForPay(OrderRecord order) {
+        if (order == null) {
+            return;
+        }
+        boolean allowMeetup = isAllowMeetup(order);
+        boolean allowDelivery = isAllowDelivery(order);
+        String mode = normalizeFulfillmentMode(order.fulfillmentMode());
+
+        if (allowMeetup && allowDelivery) {
+            if (mode == null) {
+                throw new BizException(OrderErrorCode.ORDER_FULFILLMENT_NOT_SELECTED, HttpStatus.BAD_REQUEST);
+            }
+            if ("DELIVERY".equals(mode) && !hasShippingSnapshot(order)) {
+                throw new BizException(OrderErrorCode.ORDER_SHIPPING_ADDRESS_REQUIRED, HttpStatus.BAD_REQUEST);
+            }
+            return;
+        }
+        if (allowDelivery) {
+            if (!"DELIVERY".equals(mode) || !hasShippingSnapshot(order)) {
+                throw new BizException(OrderErrorCode.ORDER_SHIPPING_ADDRESS_REQUIRED, HttpStatus.BAD_REQUEST);
+            }
+            return;
+        }
+        if (allowMeetup && mode == null) {
+            // 兼容历史订单，面交场景允许空值。
+            return;
+        }
+        if (allowMeetup && !"MEETUP".equals(mode)) {
+            throw new BizException(OrderErrorCode.ORDER_FULFILLMENT_INVALID, HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    private void ensureShippingAddressReadyForDelivery(OrderRecord order) {
+        if (order == null) {
+            return;
+        }
+        if (!"DELIVERY".equals(normalizeFulfillmentMode(order.fulfillmentMode()))) {
+            return;
+        }
+        if (!hasShippingSnapshot(order)) {
+            throw new BizException(OrderErrorCode.ORDER_SHIPPING_ADDRESS_REQUIRED, HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    private boolean hasShippingSnapshot(OrderRecord order) {
+        return order != null
+                && order.shippingAddressId() != null
+                && order.shippingAddressId() > 0
+                && StringUtils.hasText(order.shippingReceiverName())
+                && StringUtils.hasText(order.shippingReceiverPhone())
+                && StringUtils.hasText(order.shippingProvince())
+                && StringUtils.hasText(order.shippingCity())
+                && StringUtils.hasText(order.shippingDistrict())
+                && StringUtils.hasText(order.shippingDetailAddress());
+    }
+
+    private boolean isAllowMeetup(OrderRecord order) {
+        return order != null && order.allowMeetup() != null && order.allowMeetup() == 1;
+    }
+
+    private boolean isAllowDelivery(OrderRecord order) {
+        return order != null && order.allowDelivery() != null && order.allowDelivery() == 1;
+    }
+
+    private String normalizeFulfillmentMode(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
+        String mode = raw.trim().toUpperCase();
+        if ("MEETUP".equals(mode) || "DELIVERY".equals(mode)) {
+            return mode;
+        }
+        return null;
+    }
+
+    private TradeCapability resolveTradeCapability(String tradeMode) {
+        if (!StringUtils.hasText(tradeMode)) {
+            return new TradeCapability(true, true);
+        }
+        String normalized = tradeMode.trim().toUpperCase();
+        return switch (normalized) {
+            case "MEETUP" -> new TradeCapability(true, false);
+            case "DELIVERY" -> new TradeCapability(false, true);
+            case "BOTH" -> new TradeCapability(true, true);
+            default -> new TradeCapability(true, true);
+        };
+    }
+
     private void insertStatusAudit(String orderNo,
                                    Long operatorUserId,
                                    String source,
@@ -1231,6 +1411,9 @@ public class OrderCommandService {
 
     private record PreparedOrderLine(Long productId, String productNo, Long skuId, String skuNo, String skuName,
                                      String specJson, Long priceCent, Integer quantity, Long subtotalCent,
-                                     Long sellerUserId) {
+                                     Long sellerUserId, boolean allowMeetup, boolean allowDelivery) {
+    }
+
+    private record TradeCapability(boolean allowMeetup, boolean allowDelivery) {
     }
 }

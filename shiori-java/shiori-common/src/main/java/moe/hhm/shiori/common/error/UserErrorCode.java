@@ -21,7 +21,9 @@ public enum UserErrorCode implements ErrorCode {
     AVATAR_READ_FAILED(30017, "头像读取失败"),
     CAPABILITY_BAN_NOT_FOUND(30018, "用户能力封禁记录不存在"),
     PERMISSION_OVERRIDE_NOT_FOUND(30019, "用户权限覆盖记录不存在"),
-    PERMISSION_OVERRIDE_ALREADY_EXISTS(30020, "用户权限覆盖记录已存在");
+    PERMISSION_OVERRIDE_ALREADY_EXISTS(30020, "用户权限覆盖记录已存在"),
+    ADDRESS_NOT_FOUND(30021, "收货地址不存在"),
+    ADDRESS_INVALID(30022, "收货地址参数不合法");
 
     private final int code;
     private final String message;

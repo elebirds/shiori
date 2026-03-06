@@ -207,7 +207,15 @@ onBeforeUnmount(() => {
 <template>
   <section class="space-y-4">
     <header class="mx-auto max-w-3xl rounded-2xl border border-stone-200 bg-white/90 p-4">
-      <h1 class="font-display text-2xl text-stone-900">编辑资料</h1>
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h1 class="font-display text-2xl text-stone-900">编辑资料</h1>
+        <RouterLink
+          to="/profile/addresses"
+          class="rounded-lg border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
+        >
+          管理收货地址
+        </RouterLink>
+      </div>
     </header>
 
     <ResultState :loading="profileQuery.isLoading.value" :error="errorMessage" :empty="!profileQuery.isLoading.value && !profileQuery.data.value" empty-text="未获取到用户资料">

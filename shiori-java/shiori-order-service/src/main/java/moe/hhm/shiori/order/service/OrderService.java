@@ -8,6 +8,7 @@ import moe.hhm.shiori.order.domain.OrderStatus;
 import moe.hhm.shiori.order.dto.OrderDetailResponse;
 import moe.hhm.shiori.order.dto.OrderItemResponse;
 import moe.hhm.shiori.order.dto.OrderPageResponse;
+import moe.hhm.shiori.order.dto.OrderShippingAddressResponse;
 import moe.hhm.shiori.order.dto.OrderStatusAuditItemResponse;
 import moe.hhm.shiori.order.dto.OrderStatusAuditPageResponse;
 import moe.hhm.shiori.order.dto.OrderSummaryResponse;
@@ -66,6 +67,10 @@ public class OrderService {
                 order.bizSource(),
                 order.chatConversationId(),
                 order.chatListingId(),
+                toBool(order.allowMeetup()),
+                toBool(order.allowDelivery()),
+                order.fulfillmentMode(),
+                buildShippingAddress(order),
                 order.createdAt(),
                 order.paidAt(),
                 order.finishedAt(),
@@ -250,6 +255,10 @@ public class OrderService {
                 order.bizSource(),
                 order.chatConversationId(),
                 order.chatListingId(),
+                toBool(order.allowMeetup()),
+                toBool(order.allowDelivery()),
+                order.fulfillmentMode(),
+                buildShippingAddress(order),
                 order.createdAt(),
                 order.paidAt(),
                 order.finishedAt(),
@@ -295,6 +304,35 @@ public class OrderService {
 
     private boolean isDeleted(OrderRecord record) {
         return record.isDeleted() != null && record.isDeleted() == 1;
+    }
+
+    private boolean toBool(Integer value) {
+        return value != null && value == 1;
+    }
+
+    private OrderShippingAddressResponse buildShippingAddress(OrderRecord order) {
+        if (order == null || !StringUtils.hasText(order.fulfillmentMode())) {
+            return null;
+        }
+        if (!"DELIVERY".equalsIgnoreCase(order.fulfillmentMode())) {
+            return null;
+        }
+        if (!StringUtils.hasText(order.shippingReceiverName())
+                || !StringUtils.hasText(order.shippingReceiverPhone())
+                || !StringUtils.hasText(order.shippingProvince())
+                || !StringUtils.hasText(order.shippingCity())
+                || !StringUtils.hasText(order.shippingDistrict())
+                || !StringUtils.hasText(order.shippingDetailAddress())) {
+            return null;
+        }
+        return new OrderShippingAddressResponse(
+                order.shippingReceiverName(),
+                order.shippingReceiverPhone(),
+                order.shippingProvince(),
+                order.shippingCity(),
+                order.shippingDistrict(),
+                order.shippingDetailAddress()
+        );
     }
 
     private void requireOrderExists(String orderNo) {
