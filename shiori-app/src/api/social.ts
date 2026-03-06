@@ -34,6 +34,12 @@ export interface PostV2PageResponse {
   items: PostV2ItemResponse[]
 }
 
+export interface PostAuthorQueryV2Request {
+  authorUserIds: number[]
+  page?: number
+  size?: number
+}
+
 export function createPostV2(payload: CreatePostV2Request): Promise<PostV2ItemResponse> {
   return httpPost<PostV2ItemResponse>('/api/v2/social/posts', payload)
 }
@@ -49,11 +55,6 @@ export function listUserPostsV2(
   return httpGet<PostV2PageResponse>(`/api/v2/social/users/${authorUserId}/posts`, { params })
 }
 
-export function listSquareFeedPostsV2(params?: { page?: number; size?: number }): Promise<PostV2PageResponse> {
-  return httpGet<PostV2PageResponse>('/api/v2/social/square/feed', {
-    params: {
-      page: params?.page,
-      size: params?.size,
-    },
-  })
+export function queryPostsByAuthorsV2(payload: PostAuthorQueryV2Request): Promise<PostV2PageResponse> {
+  return httpPost<PostV2PageResponse>('/api/v2/social/posts/query', payload)
 }

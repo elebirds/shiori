@@ -7,7 +7,7 @@ import moe.hhm.shiori.common.error.ProductErrorCode;
 import moe.hhm.shiori.common.exception.BizException;
 import moe.hhm.shiori.common.richtext.RichTextPolicies;
 import moe.hhm.shiori.common.richtext.RichTextProcessor;
-import moe.hhm.shiori.social.client.UserServiceClient;
+import moe.hhm.shiori.common.storage.OssObjectService;
 import moe.hhm.shiori.social.domain.PostSourceType;
 import moe.hhm.shiori.social.dto.v2.CreatePostV2Request;
 import moe.hhm.shiori.social.dto.v2.PostRelatedProductResponse;
@@ -18,7 +18,6 @@ import moe.hhm.shiori.social.model.EventConsumeLogEntity;
 import moe.hhm.shiori.social.model.PostEntity;
 import moe.hhm.shiori.social.model.PostRecord;
 import moe.hhm.shiori.social.repository.SocialPostMapper;
-import moe.hhm.shiori.common.storage.OssObjectService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,14 +32,11 @@ public class SocialPostService {
 
     private final SocialPostMapper socialPostMapper;
     private final OssObjectService ossObjectService;
-    private final UserServiceClient userServiceClient;
 
     public SocialPostService(SocialPostMapper socialPostMapper,
-                             OssObjectService ossObjectService,
-                             UserServiceClient userServiceClient) {
+                             OssObjectService ossObjectService) {
         this.socialPostMapper = socialPostMapper;
         this.ossObjectService = ossObjectService;
-        this.userServiceClient = userServiceClient;
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -104,21 +100,6 @@ public class SocialPostService {
 
         long total = socialPostMapper.countPostsByAuthorIds(normalizedAuthorIds);
         List<PostRecord> records = socialPostMapper.listPostsByAuthorIds(normalizedAuthorIds, normalizedSize, offset);
-        List<PostV2ItemResponse> items = records == null ? List.of() : records.stream().map(this::toItemResponse).toList();
-        return new PostV2PageResponse(total, normalizedPage, normalizedSize, items);
-    }
-
-    public PostV2PageResponse listSquareFeed(Long currentUserId, int page, int size) {
-        int normalizedPage = normalizePage(page);
-        int normalizedSize = normalizeSize(size);
-        int offset = (normalizedPage - 1) * normalizedSize;
-
-        List<Long> authorUserIds = userServiceClient.listFollowingUserIdsIncludingSelf(currentUserId);
-        if (authorUserIds.isEmpty()) {
-            return new PostV2PageResponse(0, normalizedPage, normalizedSize, List.of());
-        }
-        long total = socialPostMapper.countPostsByAuthorIds(authorUserIds);
-        List<PostRecord> records = socialPostMapper.listPostsByAuthorIds(authorUserIds, normalizedSize, offset);
         List<PostV2ItemResponse> items = records == null ? List.of() : records.stream().map(this::toItemResponse).toList();
         return new PostV2PageResponse(total, normalizedPage, normalizedSize, items);
     }

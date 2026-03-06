@@ -3,11 +3,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { getUserProfilesByUserIds, type PublicUserProfile } from '@/api/auth'
-import { deletePostV2, listSquareFeedPostsV2 } from '@/api/social'
+import { getUserProfilesByUserIds, listUserFollowingByUserNo, type PublicUserProfile } from '@/api/auth'
+import { deletePostV2, queryPostsByAuthorsV2 } from '@/api/social'
 import PostFeedCard from '@/components/PostFeedCard.vue'
 import ResultState from '@/components/ResultState.vue'
 import { useAuthStore } from '@/stores/auth'
+import { buildSquareAuthorUserIds, loadFollowingUserIds } from '@/views/squareFeed'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -17,12 +18,22 @@ const page = ref(1)
 const size = 10
 const deletingPostId = ref<number | null>(null)
 const currentUserId = computed(() => authStore.user?.userId || null)
+const currentUserNo = computed(() => authStore.user?.userNo || '')
+
+const followingUserIdsQuery = useQuery({
+  queryKey: computed(() => ['square-following-user-ids', currentUserNo.value]),
+  enabled: computed(() => authStore.isAuthenticated && Boolean(currentUserNo.value)),
+  queryFn: () => loadFollowingUserIds(currentUserNo.value, listUserFollowingByUserNo),
+})
+
+const authorUserIds = computed(() => buildSquareAuthorUserIds(currentUserId.value, followingUserIdsQuery.data.value || []))
 
 const feedQuery = useQuery({
-  queryKey: computed(() => ['square-feed-posts', page.value, size]),
-  enabled: computed(() => authStore.isAuthenticated),
+  queryKey: computed(() => ['square-feed-posts', page.value, size, authorUserIds.value.join(',')]),
+  enabled: computed(() => authStore.isAuthenticated && followingUserIdsQuery.isSuccess.value),
   queryFn: () =>
-    listSquareFeedPostsV2({
+    queryPostsByAuthorsV2({
+      authorUserIds: authorUserIds.value,
       page: page.value,
       size,
     }),
@@ -52,6 +63,9 @@ const authorProfileMap = computed(() => {
 })
 
 const loadErrorMessage = computed(() => {
+  if (followingUserIdsQuery.error.value instanceof Error) {
+    return `无法加载关注列表，请稍后重试：${followingUserIdsQuery.error.value.message}`
+  }
   if (feedQuery.error.value instanceof Error) {
     return feedQuery.error.value.message
   }
@@ -99,6 +113,7 @@ async function handleDelete(postId: number): Promise<void> {
 }
 
 function refreshFeed(): void {
+  void queryClient.invalidateQueries({ queryKey: ['square-following-user-ids'] })
   void queryClient.invalidateQueries({ queryKey: ['square-feed-posts'] })
 }
 </script>
@@ -132,9 +147,9 @@ function refreshFeed(): void {
     </header>
 
     <ResultState
-      :loading="feedQuery.isLoading.value"
+      :loading="followingUserIdsQuery.isLoading.value || feedQuery.isLoading.value"
       :error="loadErrorMessage"
-      :empty="!feedQuery.isLoading.value && feedItems.length === 0"
+      :empty="!followingUserIdsQuery.isLoading.value && !feedQuery.isLoading.value && feedItems.length === 0"
       empty-text="关注动态暂时为空，去用户主页关注更多同学吧"
     >
       <section class="space-y-3">

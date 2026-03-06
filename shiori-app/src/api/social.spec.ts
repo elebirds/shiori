@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { httpDelete, httpGet, httpPost } from '@/api/http'
-import { createPostV2, deletePostV2, listSquareFeedPostsV2, listUserPostsV2 } from '@/api/social'
+import { createPostV2, deletePostV2, listUserPostsV2, queryPostsByAuthorsV2 } from '@/api/social'
 
 vi.mock('@/api/http', () => ({
   httpGet: vi.fn(),
@@ -45,17 +45,20 @@ describe('social api', () => {
     })
   })
 
-  it('should call square feed api', async () => {
-    vi.mocked(httpGet).mockResolvedValue({} as never)
+  it('should call post query api', async () => {
+    vi.mocked(httpPost).mockResolvedValue({} as never)
 
-    await listSquareFeedPostsV2({ page: 1, size: 10 })
+    await queryPostsByAuthorsV2({
+      authorUserIds: [1001, 1002],
+      page: 1,
+      size: 10,
+    })
 
-    expect(httpGet).toHaveBeenCalledTimes(1)
-    expect(httpGet).toHaveBeenCalledWith('/api/v2/social/square/feed', {
-      params: {
-        page: 1,
-        size: 10,
-      },
+    expect(httpPost).toHaveBeenCalledTimes(1)
+    expect(httpPost).toHaveBeenCalledWith('/api/v2/social/posts/query', {
+      authorUserIds: [1001, 1002],
+      page: 1,
+      size: 10,
     })
   })
 })

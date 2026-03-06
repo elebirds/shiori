@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import moe.hhm.shiori.social.dto.v2.CreatePostV2Request;
+import moe.hhm.shiori.social.dto.v2.PostAuthorQueryRequest;
 import moe.hhm.shiori.social.dto.v2.PostV2ItemResponse;
 import moe.hhm.shiori.social.dto.v2.PostV2PageResponse;
 import moe.hhm.shiori.social.security.CurrentUserSupport;
@@ -52,19 +53,18 @@ public class SocialPostV2Controller {
         return socialPostService.listPostsByAuthor(authorUserId, page, size);
     }
 
-    @GetMapping("/square/feed")
-    public PostV2PageResponse listSquareFeed(@RequestParam(defaultValue = "1") int page,
-                                             @RequestParam(defaultValue = "10") int size,
-                                             Authentication authentication) {
-        Long userId = CurrentUserSupport.requireUserId(authentication);
-        return socialPostService.listSquareFeed(userId, page, size);
-    }
-
     @GetMapping("/posts")
     public PostV2PageResponse listFeed(@RequestParam(required = false) String authorUserIds,
                                        @RequestParam(defaultValue = "1") int page,
                                        @RequestParam(defaultValue = "10") int size) {
         return socialPostService.listPostsByAuthors(parseAuthorUserIds(authorUserIds), page, size);
+    }
+
+    @PostMapping("/posts/query")
+    public PostV2PageResponse queryPostsByAuthors(@Valid @RequestBody PostAuthorQueryRequest request) {
+        int page = request.page() == null ? 1 : request.page();
+        int size = request.size() == null ? 10 : request.size();
+        return socialPostService.listPostsByAuthors(request.authorUserIds(), page, size);
     }
 
     private List<Long> parseAuthorUserIds(String authorUserIds) {
