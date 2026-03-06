@@ -370,19 +370,6 @@ onBeforeUnmount(() => {
                 CDK 兑换
               </button>
               <RouterLink
-                to="/notifications"
-                class="flex items-center justify-between px-3 py-2 text-sm text-stone-700 transition hover:bg-stone-100"
-                @click="closeDropdown"
-              >
-                <span>通知</span>
-                <span
-                  v-if="notifyStore.unreadCount > 0"
-                  class="rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white"
-                >
-                  {{ notifyStore.unreadCount > 99 ? '99+' : notifyStore.unreadCount }}
-                </span>
-              </RouterLink>
-              <RouterLink
                 to="/account/security"
                 class="block px-3 py-2 text-sm text-stone-700 transition hover:bg-stone-100"
                 @click="closeDropdown"
@@ -507,19 +494,6 @@ onBeforeUnmount(() => {
               >
                 CDK 兑换
               </button>
-              <RouterLink
-                to="/notifications"
-                class="flex items-center justify-between rounded-lg px-3 py-2 text-sm text-stone-700 transition hover:bg-stone-100"
-                @click="closeMobileMenu"
-              >
-                <span>通知</span>
-                <span
-                  v-if="notifyStore.unreadCount > 0"
-                  class="rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white"
-                >
-                  {{ notifyStore.unreadCount > 99 ? '99+' : notifyStore.unreadCount }}
-                </span>
-              </RouterLink>
               <RouterLink
                 to="/account/security"
                 class="block rounded-lg px-3 py-2 text-sm text-stone-700 transition hover:bg-stone-100"

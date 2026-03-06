@@ -1090,12 +1090,10 @@ public class OrderCommandService {
             throw new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST);
         }
         PreparedOrderLine first = lines.getFirst();
-        Long expectedListingId = first.productId();
         Long expectedSellerId = first.sellerUserId();
         ChatConversationSnapshot conversation = notifyChatClient.getConversationForUser(conversationId, buyerUserId, roles);
         if (conversation == null
                 || !buyerUserId.equals(conversation.buyerId())
-                || !expectedListingId.equals(conversation.listingId())
                 || !expectedSellerId.equals(conversation.sellerId())) {
             throw new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST);
         }

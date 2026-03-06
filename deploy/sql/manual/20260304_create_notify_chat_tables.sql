@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS conversation (
     created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     status VARCHAR(16) NOT NULL DEFAULT 'ACTIVE',
-    UNIQUE KEY uk_conv_triplet (listing_id, buyer_id, seller_id),
+    UNIQUE KEY uk_conv_pair (buyer_id, seller_id),
     KEY idx_conv_buyer_updated (buyer_id, id DESC),
     KEY idx_conv_seller_updated (seller_id, id DESC)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

@@ -51,19 +51,37 @@ func (r *MySQLRepository) GetOrCreateConversation(listingID, buyerID, sellerID i
 	if listingID <= 0 || buyerID <= 0 || sellerID <= 0 {
 		return Conversation{}, ErrInvalidArgument
 	}
-	if _, err := r.db.Exec(
-		`INSERT IGNORE INTO conversation
-			(listing_id, buyer_id, seller_id, created_at, updated_at, status)
-		 VALUES (?, ?, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3), 'ACTIVE')`,
-		listingID, buyerID, sellerID,
-	); err != nil {
-		return Conversation{}, fmt.Errorf("insert conversation failed: %w", err)
+	conversation, err := r.getConversationByPair(buyerID, sellerID)
+	if err != nil {
+		if !errors.Is(err, ErrConversationAbsent) {
+			return Conversation{}, err
+		}
+		if _, execErr := r.db.Exec(
+			`INSERT IGNORE INTO conversation
+				(listing_id, buyer_id, seller_id, created_at, updated_at, status)
+			 VALUES (?, ?, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3), 'ACTIVE')`,
+			listingID, buyerID, sellerID,
+		); execErr != nil {
+			return Conversation{}, fmt.Errorf("insert conversation failed: %w", execErr)
+		}
+		conversation, err = r.getConversationByPair(buyerID, sellerID)
+		if err != nil {
+			return Conversation{}, err
+		}
 	}
 
-	conversation, err := r.getConversationByTriplet(listingID, buyerID, sellerID)
-	if err != nil {
-		return Conversation{}, err
+	if conversation.ListingID != listingID {
+		if _, err := r.db.Exec(
+			`UPDATE conversation
+			 SET listing_id = ?, updated_at = UTC_TIMESTAMP(3)
+			 WHERE id = ?`,
+			listingID, conversation.ID,
+		); err != nil {
+			return Conversation{}, fmt.Errorf("update conversation listing failed: %w", err)
+		}
+		conversation.ListingID = listingID
 	}
+
 	if _, err := r.db.Exec(
 		`INSERT INTO member_state (conversation_id, user_id, last_read_msg_id, updated_at)
 		 VALUES (?, ?, 0, UTC_TIMESTAMP(3)), (?, ?, 0, UTC_TIMESTAMP(3))
@@ -210,6 +228,14 @@ LEFT JOIN message lm
 LEFT JOIN member_state ms
   ON ms.conversation_id = c.id AND ms.user_id = ?
 WHERE (c.buyer_id = ? OR c.seller_id = ?)
+  AND c.id = (
+      SELECT c2.id
+      FROM conversation c2
+      WHERE c2.buyer_id = c.buyer_id
+        AND c2.seller_id = c.seller_id
+      ORDER BY c2.updated_at DESC, c2.id DESC
+      LIMIT 1
+  )
 `
 	args := []any{userID, userID, userID, userID}
 	if cursor > 0 {
@@ -391,6 +417,14 @@ func (r *MySQLRepository) CountUnreadConversations(userID int64) (int64, error) 
 		   LEFT JOIN member_state ms
 		     ON ms.conversation_id = c.id AND ms.user_id = ?
 		  WHERE (c.buyer_id = ? OR c.seller_id = ?)
+		    AND c.id = (
+		        SELECT c2.id
+		          FROM conversation c2
+		         WHERE c2.buyer_id = c.buyer_id
+		           AND c2.seller_id = c.seller_id
+		         ORDER BY c2.updated_at DESC, c2.id DESC
+		         LIMIT 1
+		    )
 		    AND EXISTS (
 		        SELECT 1
 		          FROM message m
@@ -419,6 +453,14 @@ func (r *MySQLRepository) CountUnreadMessages(userID int64) (int64, error) {
 		   LEFT JOIN member_state ms
 		     ON ms.conversation_id = c.id AND ms.user_id = ?
 		  WHERE (c.buyer_id = ? OR c.seller_id = ?)
+		    AND c.id = (
+		        SELECT c2.id
+		          FROM conversation c2
+		         WHERE c2.buyer_id = c.buyer_id
+		           AND c2.seller_id = c.seller_id
+		         ORDER BY c2.updated_at DESC, c2.id DESC
+		         LIMIT 1
+		    )
 		    AND m.sender_id <> ?
 		    AND m.id > COALESCE(ms.last_read_msg_id, 0)`,
 		userID, userID, userID, userID,
@@ -809,13 +851,14 @@ func (r *MySQLRepository) InsertModerationAudit(userID, conversationID int64, or
 	return nil
 }
 
-func (r *MySQLRepository) getConversationByTriplet(listingID, buyerID, sellerID int64) (Conversation, error) {
+func (r *MySQLRepository) getConversationByPair(buyerID, sellerID int64) (Conversation, error) {
 	row := r.db.QueryRow(
 		`SELECT id, listing_id, buyer_id, seller_id, created_at, updated_at
 		 FROM conversation
-		 WHERE listing_id = ? AND buyer_id = ? AND seller_id = ?
+		 WHERE buyer_id = ? AND seller_id = ?
+		 ORDER BY updated_at DESC, id DESC
 		 LIMIT 1`,
-		listingID, buyerID, sellerID,
+		buyerID, sellerID,
 	)
 	conversation, err := scanConversation(row)
 	if err != nil {

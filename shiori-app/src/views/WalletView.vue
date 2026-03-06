@@ -166,7 +166,7 @@ function clearLedgerFilter(): void {
     >
       <p class="text-xs uppercase tracking-[0.26em] text-blue-100/90">钱包中心</p>
       <h1 class="mt-2 font-display text-3xl tracking-wide">余额钱包</h1>
-      <p class="mt-2 text-sm text-blue-50/90">用于订单余额支付与退款回流，资金流水支持按业务号与变更类型检索。</p>
+      <p class="mt-2 text-sm text-blue-50/90">用于订单余额支付与退款回流，资金流水支持按关键词与变更类型检索。</p>
     </header>
 
     <div v-if="walletQuery.isLoading.value" class="rounded-2xl border border-blue-100 bg-[var(--shiori-pay-surface)] p-6 text-sm text-[var(--shiori-pay-mute)]">
@@ -246,7 +246,7 @@ function clearLedgerFilter(): void {
               </div>
               <div class="shiori-filter-field">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="M4 7h16M4 12h12M4 17h8" /></svg>
-                <input v-model.trim="ledgerDraft.bizNo" type="text" placeholder="业务号" class="shiori-filter-control shiori-filter-control-w-md border-blue-200 text-[var(--shiori-pay-ink)] focus:border-[var(--shiori-pay-blue-600)] focus:ring-blue-200" />
+                <input v-model.trim="ledgerDraft.bizNo" type="text" placeholder="关键词（业务号）" class="shiori-filter-control shiori-filter-control-w-md border-blue-200 text-[var(--shiori-pay-ink)] focus:border-[var(--shiori-pay-blue-600)] focus:ring-blue-200" />
               </div>
               <div class="shiori-filter-field">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="M8 2v4M16 2v4M4 10h16M5 6h14a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1Z" /></svg>
@@ -295,7 +295,7 @@ function clearLedgerFilter(): void {
                 </div>
                 <div class="shiori-filter-field w-full">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="M4 7h16M4 12h12M4 17h8" /></svg>
-                  <input v-model.trim="ledgerDraft.bizNo" type="text" placeholder="业务号" class="shiori-filter-control shiori-filter-control-w-full border-blue-200 text-[var(--shiori-pay-ink)] focus:border-[var(--shiori-pay-blue-600)] focus:ring-blue-200" />
+                  <input v-model.trim="ledgerDraft.bizNo" type="text" placeholder="关键词（业务号）" class="shiori-filter-control shiori-filter-control-w-full border-blue-200 text-[var(--shiori-pay-ink)] focus:border-[var(--shiori-pay-blue-600)] focus:ring-blue-200" />
                 </div>
                 <div class="shiori-filter-field w-full">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shiori-filter-icon"><path d="M8 2v4M16 2v4M4 10h16M5 6h14a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1Z" /></svg>

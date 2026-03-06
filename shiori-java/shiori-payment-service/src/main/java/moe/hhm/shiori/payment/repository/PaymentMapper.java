@@ -127,7 +127,7 @@ public interface PaymentMapper {
               AND biz_type = #{bizType}
             </if>
             <if test="bizNo != null and bizNo != ''">
-              AND biz_no = #{bizNo}
+              AND biz_no LIKE CONCAT('%', #{bizNo}, '%')
             </if>
             <if test="changeType != null and changeType != ''">
               AND change_type = #{changeType}
@@ -166,7 +166,7 @@ public interface PaymentMapper {
               AND biz_type = #{bizType}
             </if>
             <if test="bizNo != null and bizNo != ''">
-              AND biz_no = #{bizNo}
+              AND biz_no LIKE CONCAT('%', #{bizNo}, '%')
             </if>
             <if test="changeType != null and changeType != ''">
               AND change_type = #{changeType}
@@ -202,7 +202,7 @@ public interface PaymentMapper {
               AND biz_type = #{bizType}
             </if>
             <if test="bizNo != null and bizNo != ''">
-              AND biz_no = #{bizNo}
+              AND biz_no LIKE CONCAT('%', #{bizNo}, '%')
             </if>
             <if test="changeType != null and changeType != ''">
               AND change_type = #{changeType}
@@ -244,7 +244,7 @@ public interface PaymentMapper {
               AND biz_type = #{bizType}
             </if>
             <if test="bizNo != null and bizNo != ''">
-              AND biz_no = #{bizNo}
+              AND biz_no LIKE CONCAT('%', #{bizNo}, '%')
             </if>
             <if test="changeType != null and changeType != ''">
               AND change_type = #{changeType}
