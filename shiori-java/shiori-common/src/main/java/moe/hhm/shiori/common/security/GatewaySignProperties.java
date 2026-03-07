@@ -27,6 +27,8 @@ public class GatewaySignProperties {
             "/api/user/profiles/**",
             "/api/user/media/avatar/**",
             "/api/v2/product/users/**",
+            "/api/v2/order/reviews/users/**",
+            "/api/v2/order/reviews/products/**",
             "/api/v2/social/users/*/posts"
     ));
 
