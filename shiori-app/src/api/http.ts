@@ -52,12 +52,14 @@ export function clearTokenPair(): void {
 }
 
 apiClient.interceptors.request.use((config) => {
+  const headers = AxiosHeaders.from(config.headers)
   const token = getAccessToken()
   if (token) {
-    const headers = AxiosHeaders.from(config.headers)
     headers.set('Authorization', `Bearer ${token}`)
-    config.headers = headers
+  } else {
+    headers.delete('Authorization')
   }
+  config.headers = headers
   return config
 })
 
