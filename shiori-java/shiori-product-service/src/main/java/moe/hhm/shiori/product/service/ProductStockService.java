@@ -6,7 +6,6 @@ import moe.hhm.shiori.product.domain.StockOpType;
 import moe.hhm.shiori.product.dto.StockDeductRequest;
 import moe.hhm.shiori.product.dto.StockOperateResponse;
 import moe.hhm.shiori.product.dto.StockReleaseRequest;
-import moe.hhm.shiori.product.model.SkuRecord;
 import moe.hhm.shiori.product.model.StockTxnRecord;
 import moe.hhm.shiori.product.repository.ProductMapper;
 import org.springframework.dao.DuplicateKeyException;
@@ -34,14 +33,24 @@ public class ProductStockService {
     }
 
     private StockOperateResponse operateStock(String bizNo, Long skuId, Integer quantity, StockOpType opType) {
-        SkuRecord sku = productMapper.findActiveSkuByIdForUpdate(skuId);
-        if (sku == null) {
-            throw new BizException(ProductErrorCode.SKU_NOT_FOUND, HttpStatus.NOT_FOUND);
-        }
-
         StockTxnRecord existed = productMapper.findStockTxnByBizNoAndType(bizNo, opType.name());
         if (existed != null) {
             if (existed.success() != null && existed.success() == 1) {
+                return new StockOperateResponse(true, true, bizNo, skuId, quantity, productMapper.findStockBySkuId(skuId));
+            }
+            if (opType == StockOpType.DEDUCT) {
+                throw new BizException(ProductErrorCode.STOCK_NOT_ENOUGH, HttpStatus.BAD_REQUEST);
+            }
+            return new StockOperateResponse(true, true, bizNo, skuId, quantity, productMapper.findStockBySkuId(skuId));
+        }
+
+        if (productMapper.findActiveSkuByIdForUpdate(skuId) == null) {
+            throw new BizException(ProductErrorCode.SKU_NOT_FOUND, HttpStatus.NOT_FOUND);
+        }
+
+        StockTxnRecord latest = productMapper.findStockTxnByBizNoAndType(bizNo, opType.name());
+        if (latest != null) {
+            if (latest.success() != null && latest.success() == 1) {
                 return new StockOperateResponse(true, true, bizNo, skuId, quantity, productMapper.findStockBySkuId(skuId));
             }
             if (opType == StockOpType.DEDUCT) {

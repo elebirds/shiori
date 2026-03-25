@@ -397,6 +397,46 @@ public interface OrderMapper {
     OrderRecord findOrderByOrderNo(@Param("orderNo") String orderNo);
 
     @Select("""
+            SELECT id,
+                   order_no AS orderNo,
+                   buyer_user_id AS buyerUserId,
+                   seller_user_id AS sellerUserId,
+                   status,
+                   total_amount_cent AS totalAmountCent,
+                   item_count AS itemCount,
+                   payment_no AS paymentNo,
+                   refund_status AS refundStatus,
+                   refund_no AS refundNo,
+                   refund_amount_cent AS refundAmountCent,
+                   refund_updated_at AS refundUpdatedAt,
+                   cancel_reason AS cancelReason,
+                   timeout_at AS timeoutAt,
+                   paid_at AS paidAt,
+                   finished_at AS finishedAt,
+                   biz_source AS bizSource,
+                   chat_conversation_id AS chatConversationId,
+                   chat_listing_id AS chatListingId,
+                   allow_meetup AS allowMeetup,
+                   allow_delivery AS allowDelivery,
+                   fulfillment_mode AS fulfillmentMode,
+                   shipping_address_id AS shippingAddressId,
+                   shipping_receiver_name AS shippingReceiverName,
+                   shipping_receiver_phone AS shippingReceiverPhone,
+                   shipping_province AS shippingProvince,
+                   shipping_city AS shippingCity,
+                   shipping_district AS shippingDistrict,
+                   shipping_detail_address AS shippingDetailAddress,
+                   is_deleted AS isDeleted,
+                   created_at AS createdAt,
+                   updated_at AS updatedAt
+            FROM o_order
+            WHERE order_no = #{orderNo}
+            LIMIT 1
+            FOR UPDATE
+            """)
+    OrderRecord findOrderByOrderNoForUpdate(@Param("orderNo") String orderNo);
+
+    @Select("""
             SELECT payment_mode
             FROM o_order
             WHERE order_no = #{orderNo}

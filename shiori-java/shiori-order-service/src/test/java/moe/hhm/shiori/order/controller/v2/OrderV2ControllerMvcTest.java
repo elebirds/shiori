@@ -8,6 +8,8 @@ import moe.hhm.shiori.order.dto.OrderShippingAddressResponse;
 import moe.hhm.shiori.order.dto.OrderOperateResponse;
 import moe.hhm.shiori.order.service.OrderCommandService;
 import moe.hhm.shiori.order.service.OrderCartService;
+import moe.hhm.shiori.order.service.OrderCreateWorkflowService;
+import moe.hhm.shiori.order.service.OrderPayWorkflowService;
 import moe.hhm.shiori.order.service.OrderReviewService;
 import moe.hhm.shiori.order.service.OrderRefundService;
 import moe.hhm.shiori.order.service.OrderService;
@@ -31,7 +33,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(properties = {
         "security.gateway-sign.internal-secret=test-gateway-sign-secret-32-bytes-0001",
         "security.gateway-sign.max-skew-seconds=300",
-        "order.payment-client.internal-token=test-order-payment-internal-token-000000000001"
+        "order.payment-client.internal-token=test-order-payment-internal-token-000000000001",
+        "order.command.enabled=false"
 })
 @AutoConfigureMockMvc
 class OrderV2ControllerMvcTest {
@@ -43,6 +46,12 @@ class OrderV2ControllerMvcTest {
 
     @MockitoBean
     private OrderCommandService orderCommandService;
+
+    @MockitoBean
+    private OrderCreateWorkflowService orderCreateWorkflowService;
+
+    @MockitoBean
+    private OrderPayWorkflowService orderPayWorkflowService;
 
     @MockitoBean
     private OrderService orderService;

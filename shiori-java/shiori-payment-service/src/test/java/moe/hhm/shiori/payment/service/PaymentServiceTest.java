@@ -167,7 +167,8 @@ class PaymentServiceTest {
 
     @Test
     void shouldReturnIdempotentWhenTradeAppearsAfterWalletLocked() {
-        when(paymentMapper.findTradeByOrderNo("O1004")).thenReturn(null);
+        when(paymentMapper.findTradeByOrderNo("O1004"))
+                .thenReturn(null);
         when(paymentMapper.findTradeByOrderNoForUpdate("O1004"))
                 .thenReturn(trade("O1004", "P-1004", 1001L, 2001L, 100L, TradePaymentStatus.RESERVED.code()));
         when(paymentMapper.findWalletByUserIdForUpdate(1001L)).thenReturn(wallet(1001L, 500L, 0L));
@@ -210,7 +211,7 @@ class PaymentServiceTest {
     }
 
     @Test
-    void shouldLockWalletBeforeLockingTradeGapDuringReserve() {
+    void shouldLockWalletBeforeCheckingTradeGapDuringReserve() {
         when(paymentMapper.findTradeByOrderNo("O1007")).thenReturn(null);
         when(paymentMapper.findWalletByUserIdForUpdate(1001L)).thenReturn(wallet(1001L, 500L, 0L));
         when(paymentMapper.findTradeByOrderNoForUpdate("O1007")).thenReturn(null);
@@ -221,6 +222,17 @@ class PaymentServiceTest {
         inOrder.verify(paymentMapper).findTradeByOrderNo("O1007");
         inOrder.verify(paymentMapper).findWalletByUserIdForUpdate(1001L);
         inOrder.verify(paymentMapper).findTradeByOrderNoForUpdate("O1007");
+    }
+
+    @Test
+    void shouldNotReadWalletAgainAfterReserveBalanceUpdated() {
+        when(paymentMapper.findTradeByOrderNo("O1008")).thenReturn(null);
+        when(paymentMapper.findWalletByUserIdForUpdate(1001L)).thenReturn(wallet(1001L, 500L, 0L));
+        when(paymentMapper.findTradeByOrderNoForUpdate("O1008")).thenReturn(null);
+
+        paymentService.reserveOrderPayment("O1008", 1001L, 2001L, 100L);
+
+        verify(paymentMapper, never()).findWalletByUserId(1001L);
     }
 
     @Test

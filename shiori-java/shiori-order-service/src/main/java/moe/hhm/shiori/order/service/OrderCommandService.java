@@ -52,6 +52,7 @@ import moe.hhm.shiori.order.model.OutboxEventEntity;
 import moe.hhm.shiori.order.repository.OrderMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -70,13 +71,13 @@ public class OrderCommandService {
     private static final String EVENT_ORDER_CANCELED = "OrderCanceled";
     private static final String EVENT_ORDER_DELIVERED = "OrderDelivered";
     private static final String EVENT_ORDER_FINISHED = "OrderFinished";
-    private static final String SOURCE_BUYER = "BUYER";
-    private static final String SOURCE_SELLER = "SELLER";
-    private static final String SOURCE_ADMIN = "ADMIN";
-    private static final String SOURCE_SYSTEM = "SYSTEM";
-    private static final String SOURCE_CHAT = "CHAT";
-    private static final String OP_CREATE = "CREATE";
-    private static final String OP_PAY = "PAY";
+    static final String SOURCE_BUYER = "BUYER";
+    static final String SOURCE_SELLER = "SELLER";
+    static final String SOURCE_ADMIN = "ADMIN";
+    static final String SOURCE_SYSTEM = "SYSTEM";
+    static final String SOURCE_CHAT = "CHAT";
+    static final String OP_CREATE = "CREATE";
+    static final String OP_PAY = "PAY";
     private static final String OP_CANCEL = "CANCEL";
 
     private final OrderMapper orderMapper;
@@ -88,6 +89,8 @@ public class OrderCommandService {
     private final OrderMqProperties orderMqProperties;
     private final ObjectMapper objectMapper;
     private final OrderMetrics orderMetrics;
+    private final ObjectProvider<OrderCreateWorkflowService> orderCreateWorkflowServiceProvider;
+    private final ObjectProvider<OrderPayWorkflowService> orderPayWorkflowServiceProvider;
 
     public OrderCommandService(OrderMapper orderMapper,
                                ProductServiceClient productServiceClient,
@@ -97,7 +100,9 @@ public class OrderCommandService {
                                OrderProperties orderProperties,
                                OrderMqProperties orderMqProperties,
                                ObjectMapper objectMapper,
-                               OrderMetrics orderMetrics) {
+                               OrderMetrics orderMetrics,
+                               ObjectProvider<OrderCreateWorkflowService> orderCreateWorkflowServiceProvider,
+                               ObjectProvider<OrderPayWorkflowService> orderPayWorkflowServiceProvider) {
         this.orderMapper = orderMapper;
         this.productServiceClient = productServiceClient;
         this.userServiceClient = userServiceClient;
@@ -107,96 +112,15 @@ public class OrderCommandService {
         this.orderMqProperties = orderMqProperties;
         this.objectMapper = objectMapper;
         this.orderMetrics = orderMetrics;
+        this.orderCreateWorkflowServiceProvider = orderCreateWorkflowServiceProvider;
+        this.orderPayWorkflowServiceProvider = orderPayWorkflowServiceProvider;
     }
 
-    @Transactional(rollbackFor = Exception.class)
     public CreateOrderResponse createOrder(Long buyerUserId,
                                            List<String> roles,
                                            String idempotencyKey,
                                            CreateOrderRequest request) {
-        String normalizedIdempotencyKey = requireIdempotencyKey(idempotencyKey);
-
-        String existedOrderNo = orderMapper.findOrderNoByBuyerAndIdempotencyKey(buyerUserId, normalizedIdempotencyKey);
-        if (StringUtils.hasText(existedOrderNo)) {
-            orderMetrics.incIdempotency(OP_CREATE, "hit");
-            return buildIdempotentCreateResponse(existedOrderNo);
-        }
-        orderMetrics.incIdempotency(OP_CREATE, "miss");
-
-        String normalizedSource = normalizeSource(request == null ? null : request.source());
-        Long chatConversationId = normalizeConversationId(request == null ? null : request.conversationId(), normalizedSource);
-
-        List<PreparedOrderLine> lines = prepareOrderLines(buyerUserId, roles, request);
-        validateChatSourceContext(buyerUserId, roles, normalizedSource, chatConversationId, lines);
-        long totalAmountCent = lines.stream().mapToLong(PreparedOrderLine::subtotalCent).sum();
-        int itemCount = lines.stream().mapToInt(PreparedOrderLine::quantity).sum();
-        boolean allowMeetup = lines.stream().allMatch(PreparedOrderLine::allowMeetup);
-        boolean allowDelivery = lines.stream().allMatch(PreparedOrderLine::allowDelivery);
-        if (!allowMeetup && !allowDelivery) {
-            throw new BizException(OrderErrorCode.ORDER_FULFILLMENT_INVALID, HttpStatus.BAD_REQUEST);
-        }
-        String initialFulfillmentMode = null;
-        if (allowMeetup && !allowDelivery) {
-            initialFulfillmentMode = "MEETUP";
-        } else if (!allowMeetup) {
-            initialFulfillmentMode = "DELIVERY";
-        }
-        String orderNo = generateOrderNo();
-        LocalDateTime timeoutAt = LocalDateTime.now().plusMinutes(orderProperties.getTimeoutMinutes());
-
-        List<PreparedOrderLine> deducted = new ArrayList<>();
-        try {
-            for (PreparedOrderLine line : lines) {
-                productServiceClient.deductStock(
-                        line.skuId(),
-                        line.quantity(),
-                        stockBizNo(orderNo, line.skuId()),
-                        buyerUserId,
-                        roles);
-                deducted.add(line);
-            }
-        } catch (RuntimeException ex) {
-            compensateReleased(orderNo, buyerUserId, roles, deducted);
-            throw ex;
-        }
-
-        try {
-            orderMapper.insertCreateIdempotency(buyerUserId, normalizedIdempotencyKey, orderNo);
-        } catch (DuplicateKeyException ex) {
-            compensateReleased(orderNo, buyerUserId, roles, deducted);
-            orderMetrics.incIdempotency(OP_CREATE, "hit");
-            return buildIdempotentCreateResponseFromKey(buyerUserId, normalizedIdempotencyKey);
-        }
-
-        try {
-            Long chatListingId = SOURCE_CHAT.equals(normalizedSource) ? lines.getFirst().productId() : null;
-            persistOrder(
-                    orderNo,
-                    buyerUserId,
-                    lines.getFirst().sellerUserId(),
-                    totalAmountCent,
-                    itemCount,
-                    timeoutAt,
-                    normalizedSource,
-                    chatConversationId,
-                    chatListingId,
-                    allowMeetup,
-                    allowDelivery,
-                    initialFulfillmentMode,
-                    lines
-            );
-            appendOrderCreatedOutbox(orderNo, buyerUserId, lines.getFirst().sellerUserId(), totalAmountCent, itemCount);
-            appendOrderTimeoutOutbox(orderNo, buyerUserId);
-            orderMetrics.incStateTransition("NEW", OrderStatus.UNPAID.name(), SOURCE_BUYER);
-            if (SOURCE_CHAT.equals(normalizedSource) && chatConversationId != null) {
-                orderMetrics.incChatToOrderSubmit(normalizedSource);
-                orderMetrics.incChatTradeStatusCardSent("ORDER_CREATED");
-            }
-            return new CreateOrderResponse(orderNo, OrderStatus.UNPAID.name(), totalAmountCent, itemCount, false);
-        } catch (RuntimeException ex) {
-            compensateReleased(orderNo, buyerUserId, roles, deducted);
-            throw ex;
-        }
+        return orderCreateWorkflowServiceProvider.getObject().createOrder(buyerUserId, roles, idempotencyKey, request);
     }
 
     public void recordChatToOrderClick(Long userId, ChatToOrderClickRequest request) {
@@ -270,93 +194,8 @@ public class OrderCommandService {
         throw new BizException(OrderErrorCode.ORDER_FULFILLMENT_INVALID, HttpStatus.BAD_REQUEST);
     }
 
-    @Transactional(rollbackFor = Exception.class)
     public OrderOperateResponse payOrderByBalance(Long buyerUserId, String orderNo, String idempotencyKey) {
-        String normalizedIdempotencyKey = requireIdempotencyKey(idempotencyKey);
-        OrderRecord order = requireOrder(orderNo);
-        ensureBuyer(order, buyerUserId);
-
-        if (hasOperateIdempotencyHit(buyerUserId, OP_PAY, normalizedIdempotencyKey, orderNo)) {
-            OrderStatus status = OrderStatus.fromCode(order.status());
-            if (status == OrderStatus.PAID && isBalanceEscrowOrder(orderNo)) {
-                return new OrderOperateResponse(orderNo, OrderStatus.PAID.name(), true);
-            }
-            throw new BizException(OrderErrorCode.ORDER_STATUS_INVALID, HttpStatus.CONFLICT);
-        }
-
-        OrderStatus status = OrderStatus.fromCode(order.status());
-        if (status == OrderStatus.PAID) {
-            if (isBalanceEscrowOrder(orderNo)) {
-                saveOperateIdempotency(buyerUserId, OP_PAY, normalizedIdempotencyKey, orderNo);
-                return new OrderOperateResponse(orderNo, OrderStatus.PAID.name(), true);
-            }
-            throw new BizException(OrderErrorCode.ORDER_PAYMENT_CONFLICT, HttpStatus.CONFLICT);
-        }
-        if (status != OrderStatus.UNPAID) {
-            throw new BizException(OrderErrorCode.ORDER_STATUS_INVALID, HttpStatus.CONFLICT);
-        }
-        ensureFulfillmentReadyForPay(order);
-
-        ReserveBalancePaymentSnapshot reserved = paymentServiceClient.reserveOrderPayment(
-                orderNo,
-                order.buyerUserId(),
-                order.sellerUserId(),
-                order.totalAmountCent(),
-                buyerUserId,
-                List.of("ROLE_USER")
-        );
-        String paymentNo = reserved.paymentNo();
-        boolean releaseRequired = true;
-
-        try {
-            int affected = orderMapper.markOrderPaidByBalance(
-                    orderNo,
-                    buyerUserId,
-                    paymentNo,
-                    LocalDateTime.now(),
-                    OrderStatus.UNPAID.getCode(),
-                    OrderStatus.PAID.getCode()
-            );
-            if (affected == 0) {
-                OrderRecord latest = requireOrder(orderNo);
-                if (OrderStatus.fromCode(latest.status()) == OrderStatus.PAID
-                        && Objects.equals(latest.paymentNo(), paymentNo)
-                        && isBalanceEscrowOrder(orderNo)) {
-                    releaseRequired = false;
-                    saveOperateIdempotency(buyerUserId, OP_PAY, normalizedIdempotencyKey, orderNo);
-                    return new OrderOperateResponse(orderNo, OrderStatus.PAID.name(), true);
-                }
-                throw new BizException(OrderErrorCode.ORDER_STATUS_INVALID, HttpStatus.CONFLICT);
-            }
-        } catch (DuplicateKeyException ex) {
-            OrderRecord paymentOrder = orderMapper.findOrderByPaymentNo(paymentNo);
-            if (paymentOrder != null && orderNo.equals(paymentOrder.orderNo()) && isBalanceEscrowOrder(orderNo)) {
-                releaseRequired = false;
-                saveOperateIdempotency(buyerUserId, OP_PAY, normalizedIdempotencyKey, orderNo);
-                return new OrderOperateResponse(orderNo, OrderStatus.PAID.name(), true);
-            }
-            orderMetrics.incIdempotency(OP_PAY, "conflict");
-            throw new BizException(OrderErrorCode.ORDER_PAYMENT_CONFLICT, HttpStatus.CONFLICT);
-        } catch (RuntimeException ex) {
-            if (releaseRequired) {
-                safeReleaseReservedPayment(orderNo, buyerUserId, "order_pay_failed:" + ex.getClass().getSimpleName());
-            }
-            throw ex;
-        }
-
-        releaseRequired = false;
-        try {
-            appendOrderPaidOutbox(orderNo, paymentNo, order.buyerUserId(), order.sellerUserId(), order.totalAmountCent());
-            orderMetrics.incStateTransition(OrderStatus.UNPAID.name(), OrderStatus.PAID.name(), SOURCE_BUYER);
-            insertStatusAudit(orderNo, buyerUserId, SOURCE_BUYER, OrderStatus.UNPAID, OrderStatus.PAID,
-                    "买家余额支付成功, paymentNo=" + paymentNo);
-            recordTradeStatusCardSentForChatOrder(order, "ORDER_PAID");
-            saveOperateIdempotency(buyerUserId, OP_PAY, normalizedIdempotencyKey, orderNo);
-            return new OrderOperateResponse(orderNo, OrderStatus.PAID.name(), false);
-        } catch (RuntimeException ex) {
-            safeReleaseReservedPayment(orderNo, buyerUserId, "order_pay_tx_rollback:" + ex.getClass().getSimpleName());
-            throw ex;
-        }
+        return orderPayWorkflowServiceProvider.getObject().payOrderByBalance(buyerUserId, orderNo, idempotencyKey);
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -740,19 +579,19 @@ public class OrderCommandService {
         insertStatusAudit(orderNo, null, SOURCE_SYSTEM, OrderStatus.UNPAID, OrderStatus.CANCELED, "超时未支付自动取消");
     }
 
-    private void persistOrder(String orderNo,
-                              Long buyerUserId,
-                              Long sellerUserId,
-                              long totalAmountCent,
-                              int itemCount,
-                              LocalDateTime timeoutAt,
-                              String source,
-                              Long conversationId,
-                              Long listingId,
-                              boolean allowMeetup,
-                              boolean allowDelivery,
-                              String fulfillmentMode,
-                              List<PreparedOrderLine> lines) {
+    void persistOrder(String orderNo,
+                      Long buyerUserId,
+                      Long sellerUserId,
+                      long totalAmountCent,
+                      int itemCount,
+                      LocalDateTime timeoutAt,
+                      String source,
+                      Long conversationId,
+                      Long listingId,
+                      boolean allowMeetup,
+                      boolean allowDelivery,
+                      String fulfillmentMode,
+                      List<PreparedOrderLine> lines) {
         OrderEntity orderEntity = new OrderEntity();
         orderEntity.setOrderNo(orderNo);
         orderEntity.setBuyerUserId(buyerUserId);
@@ -792,7 +631,7 @@ public class OrderCommandService {
         orderMapper.batchInsertOrderItems(entities);
     }
 
-    private List<PreparedOrderLine> prepareOrderLines(Long buyerUserId, List<String> roles, CreateOrderRequest request) {
+    List<PreparedOrderLine> prepareOrderLines(Long buyerUserId, List<String> roles, CreateOrderRequest request) {
         if (request == null || request.items() == null || request.items().isEmpty()) {
             throw new BizException(OrderErrorCode.ORDER_EMPTY_ITEMS, HttpStatus.BAD_REQUEST);
         }
@@ -953,19 +792,19 @@ public class OrderCommandService {
         }
     }
 
-    private void appendOrderCreatedOutbox(String orderNo, Long buyerUserId, Long sellerUserId, long totalAmountCent, int itemCount) {
+    void appendOrderCreatedOutbox(String orderNo, Long buyerUserId, Long sellerUserId, long totalAmountCent, int itemCount) {
         OrderCreatedPayload payload = new OrderCreatedPayload(orderNo, buyerUserId, sellerUserId, totalAmountCent, itemCount);
         appendOutbox(orderNo, EVENT_ORDER_CREATED, payload, orderMqProperties.getEventExchange(),
                 orderMqProperties.getOrderCreatedRoutingKey());
     }
 
-    private void appendOrderTimeoutOutbox(String orderNo, Long buyerUserId) {
+    void appendOrderTimeoutOutbox(String orderNo, Long buyerUserId) {
         OrderTimeoutPayload payload = new OrderTimeoutPayload(orderNo, buyerUserId);
         appendOutbox(orderNo, EVENT_ORDER_TIMEOUT, payload, orderMqProperties.getDelayExchange(),
                 orderMqProperties.getDelayRoutingKey());
     }
 
-    private void appendOrderPaidOutbox(String orderNo, String paymentNo, Long buyerUserId, Long sellerUserId, Long totalAmountCent) {
+    void appendOrderPaidOutbox(String orderNo, String paymentNo, Long buyerUserId, Long sellerUserId, Long totalAmountCent) {
         OrderPaidPayload buyerPayload = new OrderPaidPayload(
                 orderNo, paymentNo, buyerUserId, "BUYER", buyerUserId, sellerUserId, totalAmountCent);
         appendOutbox(orderNo, EVENT_ORDER_PAID, buyerPayload, orderMqProperties.getEventExchange(),
@@ -1044,7 +883,7 @@ public class OrderCommandService {
         orderMapper.insertOutboxEvent(entity);
     }
 
-    private String normalizeSource(String source) {
+    String normalizeSource(String source) {
         if (!StringUtils.hasText(source)) {
             return null;
         }
@@ -1055,7 +894,7 @@ public class OrderCommandService {
         return normalized;
     }
 
-    private Long normalizeConversationId(Long conversationId, String source) {
+    Long normalizeConversationId(Long conversationId, String source) {
         if (conversationId == null) {
             if (SOURCE_CHAT.equals(source)) {
                 throw new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST);
@@ -1068,7 +907,7 @@ public class OrderCommandService {
         return conversationId;
     }
 
-    private void recordTradeStatusCardSentForChatOrder(OrderRecord order, String status) {
+    void recordTradeStatusCardSentForChatOrder(OrderRecord order, String status) {
         if (order == null || !SOURCE_CHAT.equals(order.bizSource())) {
             return;
         }
@@ -1078,11 +917,11 @@ public class OrderCommandService {
         orderMetrics.incChatTradeStatusCardSent(status);
     }
 
-    private void validateChatSourceContext(Long buyerUserId,
-                                           List<String> roles,
-                                           String source,
-                                           Long conversationId,
-                                           List<PreparedOrderLine> lines) {
+    void validateChatSourceContext(Long buyerUserId,
+                                   List<String> roles,
+                                   String source,
+                                   Long conversationId,
+                                   List<PreparedOrderLine> lines) {
         if (!SOURCE_CHAT.equals(source)) {
             return;
         }
@@ -1189,12 +1028,12 @@ public class OrderCommandService {
         }
     }
 
-    private boolean isBalanceEscrowOrder(String orderNo) {
+    boolean isBalanceEscrowOrder(String orderNo) {
         String mode = orderMapper.findPaymentModeByOrderNo(orderNo);
         return OrderPaymentMode.fromCode(mode) == OrderPaymentMode.BALANCE_ESCROW;
     }
 
-    private void ensureBuyer(OrderRecord order, Long buyerUserId) {
+    void ensureBuyer(OrderRecord order, Long buyerUserId) {
         if (!order.buyerUserId().equals(buyerUserId)) {
             throw new BizException(OrderErrorCode.ORDER_NO_PERMISSION, HttpStatus.FORBIDDEN);
         }
@@ -1215,7 +1054,7 @@ public class OrderCommandService {
         }
     }
 
-    private void ensureFulfillmentReadyForPay(OrderRecord order) {
+    void ensureFulfillmentReadyForPay(OrderRecord order) {
         if (order == null) {
             return;
         }
@@ -1303,12 +1142,12 @@ public class OrderCommandService {
         };
     }
 
-    private void insertStatusAudit(String orderNo,
-                                   Long operatorUserId,
-                                   String source,
-                                   OrderStatus fromStatus,
-                                   OrderStatus toStatus,
-                                   String reason) {
+    void insertStatusAudit(String orderNo,
+                           Long operatorUserId,
+                           String source,
+                           OrderStatus fromStatus,
+                           OrderStatus toStatus,
+                           String reason) {
         orderMapper.insertStatusAuditLog(
                 orderNo,
                 operatorUserId,
@@ -1319,17 +1158,17 @@ public class OrderCommandService {
         );
     }
 
-    private String requireIdempotencyKey(String idempotencyKey) {
+    String requireIdempotencyKey(String idempotencyKey) {
         if (!StringUtils.hasText(idempotencyKey)) {
             throw new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST);
         }
         return idempotencyKey.trim();
     }
 
-    private boolean hasOperateIdempotencyHit(Long operatorUserId,
-                                             String operationType,
-                                             String idempotencyKey,
-                                             String orderNo) {
+    boolean hasOperateIdempotencyHit(Long operatorUserId,
+                                     String operationType,
+                                     String idempotencyKey,
+                                     String orderNo) {
         OrderOperateIdempotencyRecord existed = orderMapper.findOperateIdempotency(operatorUserId, operationType,
                 idempotencyKey);
         if (existed == null) {
@@ -1344,10 +1183,10 @@ public class OrderCommandService {
         return true;
     }
 
-    private void saveOperateIdempotency(Long operatorUserId,
-                                        String operationType,
-                                        String idempotencyKey,
-                                        String orderNo) {
+    void saveOperateIdempotency(Long operatorUserId,
+                                String operationType,
+                                String idempotencyKey,
+                                String orderNo) {
         try {
             orderMapper.insertOperateIdempotency(operatorUserId, operationType, idempotencyKey, orderNo);
         } catch (DuplicateKeyException ex) {
@@ -1362,7 +1201,7 @@ public class OrderCommandService {
         }
     }
 
-    private OrderRecord requireOrder(String orderNo) {
+    OrderRecord requireOrder(String orderNo) {
         OrderRecord record = orderMapper.findOrderByOrderNo(orderNo);
         if (record == null || isDeleted(record)) {
             throw new BizException(OrderErrorCode.ORDER_NOT_FOUND, HttpStatus.NOT_FOUND);
@@ -1374,7 +1213,7 @@ public class OrderCommandService {
         return record.isDeleted() != null && record.isDeleted() == 1;
     }
 
-    private CreateOrderResponse buildIdempotentCreateResponseFromKey(Long buyerUserId, String idempotencyKey) {
+    CreateOrderResponse buildIdempotentCreateResponseFromKey(Long buyerUserId, String idempotencyKey) {
         String existedOrderNo = orderMapper.findOrderNoByBuyerAndIdempotencyKey(buyerUserId, idempotencyKey);
         if (!StringUtils.hasText(existedOrderNo)) {
             throw new BizException(OrderErrorCode.ORDER_DUPLICATE_REQUEST, HttpStatus.CONFLICT);
@@ -1382,7 +1221,7 @@ public class OrderCommandService {
         return buildIdempotentCreateResponse(existedOrderNo);
     }
 
-    private CreateOrderResponse buildIdempotentCreateResponse(String orderNo) {
+    CreateOrderResponse buildIdempotentCreateResponse(String orderNo) {
         OrderRecord order = orderMapper.findOrderByOrderNo(orderNo);
         if (order == null || isDeleted(order)) {
             throw new BizException(OrderErrorCode.ORDER_DUPLICATE_REQUEST, HttpStatus.CONFLICT);
@@ -1396,20 +1235,48 @@ public class OrderCommandService {
         );
     }
 
-    private String stockBizNo(String orderNo, Long skuId) {
+    String stockBizNo(String orderNo, Long skuId) {
         return orderNo + ":" + skuId;
     }
 
-    private String generateOrderNo() {
+    String generateOrderNo() {
         return "O" + System.currentTimeMillis() + ThreadLocalRandom.current().nextInt(1000, 10000);
     }
 
     private record AggregatedOrderItem(Long productId, Long skuId, Integer quantity) {
     }
 
-    private record PreparedOrderLine(Long productId, String productNo, Long skuId, String skuNo, String skuName,
-                                     String specJson, Long priceCent, Integer quantity, Long subtotalCent,
-                                     Long sellerUserId, boolean allowMeetup, boolean allowDelivery) {
+    OrderMapper orderMapper() {
+        return orderMapper;
+    }
+
+    ProductServiceClient productServiceClient() {
+        return productServiceClient;
+    }
+
+    PaymentServiceClient paymentServiceClient() {
+        return paymentServiceClient;
+    }
+
+    OrderProperties orderProperties() {
+        return orderProperties;
+    }
+
+    OrderMqProperties orderMqProperties() {
+        return orderMqProperties;
+    }
+
+    ObjectMapper objectMapper() {
+        return objectMapper;
+    }
+
+    OrderMetrics orderMetrics() {
+        return orderMetrics;
+    }
+
+    record PreparedOrderLine(Long productId, String productNo, Long skuId, String skuNo, String skuName,
+                             String specJson, Long priceCent, Integer quantity, Long subtotalCent,
+                             Long sellerUserId, boolean allowMeetup, boolean allowDelivery) {
     }
 
     private record TradeCapability(boolean allowMeetup, boolean allowDelivery) {

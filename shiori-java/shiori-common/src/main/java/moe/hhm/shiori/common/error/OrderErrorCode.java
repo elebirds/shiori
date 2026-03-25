@@ -39,7 +39,8 @@ public enum OrderErrorCode implements ErrorCode {
     ORDER_USER_UNREACHABLE(50035, "用户服务不可达"),
     ORDER_USER_TIMEOUT(50036, "用户服务响应超时"),
     ORDER_USER_SERVICE_ERROR(50037, "用户服务异常"),
-    ORDER_USER_RESPONSE_INVALID(50038, "用户服务响应异常");
+    ORDER_USER_RESPONSE_INVALID(50038, "用户服务响应异常"),
+    ORDER_REQUEST_PROCESSING(50039, "请求处理中，请稍后重试");
 
     private final int code;
     private final String message;
@@ -57,5 +58,17 @@ public enum OrderErrorCode implements ErrorCode {
     @Override
     public String message() {
         return message;
+    }
+
+    public static OrderErrorCode fromCode(Integer code) {
+        if (code == null) {
+            return null;
+        }
+        for (OrderErrorCode value : values()) {
+            if (value.code == code) {
+                return value;
+            }
+        }
+        return null;
     }
 }

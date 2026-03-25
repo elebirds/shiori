@@ -9,6 +9,7 @@ public class OrderProperties {
 
     private long timeoutMinutes = 15;
     private final Outbox outbox = new Outbox();
+    private final Command command = new Command();
     private final Review review = new Review();
     private final Refund refund = new Refund();
 
@@ -22,6 +23,10 @@ public class OrderProperties {
 
     public Outbox getOutbox() {
         return outbox;
+    }
+
+    public Command getCommand() {
+        return command;
     }
 
     public Review getReview() {
@@ -60,6 +65,54 @@ public class OrderProperties {
 
         public void setRelayBatchSize(int relayBatchSize) {
             this.relayBatchSize = relayBatchSize;
+        }
+
+        public int getMaxBackoffSeconds() {
+            return maxBackoffSeconds;
+        }
+
+        public void setMaxBackoffSeconds(int maxBackoffSeconds) {
+            this.maxBackoffSeconds = maxBackoffSeconds;
+        }
+    }
+
+    public static class Command {
+        private boolean enabled = true;
+        private long recoveryFixedDelayMs = 3000;
+        private int recoveryBatchSize = 100;
+        private int stalePreparedSeconds = 30;
+        private int maxBackoffSeconds = 300;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public long getRecoveryFixedDelayMs() {
+            return recoveryFixedDelayMs;
+        }
+
+        public void setRecoveryFixedDelayMs(long recoveryFixedDelayMs) {
+            this.recoveryFixedDelayMs = recoveryFixedDelayMs;
+        }
+
+        public int getRecoveryBatchSize() {
+            return recoveryBatchSize;
+        }
+
+        public void setRecoveryBatchSize(int recoveryBatchSize) {
+            this.recoveryBatchSize = recoveryBatchSize;
+        }
+
+        public int getStalePreparedSeconds() {
+            return stalePreparedSeconds;
+        }
+
+        public void setStalePreparedSeconds(int stalePreparedSeconds) {
+            this.stalePreparedSeconds = stalePreparedSeconds;
         }
 
         public int getMaxBackoffSeconds() {

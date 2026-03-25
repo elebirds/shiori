@@ -221,7 +221,7 @@ public class PaymentService {
         paymentMapper.updateWalletBalance(userId, availableAfter, frozenBefore);
         appendLedger(userId, BIZ_TYPE_CDK, String.valueOf(cdk.id()), "CDK_REDEEM",
                 amount, 0L, availableAfter, frozenBefore, "CDK兑换");
-        appendWalletChangedOutbox(userId, "CDK:" + cdk.id());
+        appendWalletChangedOutbox(userId, availableAfter, frozenBefore, "CDK:" + cdk.id());
 
         int affected = paymentMapper.markCdkRedeemed(
                 cdk.id(),
@@ -292,27 +292,24 @@ public class PaymentService {
             throw new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST);
         }
 
-        // Avoid taking the trade lock before the buyer wallet lock.
-        // The order service only calls reserve on UNPAID orders, while settle/release/refund
-        // are reached from later states, so same-order reserve vs. settle concurrency is
-        // blocked by the upstream order state machine.
-        TradePaymentRecord existed = paymentMapper.findTradeByOrderNo(orderNo.trim());
+        String normalizedOrderNo = orderNo.trim();
+        TradePaymentRecord existed = paymentMapper.findTradeByOrderNo(normalizedOrderNo);
         if (existed != null) {
             TradePaymentStatus status = TradePaymentStatus.fromCode(existed.status());
             if (status == TradePaymentStatus.RESERVED) {
-                ensureReserveRequestMatchesTrade(orderNo.trim(), buyerUserId, sellerUserId, amountCent, existed);
-                return new ReserveOrderPaymentResponse(orderNo.trim(), existed.paymentNo(), status.name(), true);
+                ensureReserveRequestMatchesTrade(normalizedOrderNo, buyerUserId, sellerUserId, amountCent, existed);
+                return new ReserveOrderPaymentResponse(normalizedOrderNo, existed.paymentNo(), status.name(), true);
             }
             throw new BizException(PaymentErrorCode.PAYMENT_TRADE_STATUS_INVALID, HttpStatus.CONFLICT);
         }
 
         WalletAccountRecord buyerWallet = ensureWalletForUpdate(buyerUserId);
-        TradePaymentRecord latest = paymentMapper.findTradeByOrderNoForUpdate(orderNo.trim());
+        TradePaymentRecord latest = paymentMapper.findTradeByOrderNoForUpdate(normalizedOrderNo);
         if (latest != null) {
             TradePaymentStatus latestStatus = TradePaymentStatus.fromCode(latest.status());
             if (latestStatus == TradePaymentStatus.RESERVED) {
-                ensureReserveRequestMatchesTrade(orderNo.trim(), buyerUserId, sellerUserId, amountCent, latest);
-                return new ReserveOrderPaymentResponse(orderNo.trim(), latest.paymentNo(), latestStatus.name(), true);
+                ensureReserveRequestMatchesTrade(normalizedOrderNo, buyerUserId, sellerUserId, amountCent, latest);
+                return new ReserveOrderPaymentResponse(normalizedOrderNo, latest.paymentNo(), latestStatus.name(), true);
             }
             throw new BizException(PaymentErrorCode.PAYMENT_TRADE_STATUS_INVALID, HttpStatus.CONFLICT);
         }
@@ -327,14 +324,14 @@ public class PaymentService {
         long availableAfter = availableBefore - amount;
         long frozenAfter = checkedAdd(frozenBefore, amount);
         paymentMapper.updateWalletBalance(buyerUserId, availableAfter, frozenAfter);
-        appendLedger(buyerUserId, BIZ_TYPE_ORDER, orderNo.trim(), "ORDER_RESERVE",
+        appendLedger(buyerUserId, BIZ_TYPE_ORDER, normalizedOrderNo, "ORDER_RESERVE",
                 -amount, amount, availableAfter, frozenAfter, "订单托管冻结");
-        appendWalletChangedOutbox(buyerUserId, orderNo.trim());
+        appendWalletChangedOutbox(buyerUserId, availableAfter, frozenAfter, normalizedOrderNo);
 
         String paymentNo = generatePaymentNo();
         try {
             paymentMapper.insertTradePayment(
-                    orderNo.trim(),
+                    normalizedOrderNo,
                     paymentNo,
                     buyerUserId,
                     sellerUserId,
@@ -343,17 +340,16 @@ public class PaymentService {
                     LocalDateTime.now()
             );
         } catch (DuplicateKeyException ex) {
-            TradePaymentRecord duplicated = paymentMapper.findTradeByOrderNo(orderNo.trim());
+            TradePaymentRecord duplicated = paymentMapper.findTradeByOrderNo(normalizedOrderNo);
             if (duplicated != null
                     && TradePaymentStatus.fromCode(duplicated.status()) == TradePaymentStatus.RESERVED) {
-                ensureReserveRequestMatchesTrade(orderNo.trim(), buyerUserId, sellerUserId, amountCent, duplicated);
-                return new ReserveOrderPaymentResponse(orderNo.trim(), duplicated.paymentNo(),
-                        TradePaymentStatus.fromCode(duplicated.status()).name(), true);
+                ensureReserveRequestMatchesTrade(normalizedOrderNo, buyerUserId, sellerUserId, amountCent, duplicated);
+                return new ReserveOrderPaymentResponse(normalizedOrderNo, duplicated.paymentNo(),
+                        TradePaymentStatus.RESERVED.name(), true);
             }
             throw new BizException(PaymentErrorCode.PAYMENT_TRADE_STATUS_INVALID, HttpStatus.CONFLICT);
         }
-
-        return new ReserveOrderPaymentResponse(orderNo.trim(), paymentNo, TradePaymentStatus.RESERVED.name(), false);
+        return new ReserveOrderPaymentResponse(normalizedOrderNo, paymentNo, TradePaymentStatus.RESERVED.name(), false);
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -389,7 +385,7 @@ public class PaymentService {
         paymentMapper.updateWalletBalance(trade.buyerUserId(), buyerAvailable, buyerFrozenAfter);
         appendLedger(trade.buyerUserId(), BIZ_TYPE_ORDER, orderNo.trim(), "ORDER_SETTLE_BUYER",
                 0L, -amount, buyerAvailable, buyerFrozenAfter, "订单托管结算-买家扣减冻结");
-        appendWalletChangedOutbox(trade.buyerUserId(), orderNo.trim());
+        appendWalletChangedOutbox(trade.buyerUserId(), buyerAvailable, buyerFrozenAfter, orderNo.trim());
 
         WalletAccountRecord sellerWallet = ensureWalletForUpdate(trade.sellerUserId());
         long sellerAvailable = safeNonNegative(sellerWallet.availableBalanceCent());
@@ -400,7 +396,7 @@ public class PaymentService {
                 amount, 0L, sellerAvailableAfter, sellerFrozen,
                 "订单托管结算-卖家入账, operatorType=" + operatorType.trim().toUpperCase(Locale.ROOT)
                         + ", operatorUserId=" + (operatorUserId == null ? "" : operatorUserId));
-        appendWalletChangedOutbox(trade.sellerUserId(), orderNo.trim());
+        appendWalletChangedOutbox(trade.sellerUserId(), sellerAvailableAfter, sellerFrozen, orderNo.trim());
 
         int affected = paymentMapper.markTradeSettled(
                 orderNo.trim(),
@@ -447,7 +443,7 @@ public class PaymentService {
         appendLedger(trade.buyerUserId(), BIZ_TYPE_ORDER, orderNo.trim(), "ORDER_RELEASE",
                 amount, -amount, buyerAvailableAfter, buyerFrozenAfter,
                 StringUtils.hasText(reason) ? reason.trim() : "订单支付补偿释放");
-        appendWalletChangedOutbox(trade.buyerUserId(), orderNo.trim());
+        appendWalletChangedOutbox(trade.buyerUserId(), buyerAvailableAfter, buyerFrozenAfter, orderNo.trim());
 
         int affected = paymentMapper.markTradeReleased(
                 orderNo.trim(),
@@ -560,13 +556,13 @@ public class PaymentService {
                 -amount, 0L, sellerAvailableAfter, sellerFrozen,
                 "订单退款扣减卖家可用, operatorType=" + operatorType.trim().toUpperCase(Locale.ROOT)
                         + ", operatorUserId=" + (operatorUserId == null ? "" : operatorUserId));
-        appendWalletChangedOutbox(trade.sellerUserId(), normalizedOrderNo);
+        appendWalletChangedOutbox(trade.sellerUserId(), sellerAvailableAfter, sellerFrozen, normalizedOrderNo);
 
         paymentMapper.updateWalletBalance(trade.buyerUserId(), buyerAvailableAfter, buyerFrozen);
         appendLedger(trade.buyerUserId(), BIZ_TYPE_ORDER, normalizedOrderNo, "ORDER_REFUND_BUYER",
                 amount, 0L, buyerAvailableAfter, buyerFrozen,
                 StringUtils.hasText(normalizedReason) ? normalizedReason : "订单退款回退买家可用");
-        appendWalletChangedOutbox(trade.buyerUserId(), normalizedOrderNo);
+        appendWalletChangedOutbox(trade.buyerUserId(), buyerAvailableAfter, buyerFrozen, normalizedOrderNo);
 
         if (current == null) {
             paymentMapper.insertTradeRefund(
@@ -655,15 +651,14 @@ public class PaymentService {
         );
     }
 
-    private void appendWalletChangedOutbox(Long userId, String bizNo) {
-        WalletAccountRecord wallet = paymentMapper.findWalletByUserId(userId);
-        if (wallet == null) {
-            return;
-        }
+    private void appendWalletChangedOutbox(Long userId,
+                                           long availableBalanceCent,
+                                           long frozenBalanceCent,
+                                           String bizNo) {
         WalletBalanceChangedPayload payload = new WalletBalanceChangedPayload(
                 userId,
-                safeNonNegative(wallet.availableBalanceCent()),
-                safeNonNegative(wallet.frozenBalanceCent()),
+                safeNonNegative(availableBalanceCent),
+                safeNonNegative(frozenBalanceCent),
                 StringUtils.hasText(bizNo) ? bizNo.trim() : "",
                 Instant.now().toString()
         );

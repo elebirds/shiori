@@ -1,0 +1,21 @@
+CREATE TABLE o_order_command (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    command_no VARCHAR(64) NOT NULL,
+    command_type VARCHAR(32) NOT NULL,
+    operator_user_id BIGINT NOT NULL,
+    idempotency_key VARCHAR(128) NOT NULL,
+    order_no VARCHAR(64) NOT NULL,
+    status VARCHAR(32) NOT NULL,
+    request_payload JSON NOT NULL,
+    progress_payload JSON NULL,
+    result_code INT NULL,
+    result_message VARCHAR(255) NULL,
+    retry_count INT NOT NULL DEFAULT 0,
+    last_error VARCHAR(500) NULL,
+    next_retry_at DATETIME(3) NULL,
+    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    UNIQUE KEY uk_order_command_no (command_no),
+    UNIQUE KEY uk_order_command_idem (operator_user_id, command_type, idempotency_key),
+    KEY idx_order_command_status_retry (status, next_retry_at, id)
+);

@@ -62,9 +62,6 @@ class ProductStockServiceTest {
 
     @Test
     void shouldReturnIdempotentWhenTxnAlreadySuccess() {
-        when(productMapper.findActiveSkuByIdForUpdate(10L)).thenReturn(
-                new SkuRecord(10L, 1L, "S001", "标准版", "{}", 3900L, 10, 0)
-        );
         when(productMapper.findStockTxnByBizNoAndType("BIZ-3", "DEDUCT")).thenReturn(
                 new StockTxnRecord(1L, "BIZ-3", 10L, "DEDUCT", 2, 1)
         );
@@ -93,7 +90,7 @@ class ProductStockServiceTest {
     }
 
     @Test
-    void shouldLockSkuBeforeTouchingStockTxn() {
+    void shouldProbeTxnBeforeLockingSku() {
         SkuRecord sku = new SkuRecord(10L, 1L, "S001", "标准版", "{}", 3900L, 10, 0);
         when(productMapper.findActiveSkuByIdForUpdate(10L)).thenReturn(sku);
         when(productMapper.findStockTxnByBizNoAndType("BIZ-LOCK", "DEDUCT")).thenReturn(null);
@@ -103,8 +100,28 @@ class ProductStockServiceTest {
         productStockService.deduct(new StockDeductRequest(10L, 2, "BIZ-LOCK"));
 
         InOrder inOrder = inOrder(productMapper);
+        inOrder.verify(productMapper).findStockTxnByBizNoAndType("BIZ-LOCK", "DEDUCT");
         inOrder.verify(productMapper).findActiveSkuByIdForUpdate(10L);
         inOrder.verify(productMapper).findStockTxnByBizNoAndType("BIZ-LOCK", "DEDUCT");
         inOrder.verify(productMapper).insertStockTxn("BIZ-LOCK", 10L, "DEDUCT", 2, 0);
+        inOrder.verify(productMapper).deductStockAtomic(10L, 2);
+    }
+
+    @Test
+    void shouldLockSkuBeforeWritingStockTxn() {
+        SkuRecord sku = new SkuRecord(10L, 1L, "S001", "标准版", "{}", 3900L, 10, 0);
+        when(productMapper.findActiveSkuByIdForUpdate(10L)).thenReturn(sku);
+        when(productMapper.findStockTxnByBizNoAndType("BIZ-FAST", "DEDUCT")).thenReturn(null);
+        when(productMapper.deductStockAtomic(10L, 2)).thenReturn(1);
+        when(productMapper.findStockBySkuId(10L)).thenReturn(8);
+
+        productStockService.deduct(new StockDeductRequest(10L, 2, "BIZ-FAST"));
+
+        InOrder inOrder = inOrder(productMapper);
+        inOrder.verify(productMapper).findStockTxnByBizNoAndType("BIZ-FAST", "DEDUCT");
+        inOrder.verify(productMapper).findActiveSkuByIdForUpdate(10L);
+        inOrder.verify(productMapper).findStockTxnByBizNoAndType("BIZ-FAST", "DEDUCT");
+        inOrder.verify(productMapper).insertStockTxn("BIZ-FAST", 10L, "DEDUCT", 2, 0);
+        inOrder.verify(productMapper).deductStockAtomic(10L, 2);
     }
 }

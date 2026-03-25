@@ -1,5 +1,6 @@
 package moe.hhm.shiori.order.service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import moe.hhm.shiori.common.exception.BizException;
@@ -17,16 +18,23 @@ import moe.hhm.shiori.order.config.OrderProperties;
 import moe.hhm.shiori.order.dto.CreateOrderItem;
 import moe.hhm.shiori.order.dto.CreateOrderRequest;
 import moe.hhm.shiori.order.dto.CreateOrderResponse;
+import moe.hhm.shiori.order.model.OrderCommandEntity;
+import moe.hhm.shiori.order.model.OrderCommandRecord;
 import moe.hhm.shiori.order.dto.OrderOperateResponse;
 import moe.hhm.shiori.order.dto.v2.UpdateOrderFulfillmentRequest;
 import moe.hhm.shiori.order.model.OrderOperateIdempotencyRecord;
 import moe.hhm.shiori.order.model.OrderRecord;
+import moe.hhm.shiori.order.repository.OrderCommandMapper;
 import moe.hhm.shiori.order.repository.OrderMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionOperations;
 import tools.jackson.databind.ObjectMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -36,6 +44,8 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -43,8 +53,17 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class OrderCommandServiceTest {
 
+    private static final TransactionOperations DIRECT_TX = new TransactionOperations() {
+        @Override
+        public <T> T execute(TransactionCallback<T> action) {
+            return action.doInTransaction(new SimpleTransactionStatus());
+        }
+    };
+
     @Mock
     private OrderMapper orderMapper;
+    @Mock
+    private OrderCommandMapper orderCommandMapper;
     @Mock
     private ProductServiceClient productServiceClient;
     @Mock
@@ -53,6 +72,10 @@ class OrderCommandServiceTest {
     private NotifyChatClient notifyChatClient;
     @Mock
     private PaymentServiceClient paymentServiceClient;
+    @Mock
+    private ObjectProvider<OrderCreateWorkflowService> orderCreateWorkflowServiceProvider;
+    @Mock
+    private ObjectProvider<OrderPayWorkflowService> orderPayWorkflowServiceProvider;
 
     private OrderCommandService orderCommandService;
 
@@ -60,6 +83,8 @@ class OrderCommandServiceTest {
     void setUp() {
         OrderProperties orderProperties = new OrderProperties();
         OrderMqProperties orderMqProperties = new OrderMqProperties();
+        ObjectMapper objectMapper = new ObjectMapper();
+        OrderMetrics orderMetrics = new OrderMetrics(new SimpleMeterRegistry());
         orderCommandService = new OrderCommandService(
                 orderMapper,
                 productServiceClient,
@@ -68,8 +93,16 @@ class OrderCommandServiceTest {
                 paymentServiceClient,
                 orderProperties,
                 orderMqProperties,
-                new ObjectMapper(),
-                new OrderMetrics(new SimpleMeterRegistry())
+                objectMapper,
+                orderMetrics,
+                orderCreateWorkflowServiceProvider,
+                orderPayWorkflowServiceProvider
+        );
+        lenient().when(orderCreateWorkflowServiceProvider.getObject()).thenReturn(
+                new OrderCreateWorkflowService(orderCommandService, orderCommandMapper, objectMapper, DIRECT_TX)
+        );
+        lenient().when(orderPayWorkflowServiceProvider.getObject()).thenReturn(
+                new OrderPayWorkflowService(orderCommandService, orderCommandMapper, objectMapper, DIRECT_TX)
         );
     }
 
@@ -214,9 +247,33 @@ class OrderCommandServiceTest {
 
     @Test
     void shouldPayOrderByBalance() {
-        when(orderMapper.findOrderByOrderNo("O202603050001"))
-                .thenReturn(orderRecord(14L, "O202603050001", 1001L, 2001L, 1, 2399L, 1, null));
+        OrderRecord order = orderRecord(14L, "O202603050001", 1001L, 2001L, 1, 2399L, 1, null);
+        when(orderMapper.findOrderByOrderNo("O202603050001")).thenReturn(order);
+        when(orderMapper.findOrderByOrderNoForUpdate("O202603050001")).thenReturn(order);
         when(orderMapper.findOperateIdempotency(1001L, "PAY", "idem-balance-pay-1")).thenReturn(null);
+        doAnswer(invocation -> {
+            OrderCommandEntity entity = invocation.getArgument(0);
+            entity.setId(1L);
+            return 1;
+        }).when(orderCommandMapper).insertOrderCommand(any(OrderCommandEntity.class));
+        when(orderCommandMapper.findByCommandNo(anyString())).thenReturn(new OrderCommandRecord(
+                1L,
+                "CMD-PAY-1",
+                "PAY_BALANCE_ORDER",
+                1001L,
+                "idem-balance-pay-1",
+                "O202603050001",
+                "PREPARED",
+                "{\"buyerUserId\":1001}",
+                "{\"paymentNo\":null}",
+                null,
+                null,
+                0,
+                null,
+                null,
+                LocalDateTime.now().minusSeconds(10),
+                LocalDateTime.now().minusSeconds(5)
+        ));
         when(paymentServiceClient.reserveOrderPayment("O202603050001", 1001L, 2001L, 2399L, 1001L, List.of("ROLE_USER")))
                 .thenReturn(new ReserveBalancePaymentSnapshot("O202603050001", "P-001", "RESERVED", false));
         when(orderMapper.markOrderPaidByBalance(eq("O202603050001"), eq(1001L), eq("P-001"), any(), eq(1), eq(2)))
