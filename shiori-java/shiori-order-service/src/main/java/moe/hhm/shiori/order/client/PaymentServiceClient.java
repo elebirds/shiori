@@ -227,6 +227,7 @@ public class PaymentServiceClient {
     }
 
     BizException mapRemoteFailure(int statusCode, Result<?> failure) {
+        String detail = buildRemoteDetail(statusCode, failure);
         if (failure != null) {
             if (failure.code() == PaymentErrorCode.PAYMENT_BALANCE_NOT_ENOUGH.code()) {
                 return new BizException(OrderErrorCode.ORDER_BALANCE_NOT_ENOUGH, HttpStatus.CONFLICT);
@@ -236,21 +237,21 @@ public class PaymentServiceClient {
             }
             if (failure.code() == CommonErrorCode.UNAUTHORIZED.code()
                     || failure.code() == CommonErrorCode.FORBIDDEN.code()) {
-                return new BizException(OrderErrorCode.ORDER_PAYMENT_SERVICE_ERROR, HttpStatus.BAD_GATEWAY);
+                return new BizException(OrderErrorCode.ORDER_PAYMENT_SERVICE_ERROR, HttpStatus.BAD_GATEWAY, detail);
             }
         }
 
         if (statusCode == HttpStatus.REQUEST_TIMEOUT.value() || statusCode == HttpStatus.GATEWAY_TIMEOUT.value()) {
-            return new BizException(OrderErrorCode.ORDER_PAYMENT_TIMEOUT, HttpStatus.GATEWAY_TIMEOUT);
+            return new BizException(OrderErrorCode.ORDER_PAYMENT_TIMEOUT, HttpStatus.GATEWAY_TIMEOUT, detail);
         }
         if (statusCode == HttpStatus.UNAUTHORIZED.value() || statusCode == HttpStatus.FORBIDDEN.value()) {
-            return new BizException(OrderErrorCode.ORDER_PAYMENT_SERVICE_ERROR, HttpStatus.BAD_GATEWAY);
+            return new BizException(OrderErrorCode.ORDER_PAYMENT_SERVICE_ERROR, HttpStatus.BAD_GATEWAY, detail);
         }
         if (statusCode >= HttpStatus.INTERNAL_SERVER_ERROR.value()) {
-            return new BizException(OrderErrorCode.ORDER_PAYMENT_SERVICE_ERROR, HttpStatus.BAD_GATEWAY);
+            return new BizException(OrderErrorCode.ORDER_PAYMENT_SERVICE_ERROR, HttpStatus.BAD_GATEWAY, detail);
         }
         if (statusCode >= HttpStatus.BAD_REQUEST.value()) {
-            return new BizException(OrderErrorCode.ORDER_PAYMENT_RESPONSE_INVALID, HttpStatus.BAD_GATEWAY);
+            return new BizException(OrderErrorCode.ORDER_PAYMENT_RESPONSE_INVALID, HttpStatus.BAD_GATEWAY, detail);
         }
         return new BizException(CommonErrorCode.SERVICE_UNAVAILABLE, HttpStatus.SERVICE_UNAVAILABLE);
     }
@@ -289,5 +290,29 @@ public class PaymentServiceClient {
             current = current.getCause();
         }
         return false;
+    }
+
+    private String buildRemoteDetail(int statusCode, Result<?> failure) {
+        if (failure == null) {
+            return "remoteStatus=" + statusCode;
+        }
+        String detail = "remoteStatus=" + statusCode
+                + ", remoteCode=" + failure.code()
+                + ", remoteMessage=" + failure.message();
+        if (failure.data() != null) {
+            detail += ", remoteData=" + stringifyRemoteData(failure.data());
+        }
+        return detail;
+    }
+
+    private String stringifyRemoteData(Object data) {
+        if (data instanceof String text) {
+            return text;
+        }
+        try {
+            return objectMapper.writeValueAsString(data);
+        } catch (JacksonException ex) {
+            return String.valueOf(data);
+        }
     }
 }

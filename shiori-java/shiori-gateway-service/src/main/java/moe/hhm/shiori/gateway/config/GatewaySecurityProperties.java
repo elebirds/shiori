@@ -121,9 +121,9 @@ public class GatewaySecurityProperties {
 
     public static class RateLimit {
         private boolean enabled = true;
-        private int loginPerSecond = 8;
-        private int orderCreatePerSecond = 10;
-        private int orderPayPerSecond = 15;
+        private int loginPerSecond = 20;
+        private int orderCreatePerSecond = 30;
+        private int orderPayPerSecond = 50;
 
         public boolean isEnabled() {
             return enabled;

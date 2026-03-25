@@ -25,6 +25,29 @@ k6 run k6-chat-ws.js
 k6 run k6-chat-conversation.js
 ```
 
+## 一键执行（推荐）
+
+已提供统一入口脚本：
+
+```bash
+./scripts/ci/run_perf_oneclick.sh
+```
+
+默认行为：
+
+1. 自动检查 `gateway/notify` 健康。
+2. 自动创建临时 admin 并发放两批 CDK（order/ws 各一批）。
+3. 通过 Docker k6 执行 `k6-order.js` 与 `k6-ws.js`。
+4. 输出失败码分布与阈值摘要，日志写入 `ci-logs/perf/diagnose`。
+
+常用开关（环境变量）：
+
+1. `RUN_ORDER=0|1`：是否执行订单压测（默认 `1`）
+2. `RUN_WS=0|1`：是否执行 WS 压测（默认 `1`）
+3. `K6_ORDER_VUS` / `K6_ORDER_DURATION`：订单并发与时长（默认 `2` / `10s`）
+4. `K6_WS_VUS` / `K6_WS_ITERATIONS`：WS 并发与迭代（默认 `2` / `10`）
+5. `CDK_AMOUNT_CENT` / `CDK_ORDER_QUANTITY` / `CDK_WS_QUANTITY`：自动发券额度和数量
+
 ## 常用参数
 
 ### 通用

@@ -7,6 +7,8 @@ import moe.hhm.shiori.common.api.Result;
 import moe.hhm.shiori.common.error.ErrorCode;
 import moe.hhm.shiori.common.error.GatewayErrorCode;
 import moe.hhm.shiori.common.exception.BizException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.webflux.error.ErrorWebExceptionHandler;
 import org.springframework.core.Ordered;
 import org.springframework.core.io.buffer.DataBuffer;
@@ -19,6 +21,7 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 public class GlobalWebFluxErrorHandler implements ErrorWebExceptionHandler, Ordered {
+    private static final Logger log = LoggerFactory.getLogger(GlobalWebFluxErrorHandler.class);
     private static final String SECURITY_AUTHENTICATION_EXCEPTION =
             "org.springframework.security.core.AuthenticationException";
     private static final String SECURITY_ACCESS_DENIED_EXCEPTION =
@@ -79,7 +82,10 @@ public class GlobalWebFluxErrorHandler implements ErrorWebExceptionHandler, Orde
             return new ErrorResponse(status, mapGatewayErrorCode(status), responseStatusException.getReason());
         }
 
-        return new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, GatewayErrorCode.INTERNAL_ERROR, null);
+        log.error("网关未捕获异常", ex);
+
+        return new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, GatewayErrorCode.INTERNAL_ERROR,
+                buildInternalErrorDetail(ex));
     }
 
     private GatewayErrorCode mapGatewayErrorCode(HttpStatus status) {
@@ -125,6 +131,21 @@ public class GlobalWebFluxErrorHandler implements ErrorWebExceptionHandler, Orde
         } catch (ClassNotFoundException ignored) {
             return null;
         }
+    }
+
+    private String buildInternalErrorDetail(Throwable ex) {
+        if (ex == null) {
+            return "unknown";
+        }
+        Throwable root = ex;
+        while (root.getCause() != null) {
+            root = root.getCause();
+        }
+        String message = root.getMessage();
+        if (message == null || message.isBlank()) {
+            return root.getClass().getSimpleName();
+        }
+        return root.getClass().getSimpleName() + ": " + message;
     }
 
     private record ErrorResponse(HttpStatus status, ErrorCode errorCode, Object data) {

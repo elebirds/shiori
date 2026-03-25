@@ -8,6 +8,8 @@ import moe.hhm.shiori.common.error.CommonErrorCode;
 import moe.hhm.shiori.common.exception.BizException;
 import moe.hhm.shiori.common.exception.ValidationErrorItem;
 import moe.hhm.shiori.common.exception.ValidationErrorPayload;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -22,6 +24,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
     private static final String SECURITY_AUTHENTICATION_EXCEPTION =
             "org.springframework.security.core.AuthenticationException";
     private static final String SECURITY_ACCESS_DENIED_EXCEPTION =
@@ -89,8 +92,10 @@ public class GlobalExceptionHandler {
             return build(HttpStatus.FORBIDDEN, CommonErrorCode.FORBIDDEN.code(), CommonErrorCode.FORBIDDEN.message(), null);
         }
 
+        log.error("未捕获异常", ex);
+
         return build(HttpStatus.INTERNAL_SERVER_ERROR, CommonErrorCode.INTERNAL_SERVER_ERROR.code(),
-                CommonErrorCode.INTERNAL_SERVER_ERROR.message(), null);
+            CommonErrorCode.INTERNAL_SERVER_ERROR.message(), buildInternalErrorDetail(ex));
     }
 
     private ResponseEntity<Result<Object>> validationBadRequest(List<FieldError> fieldErrors) {
@@ -129,5 +134,20 @@ public class GlobalExceptionHandler {
         } catch (ClassNotFoundException ignored) {
             return null;
         }
+    }
+
+    private String buildInternalErrorDetail(Throwable ex) {
+        if (ex == null) {
+            return "unknown";
+        }
+        Throwable root = ex;
+        while (root.getCause() != null) {
+            root = root.getCause();
+        }
+        String message = root.getMessage();
+        if (message == null || message.isBlank()) {
+            return root.getClass().getSimpleName();
+        }
+        return root.getClass().getSimpleName() + ": " + message;
     }
 }

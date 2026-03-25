@@ -86,6 +86,7 @@ class PaymentServiceClientTest {
         BizException ex = client.mapRemoteFailure(HttpStatus.UNAUTHORIZED.value(), null);
         assertThat(ex.getErrorCode().code()).isEqualTo(OrderErrorCode.ORDER_PAYMENT_SERVICE_ERROR.code());
         assertThat(ex.getHttpStatus()).isEqualTo(HttpStatus.BAD_GATEWAY);
+        assertThat(ex.getExtraData()).isEqualTo("remoteStatus=401");
     }
 
     @Test
@@ -107,5 +108,33 @@ class PaymentServiceClientTest {
         BizException ex = client.mapRuntimeException(runtimeEx);
         assertThat(ex.getErrorCode().code()).isEqualTo(OrderErrorCode.ORDER_PAYMENT_TIMEOUT.code());
         assertThat(ex.getHttpStatus()).isEqualTo(HttpStatus.GATEWAY_TIMEOUT);
+    }
+
+    @Test
+    void shouldExposeRemoteFailureDetailsForPaymentServiceError() {
+        Result<Object> failure = new Result<>(
+                59999,
+                "payment downstream detail",
+                null,
+                System.currentTimeMillis()
+        );
+        BizException ex = client.mapRemoteFailure(HttpStatus.BAD_GATEWAY.value(), failure);
+        assertThat(ex.getErrorCode().code()).isEqualTo(OrderErrorCode.ORDER_PAYMENT_SERVICE_ERROR.code());
+        assertThat(ex.getExtraData()).isEqualTo("remoteStatus=502, remoteCode=59999, remoteMessage=payment downstream detail");
+    }
+
+    @Test
+    void shouldIncludeRemoteDataInPaymentFailureDetails() {
+        Result<Object> failure = new Result<>(
+                19999,
+                "系统内部错误",
+                "Deadlock found when trying to get lock",
+                System.currentTimeMillis()
+        );
+        BizException ex = client.mapRemoteFailure(HttpStatus.INTERNAL_SERVER_ERROR.value(), failure);
+        assertThat(ex.getErrorCode().code()).isEqualTo(OrderErrorCode.ORDER_PAYMENT_SERVICE_ERROR.code());
+        assertThat(ex.getExtraData()).isEqualTo(
+                "remoteStatus=500, remoteCode=19999, remoteMessage=系统内部错误, remoteData=Deadlock found when trying to get lock"
+        );
     }
 }

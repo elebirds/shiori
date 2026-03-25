@@ -153,6 +153,7 @@ public class ProductServiceClient {
     }
 
     BizException mapRemoteFailure(int statusCode, Result<?> failure) {
+        String detail = buildRemoteDetail(statusCode, failure);
         if (failure != null) {
             if (failure.code() == ProductErrorCode.STOCK_NOT_ENOUGH.code()) {
                 return new BizException(OrderErrorCode.ORDER_STOCK_NOT_ENOUGH, HttpStatus.CONFLICT);
@@ -164,25 +165,25 @@ public class ProductServiceClient {
             }
             if (failure.code() == CommonErrorCode.UNAUTHORIZED.code()
                     || failure.code() == CommonErrorCode.FORBIDDEN.code()) {
-                return new BizException(OrderErrorCode.ORDER_PRODUCT_AUTH_FAILED, HttpStatus.BAD_GATEWAY);
+                return new BizException(OrderErrorCode.ORDER_PRODUCT_AUTH_FAILED, HttpStatus.BAD_GATEWAY, detail);
             }
         }
 
         if (statusCode == HttpStatus.UNAUTHORIZED.value() || statusCode == HttpStatus.FORBIDDEN.value()) {
-            return new BizException(OrderErrorCode.ORDER_PRODUCT_AUTH_FAILED, HttpStatus.BAD_GATEWAY);
+            return new BizException(OrderErrorCode.ORDER_PRODUCT_AUTH_FAILED, HttpStatus.BAD_GATEWAY, detail);
         }
         if (statusCode == HttpStatus.NOT_FOUND.value()) {
             return new BizException(OrderErrorCode.ORDER_PRODUCT_INVALID, HttpStatus.BAD_REQUEST);
         }
         if (statusCode == HttpStatus.REQUEST_TIMEOUT.value()
                 || statusCode == HttpStatus.GATEWAY_TIMEOUT.value()) {
-            return new BizException(OrderErrorCode.ORDER_PRODUCT_TIMEOUT, HttpStatus.GATEWAY_TIMEOUT);
+            return new BizException(OrderErrorCode.ORDER_PRODUCT_TIMEOUT, HttpStatus.GATEWAY_TIMEOUT, detail);
         }
         if (statusCode >= HttpStatus.INTERNAL_SERVER_ERROR.value()) {
-            return new BizException(OrderErrorCode.ORDER_PRODUCT_SERVICE_ERROR, HttpStatus.BAD_GATEWAY);
+            return new BizException(OrderErrorCode.ORDER_PRODUCT_SERVICE_ERROR, HttpStatus.BAD_GATEWAY, detail);
         }
         if (statusCode >= HttpStatus.BAD_REQUEST.value()) {
-            return new BizException(OrderErrorCode.ORDER_PRODUCT_RESPONSE_INVALID, HttpStatus.BAD_GATEWAY);
+            return new BizException(OrderErrorCode.ORDER_PRODUCT_RESPONSE_INVALID, HttpStatus.BAD_GATEWAY, detail);
         }
         return new BizException(CommonErrorCode.SERVICE_UNAVAILABLE, HttpStatus.SERVICE_UNAVAILABLE);
     }
@@ -223,5 +224,29 @@ public class ProductServiceClient {
             current = current.getCause();
         }
         return false;
+    }
+
+    private String buildRemoteDetail(int statusCode, Result<?> failure) {
+        if (failure == null) {
+            return "remoteStatus=" + statusCode;
+        }
+        String detail = "remoteStatus=" + statusCode
+                + ", remoteCode=" + failure.code()
+                + ", remoteMessage=" + failure.message();
+        if (failure.data() != null) {
+            detail += ", remoteData=" + stringifyRemoteData(failure.data());
+        }
+        return detail;
+    }
+
+    private String stringifyRemoteData(Object data) {
+        if (data instanceof String text) {
+            return text;
+        }
+        try {
+            return objectMapper.writeValueAsString(data);
+        } catch (JacksonException ex) {
+            return String.valueOf(data);
+        }
     }
 }

@@ -10,6 +10,8 @@ const vus = Number(__ENV.K6_WS_VUS || 2);
 const iterations = Number(__ENV.K6_WS_ITERATIONS || 10);
 const wsTimeoutMs = Number(__ENV.K6_WS_TIMEOUT_MS || 10000);
 const wsLatencyP95Ms = Number(__ENV.K6_WS_LATENCY_P95_MS || 3000);
+const buyerCdk = __ENV.K6_WS_BUYER_CDK || '';
+const buyerCdks = __ENV.K6_WS_BUYER_CDKS || '';
 
 const wsNotificationLatency = new Trend('shiori_perf_ws_notification_latency_ms', true);
 const wsTimeoutTotal = new Counter('shiori_perf_ws_timeout_total');
@@ -84,6 +86,22 @@ function uniqueUsername(prefix) {
   return `${safePrefix}_${seed}`.slice(0, 32);
 }
 
+function redeemCdks(token, cdkText) {
+  if (!cdkText) {
+    return;
+  }
+  const codes = String(cdkText)
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+  for (const code of codes) {
+    mustOk(
+      apiRequest('POST', '/api/v2/payment/cdks/redeem', token, { code }),
+      `redeem ws buyer cdk ${code}`
+    );
+  }
+}
+
 export function setup() {
   const notifyHttpBaseUrl = __ENV.PERF_NOTIFY_HTTP_BASE_URL || toNotifyHttpBase(notifyWsBaseUrl);
 
@@ -130,14 +148,22 @@ export function setup() {
     'login ws buyer'
   );
 
+  redeemCdks(buyerLogin.accessToken, buyerCdks);
+  redeemCdks(buyerLogin.accessToken, buyerCdk);
+
   const productCreate = mustOk(
     apiRequest('POST', '/api/v2/product/products', sellerLogin.accessToken, {
       title: `Perf WS 商品 ${perfPrefix}`,
       description: 'k6 ws baseline',
       coverObjectKey: null,
+      categoryCode: 'TEXTBOOK',
+      subCategoryCode: 'TEXTBOOK_UNSPEC',
+      conditionLevel: 'GOOD',
+      tradeMode: 'MEETUP',
+      campusCode: 'UNKNOWN_CAMPUS',
       skus: [
-        { skuName: '标准版', specJson: '{"edition":"std"}', priceCent: 1999, stock: 200000 },
-        { skuName: '豪华版', specJson: '{"edition":"pro"}', priceCent: 2999, stock: 200000 },
+        { specItems: [{ name: '版本', value: '标准版' }], priceCent: 1, stock: 200000 },
+        { specItems: [{ name: '版本', value: '豪华版' }], priceCent: 1, stock: 200000 },
       ],
     }),
     'create ws product'
@@ -158,7 +184,6 @@ export function setup() {
     buyerUserId: `${buyerRegister.userId}`,
     productId: productCreate.productId,
     skuId1: detail.skus[0].skuId,
-    skuId2: detail.skus[1].skuId,
   };
 }
 
@@ -171,7 +196,6 @@ export default function (data) {
     {
       items: [
         { productId: data.productId, skuId: data.skuId1, quantity: 1 },
-        { productId: data.productId, skuId: data.skuId2, quantity: 1 },
       ],
     },
     { 'Idempotency-Key': idemKey }

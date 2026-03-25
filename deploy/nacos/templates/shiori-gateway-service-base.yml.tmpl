@@ -24,9 +24,9 @@ security:
       - /api/v2/social/users/*/posts
   rate-limit:
     enabled: true
-    login-per-second: 8
-    order-create-per-second: 10
-    order-pay-per-second: 15
+    login-per-second: ${GATEWAY_RATE_LIMIT_LOGIN_PER_SECOND:20}
+    order-create-per-second: ${GATEWAY_RATE_LIMIT_ORDER_CREATE_PER_SECOND:30}
+    order-pay-per-second: ${GATEWAY_RATE_LIMIT_ORDER_PAY_PER_SECOND:50}
   authz:
     user-service-base-url: http://shiori-user-service
     cache:

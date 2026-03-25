@@ -6,6 +6,8 @@ const gatewayBaseUrl = __ENV.PERF_GATEWAY_BASE_URL || 'http://localhost:8080';
 const perfPrefix = __ENV.PERF_PREFIX || 'perf';
 const vus = Number(__ENV.K6_ORDER_VUS || 5);
 const duration = __ENV.K6_ORDER_DURATION || '45s';
+const buyerCdk = __ENV.K6_ORDER_BUYER_CDK || '';
+const buyerCdks = __ENV.K6_ORDER_BUYER_CDKS || '';
 const debugFailSample = __ENV.K6_DEBUG_FAIL_SAMPLE === '1';
 const debugFailLimit = Number(__ENV.K6_DEBUG_FAIL_LIMIT || 20);
 
@@ -92,6 +94,22 @@ function uniqueUsername(prefix) {
   return `${safePrefix}_${seed}`.slice(0, 32);
 }
 
+function redeemCdks(token, cdkText) {
+  if (!cdkText) {
+    return;
+  }
+  const codes = String(cdkText)
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+  for (const code of codes) {
+    mustOk(
+      apiRequest('POST', '/api/v2/payment/cdks/redeem', token, { code }),
+      `redeem buyer cdk ${code}`,
+    );
+  }
+}
+
 export function setup() {
   const health = http.get(`${gatewayBaseUrl}/actuator/health`);
   check(health, { 'gateway health is UP': (r) => r.status === 200 && r.json('status') === 'UP' });
@@ -133,18 +151,22 @@ export function setup() {
     'login buyer',
   );
 
+  redeemCdks(buyerLogin.accessToken, buyerCdks);
+  redeemCdks(buyerLogin.accessToken, buyerCdk);
+
   const productCreate = mustOk(
     apiRequest('POST', '/api/v2/product/products', sellerLogin.accessToken, {
       title: `Perf 商品 ${perfPrefix}`,
       description: 'k6 v0.4-b order flow',
       coverObjectKey: null,
       categoryCode: 'TEXTBOOK',
+      subCategoryCode: 'TEXTBOOK_UNSPEC',
       conditionLevel: 'GOOD',
       tradeMode: 'MEETUP',
-      campusCode: 'perf_campus',
+      campusCode: 'UNKNOWN_CAMPUS',
       skus: [
-        { skuName: '标准版', specJson: '{"edition":"std"}', priceCent: 1999, stock: 200000 },
-        { skuName: '豪华版', specJson: '{"edition":"pro"}', priceCent: 2999, stock: 200000 },
+        { specItems: [{ name: '版本', value: '标准版' }], priceCent: 1, stock: 200000 },
+        { specItems: [{ name: '版本', value: '豪华版' }], priceCent: 1, stock: 200000 },
       ],
     }),
     'create product',
@@ -180,7 +202,6 @@ export default function (data) {
     {
       items: [
         { productId: data.productId, skuId: data.skuId1, quantity: 1 },
-        { productId: data.productId, skuId: data.skuId2, quantity: 1 },
       ],
     },
     { 'Idempotency-Key': createIdemKey },
@@ -188,6 +209,7 @@ export default function (data) {
   orderCreateDuration.add(createOrder.res.timings.duration);
   if (!createOrder.ok) {
     markBizFailure('create', createOrder);
+    sleep(0.2);
     return;
   }
 
@@ -202,6 +224,7 @@ export default function (data) {
   orderPayDuration.add(payOrder.res.timings.duration);
   if (!payOrder.ok) {
     markBizFailure('pay', payOrder);
+    sleep(0.2);
     return;
   }
 
@@ -214,6 +237,7 @@ export default function (data) {
   orderDeliverDuration.add(deliverOrder.res.timings.duration);
   if (!deliverOrder.ok) {
     markBizFailure('deliver', deliverOrder);
+    sleep(0.2);
     return;
   }
 
@@ -226,6 +250,7 @@ export default function (data) {
   orderConfirmDuration.add(confirmReceipt.res.timings.duration);
   if (!confirmReceipt.ok) {
     markBizFailure('confirm', confirmReceipt);
+    sleep(0.2);
     return;
   }
 

@@ -60,6 +60,35 @@ class ProductServiceClientMappingTest {
         BizException ex = client.mapRemoteFailure(HttpStatus.BAD_GATEWAY.value(), null);
         assertThat(ex.getErrorCode().code()).isEqualTo(OrderErrorCode.ORDER_PRODUCT_SERVICE_ERROR.code());
         assertThat(ex.getHttpStatus()).isEqualTo(HttpStatus.BAD_GATEWAY);
+        assertThat(ex.getExtraData()).isEqualTo("remoteStatus=502");
+    }
+
+    @Test
+    void shouldExposeRemoteFailureDetailsForProductServiceError() {
+        Result<Object> failure = new Result<>(
+            59998,
+                "downstream detail",
+                null,
+                System.currentTimeMillis()
+        );
+        BizException ex = client.mapRemoteFailure(HttpStatus.INTERNAL_SERVER_ERROR.value(), failure);
+        assertThat(ex.getErrorCode().code()).isEqualTo(OrderErrorCode.ORDER_PRODUCT_SERVICE_ERROR.code());
+        assertThat(ex.getExtraData()).isEqualTo("remoteStatus=500, remoteCode=59998, remoteMessage=downstream detail");
+    }
+
+    @Test
+    void shouldIncludeRemoteDataInFailureDetails() {
+        Result<Object> failure = new Result<>(
+                19999,
+                "系统内部错误",
+                "Deadlock found when trying to get lock",
+                System.currentTimeMillis()
+        );
+        BizException ex = client.mapRemoteFailure(HttpStatus.INTERNAL_SERVER_ERROR.value(), failure);
+        assertThat(ex.getErrorCode().code()).isEqualTo(OrderErrorCode.ORDER_PRODUCT_SERVICE_ERROR.code());
+        assertThat(ex.getExtraData()).isEqualTo(
+                "remoteStatus=500, remoteCode=19999, remoteMessage=系统内部错误, remoteData=Deadlock found when trying to get lock"
+        );
     }
 
     @Test
