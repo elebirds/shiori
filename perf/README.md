@@ -2,10 +2,11 @@
 
 本目录提供交易链路性能基线脚本：
 
-1. `k6-order.js`：下单 -> 支付 -> 卖家发货 -> 买家确认收货 -> 订单详情 的 v2 履约链路压测。
-2. `k6-ws.js`：WebSocket 建连后触发支付并统计通知到达时延。
-3. `k6-chat-ws.js`：咨询聊天建连 + join + send 骨架脚本（v0.5-b）。
-4. `k6-chat-conversation.js`：咨询聊天会话压测（建连、发消息、断线重连、`afterSeq` 补偿）。
+1. `k6-order-hotspot.js`：单 buyer / 单 seller / 单热点 SKU 的 v2 履约链路压测。
+2. `k6-order-realistic.js`：多 buyer / 多 seller / 多商品分布的 v2 履约链路压测。
+3. `k6-ws.js`：WebSocket 建连后触发支付并统计通知到达时延。
+4. `k6-chat-ws.js`：咨询聊天建连 + join + send 骨架脚本（v0.5-b）。
+5. `k6-chat-conversation.js`：咨询聊天会话压测（建连、发消息、断线重连、`afterSeq` 补偿）。
 
 ## 前置条件
 
@@ -19,7 +20,8 @@
 
 ```bash
 cd perf
-k6 run k6-order.js
+k6 run k6-order-hotspot.js
+k6 run k6-order-realistic.js
 k6 run k6-ws.js
 k6 run k6-chat-ws.js
 k6 run k6-chat-conversation.js
@@ -37,8 +39,27 @@ k6 run k6-chat-conversation.js
 
 1. 自动检查 `gateway/notify` 健康。
 2. 自动创建临时 admin 并发放两批 CDK（order/ws 各一批）。
-3. 通过 Docker k6 执行 `k6-order.js` 与 `k6-ws.js`。
+3. 通过 Docker k6 执行 `k6-order-hotspot.js` 与 `k6-ws.js`。
 4. 输出失败码分布与阈值摘要，日志写入 `ci-logs/perf/diagnose`。
+
+## 独立订单入口
+
+已提供两套独立入口，便于区分热点基线与更真实分布：
+
+```bash
+./scripts/ci/run_perf_order_hotspot.sh
+./scripts/ci/run_perf_order_realistic.sh
+```
+
+默认模型：
+
+1. `run_perf_order_hotspot.sh`：
+   1. 使用 `perf/k6-order-hotspot.js`
+   2. 适合复现单热点库存/钱包链路
+2. `run_perf_order_realistic.sh`：
+   1. 使用 `perf/k6-order-realistic.js`
+   2. 默认 `80` 个 buyer、`20` 个 seller、每 seller `2` 个商品
+   3. 会按 buyer 数量自动申请同等数量的 CDK
 
 常用开关（环境变量）：
 
@@ -57,10 +78,20 @@ k6 run k6-chat-conversation.js
 3. `PERF_NOTIFY_HTTP_BASE_URL`：notify HTTP 地址（可选，默认由 WS 地址推导）
 4. `PERF_PREFIX`：测试数据前缀，默认 `perf`
 
-### `k6-order.js`
+### `k6-order-hotspot.js`
 
 1. `K6_ORDER_VUS`：并发 VU，默认 `5`
 2. `K6_ORDER_DURATION`：压测时长，默认 `45s`
+3. `K6_ORDER_BUYER_CDK` / `K6_ORDER_BUYER_CDKS`：买家充值券；热点脚本默认只消费一个 buyer
+
+### `k6-order-realistic.js`
+
+1. `K6_ORDER_VUS`：并发 VU，默认 `5`
+2. `K6_ORDER_DURATION`：压测时长，默认 `45s`
+3. `K6_ORDER_REAL_BUYERS`：买家数量，默认 `80`
+4. `K6_ORDER_REAL_SELLERS`：卖家数量，默认 `20`
+5. `K6_ORDER_REAL_PRODUCTS_PER_SELLER`：每卖家商品数，默认 `2`
+6. `K6_ORDER_BUYER_CDKS`：买家充值券列表；若提供，数量应不少于 `K6_ORDER_REAL_BUYERS`
 
 ### `k6-ws.js`
 

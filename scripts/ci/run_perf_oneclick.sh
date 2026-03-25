@@ -14,9 +14,14 @@ K6_IMAGE="${K6_IMAGE:-grafana/k6:0.49.0}"
 
 RUN_ORDER="${RUN_ORDER:-1}"
 RUN_WS="${RUN_WS:-1}"
+K6_ORDER_SCRIPT="${K6_ORDER_SCRIPT:-k6-order-hotspot.js}"
+K6_ORDER_LOG_BASENAME="${K6_ORDER_LOG_BASENAME:-k6-order-oneclick}"
 
 K6_ORDER_VUS="${K6_ORDER_VUS:-2}"
 K6_ORDER_DURATION="${K6_ORDER_DURATION:-10s}"
+K6_ORDER_REAL_BUYERS="${K6_ORDER_REAL_BUYERS:-80}"
+K6_ORDER_REAL_SELLERS="${K6_ORDER_REAL_SELLERS:-20}"
+K6_ORDER_REAL_PRODUCTS_PER_SELLER="${K6_ORDER_REAL_PRODUCTS_PER_SELLER:-2}"
 K6_WS_VUS="${K6_WS_VUS:-2}"
 K6_WS_ITERATIONS="${K6_WS_ITERATIONS:-10}"
 K6_WS_TIMEOUT_MS="${K6_WS_TIMEOUT_MS:-10000}"
@@ -78,6 +83,18 @@ rewrite_localhost_for_docker() {
   echo "${url}"
 }
 
+to_work_path() {
+  local host_path="$1"
+  case "${host_path}" in
+    "${ROOT_DIR}"/*)
+      echo "/work/${host_path#${ROOT_DIR}/}"
+      ;;
+    *)
+      fail "路径必须位于仓库内，当前无法映射到 Docker: ${host_path}"
+      ;;
+  esac
+}
+
 create_admin_and_login() {
   local suffix
   suffix="$(date +%s)$RANDOM"
@@ -123,9 +140,11 @@ create_cdk_batch_csv() {
 
 run_k6_order() {
   local cdk_codes="$1"
-  local order_log="${PERF_LOG_DIR}/k6-order-oneclick.log"
-  local order_summary_rel="ci-logs/perf/diagnose/k6-order-oneclick-summary.json"
+  local order_log="${PERF_LOG_DIR}/${K6_ORDER_LOG_BASENAME}.log"
+  local order_summary_host="${PERF_LOG_DIR}/${K6_ORDER_LOG_BASENAME}-summary.json"
+  local order_summary_work
   local gateway_for_k6
+  order_summary_work="$(to_work_path "${order_summary_host}")"
   gateway_for_k6="$(rewrite_localhost_for_docker "${GATEWAY_BASE_URL}")"
 
   local -a docker_args=(--rm -i -v "${ROOT_DIR}:/work" -w /work/perf)
@@ -133,18 +152,21 @@ run_k6_order() {
     docker_args+=(--network host)
   fi
 
-  log "执行订单压测（2VU 诊断）..."
+  log "执行订单压测（script=${K6_ORDER_SCRIPT}, vus=${K6_ORDER_VUS}, duration=${K6_ORDER_DURATION}）..."
   local rc=0
   docker run "${docker_args[@]}" \
     -e PERF_GATEWAY_BASE_URL="${gateway_for_k6}" \
     -e PERF_PREFIX="${PERF_PREFIX}-order" \
     -e K6_ORDER_VUS="${K6_ORDER_VUS}" \
     -e K6_ORDER_DURATION="${K6_ORDER_DURATION}" \
+    -e K6_ORDER_REAL_BUYERS="${K6_ORDER_REAL_BUYERS}" \
+    -e K6_ORDER_REAL_SELLERS="${K6_ORDER_REAL_SELLERS}" \
+    -e K6_ORDER_REAL_PRODUCTS_PER_SELLER="${K6_ORDER_REAL_PRODUCTS_PER_SELLER}" \
     -e K6_ORDER_BUYER_CDKS="${cdk_codes}" \
     -e K6_DEBUG_FAIL_SAMPLE="${K6_DEBUG_FAIL_SAMPLE}" \
     -e K6_DEBUG_FAIL_LIMIT="${K6_DEBUG_FAIL_LIMIT}" \
-    "${K6_IMAGE}" run k6-order.js \
-    --summary-export "/work/${order_summary_rel}" > "${order_log}" 2>&1 || rc=$?
+    "${K6_IMAGE}" run "${K6_ORDER_SCRIPT}" \
+    --summary-export "${order_summary_work}" > "${order_log}" 2>&1 || rc=$?
 
   log "订单压测日志: ${order_log}"
   log "订单失败码分布:"
@@ -158,10 +180,12 @@ run_k6_order() {
 run_k6_ws() {
   local cdk_codes="$1"
   local ws_log="${PERF_LOG_DIR}/k6-ws-oneclick.log"
-  local ws_summary_rel="ci-logs/perf/diagnose/k6-ws-oneclick-summary.json"
+  local ws_summary_host="${PERF_LOG_DIR}/k6-ws-oneclick-summary.json"
+  local ws_summary_work
   local gateway_for_k6
   local notify_ws_for_k6
   local notify_http_for_k6
+  ws_summary_work="$(to_work_path "${ws_summary_host}")"
   gateway_for_k6="$(rewrite_localhost_for_docker "${GATEWAY_BASE_URL}")"
   notify_ws_for_k6="$(rewrite_localhost_for_docker "${NOTIFY_WS_BASE_URL}")"
   notify_http_for_k6="$(rewrite_localhost_for_docker "${NOTIFY_HTTP_BASE_URL}")"
@@ -184,7 +208,7 @@ run_k6_ws() {
     -e K6_WS_LATENCY_P95_MS="${K6_WS_LATENCY_P95_MS}" \
     -e K6_WS_BUYER_CDKS="${cdk_codes}" \
     "${K6_IMAGE}" run k6-ws.js \
-    --summary-export "/work/${ws_summary_rel}" > "${ws_log}" 2>&1 || rc=$?
+    --summary-export "${ws_summary_work}" > "${ws_log}" 2>&1 || rc=$?
 
   log "WS 压测日志: ${ws_log}"
   log "WS 阈值摘要:"
@@ -198,7 +222,7 @@ main() {
   require_command jq
   require_command docker
 
-  [[ -f "${PERF_DIR}/k6-order.js" ]] || fail "未找到 ${PERF_DIR}/k6-order.js"
+  [[ -f "${PERF_DIR}/${K6_ORDER_SCRIPT}" ]] || fail "未找到 ${PERF_DIR}/${K6_ORDER_SCRIPT}"
   [[ -f "${PERF_DIR}/k6-ws.js" ]] || fail "未找到 ${PERF_DIR}/k6-ws.js"
 
   mkdir -p "${PERF_LOG_DIR}"

@@ -386,7 +386,8 @@ shiori/
 │   ├── rabbitmq/                     # RabbitMQ 最小权限账号初始化脚本
 │   └── sql/                          # MySQL 初始化脚本（创建多库）与后续运维 SQL
 └── perf/                             # ⚡ [压测资产] k6 脚本与结果记录
-    ├── k6-order.js
+    ├── k6-order-hotspot.js
+    ├── k6-order-realistic.js
     ├── k6-ws.js
     └── README.md
 ```
@@ -1017,7 +1018,8 @@ sh sql/manual/grant_admin_role.sh <username>
 
 本项目建议以 **k6 + Prometheus + Grafana** 形成“可复现性能证据链”：
 
-* `perf/k6-order.js`：下单/支付/查询链路压测
+* `perf/k6-order-hotspot.js`：单 buyer / 单 seller / 单热点 SKU 的订单链路压测
+* `perf/k6-order-realistic.js`：多 buyer / 多 seller / 多商品分布的订单链路压测
 * `perf/k6-ws.js`：WebSocket 连接与推送压测
 * Prometheus 抓取 Spring Boot Actuator 与 notify 指标，Grafana 面板展示 p95、错误率、队列堆积与在线连接数
 
@@ -1041,7 +1043,8 @@ docker compose --profile app --profile obs up -d --build
 
 ```bash
 cd perf
-k6 run k6-order.js
+k6 run k6-order-hotspot.js
+k6 run k6-order-realistic.js
 k6 run k6-ws.js
 ```
 
