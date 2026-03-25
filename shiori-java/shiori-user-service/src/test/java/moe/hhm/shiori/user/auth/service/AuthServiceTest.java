@@ -10,6 +10,7 @@ import moe.hhm.shiori.user.auth.dto.TokenPairResponse;
 import moe.hhm.shiori.user.auth.model.RegisterUserEntity;
 import moe.hhm.shiori.user.auth.model.UserAuthRecord;
 import moe.hhm.shiori.user.auth.repository.AuthUserMapper;
+import moe.hhm.shiori.user.payment.client.PaymentWalletClient;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -42,6 +43,8 @@ class AuthServiceTest {
 
     @Mock
     private UserSecurityProperties userSecurityProperties;
+    @Mock
+    private PaymentWalletClient paymentWalletClient;
 
     @InjectMocks
     private AuthService authService;
@@ -159,6 +162,7 @@ class AuthServiceTest {
         assertThat(response.username()).isEqualTo("alice");
         assertThat(response.nickname()).isEqualTo("Alice");
         verify(authUserMapper).insertUserRole(eq(1L), eq(10L));
+        verify(paymentWalletClient).initWalletAccount(1L);
     }
 
     @Test

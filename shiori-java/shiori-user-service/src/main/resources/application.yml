@@ -33,6 +33,9 @@ user:
   security:
     login-fail-lock-threshold: ${USER_LOGIN_FAIL_LOCK_THRESHOLD:5}
     lock-minutes: ${USER_LOCK_MINUTES:15}
+  payment-client:
+    service-base-url: ${USER_PAYMENT_SERVICE_BASE_URL:http://shiori-payment-service}
+    internal-token: ${ORDER_PAYMENT_INTERNAL_TOKEN:}
   outbox:
     enabled: ${USER_OUTBOX_ENABLED:true}
     relay-fixed-delay-ms: ${USER_OUTBOX_RELAY_FIXED_DELAY_MS:3000}

@@ -251,6 +251,7 @@ public interface OrderCommandMapper {
                 next_retry_at = #{nextRetryAt},
                 updated_at = CURRENT_TIMESTAMP(3)
             WHERE id = #{id}
+              AND status IN ('PREPARED', 'REMOTE_SUCCEEDED', 'COMPENSATING')
             """)
     int scheduleRetry(@Param("id") Long id,
                       @Param("retryCount") Integer retryCount,

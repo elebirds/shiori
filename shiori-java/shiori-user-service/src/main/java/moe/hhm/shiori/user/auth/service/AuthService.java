@@ -11,6 +11,7 @@ import moe.hhm.shiori.user.auth.dto.TokenPairResponse;
 import moe.hhm.shiori.user.auth.model.UserAuthRecord;
 import moe.hhm.shiori.user.auth.repository.AuthUserMapper;
 import moe.hhm.shiori.user.domain.UserStatus;
+import moe.hhm.shiori.user.payment.client.PaymentWalletClient;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -25,15 +26,18 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final TokenService tokenService;
     private final UserSecurityProperties userSecurityProperties;
+    private final PaymentWalletClient paymentWalletClient;
 
     public AuthService(AuthUserMapper authUserMapper,
                        PasswordEncoder passwordEncoder,
                        TokenService tokenService,
-                       UserSecurityProperties userSecurityProperties) {
+                       UserSecurityProperties userSecurityProperties,
+                       PaymentWalletClient paymentWalletClient) {
         this.authUserMapper = authUserMapper;
         this.passwordEncoder = passwordEncoder;
         this.tokenService = tokenService;
         this.userSecurityProperties = userSecurityProperties;
+        this.paymentWalletClient = paymentWalletClient;
     }
 
     public TokenPairResponse login(String username, String password, String loginIp) {
@@ -100,6 +104,7 @@ public class AuthService {
             throw new IllegalStateException("用户注册后未返回主键");
         }
         authUserMapper.insertUserRole(user.getId(), roleId);
+        paymentWalletClient.initWalletAccount(user.getId());
 
         return new RegisterResponse(user.getId(), user.getUserNo(), user.getUsername(), user.getNickname());
     }

@@ -1,7 +1,15 @@
 package moe.hhm.shiori.order.service;
 
 import java.time.LocalDateTime;
+import java.util.Set;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import moe.hhm.shiori.common.exception.BizException;
 import moe.hhm.shiori.order.client.ProductDetailSnapshot;
@@ -76,6 +84,8 @@ class OrderCommandServiceTest {
     private ObjectProvider<OrderCreateWorkflowService> orderCreateWorkflowServiceProvider;
     @Mock
     private ObjectProvider<OrderPayWorkflowService> orderPayWorkflowServiceProvider;
+    @Mock
+    private ObjectProvider<OrderConfirmSettlementWorkflowService> orderConfirmSettlementWorkflowServiceProvider;
 
     private OrderCommandService orderCommandService;
 
@@ -96,13 +106,17 @@ class OrderCommandServiceTest {
                 objectMapper,
                 orderMetrics,
                 orderCreateWorkflowServiceProvider,
-                orderPayWorkflowServiceProvider
+                orderPayWorkflowServiceProvider,
+                orderConfirmSettlementWorkflowServiceProvider
         );
         lenient().when(orderCreateWorkflowServiceProvider.getObject()).thenReturn(
                 new OrderCreateWorkflowService(orderCommandService, orderCommandMapper, objectMapper, DIRECT_TX)
         );
         lenient().when(orderPayWorkflowServiceProvider.getObject()).thenReturn(
                 new OrderPayWorkflowService(orderCommandService, orderCommandMapper, objectMapper, DIRECT_TX)
+        );
+        lenient().when(orderConfirmSettlementWorkflowServiceProvider.getObject()).thenReturn(
+                new OrderConfirmSettlementWorkflowService(orderCommandService, orderCommandMapper, objectMapper, DIRECT_TX)
         );
     }
 
@@ -289,19 +303,23 @@ class OrderCommandServiceTest {
     }
 
     @Test
-    void shouldSettleBalanceEscrowWhenBuyerConfirmReceipt() {
+    void shouldScheduleBalanceEscrowSettlementWhenBuyerConfirmReceipt() {
         when(orderMapper.findOrderByOrderNo("O202603050002"))
                 .thenReturn(orderRecord(15L, "O202603050002", 1001L, 2001L, 4, 3999L, 1, "P-002"));
         when(orderMapper.markOrderFinishedByBuyer("O202603050002", 1001L, 4, 5)).thenReturn(1);
         when(orderMapper.findPaymentModeByOrderNo("O202603050002")).thenReturn("BALANCE_ESCROW");
-        when(paymentServiceClient.settleOrderPayment("O202603050002", "BUYER", 1001L, 1001L, List.of("ROLE_USER")))
-                .thenReturn(new SettleBalancePaymentSnapshot("O202603050002", "P-002", "SETTLED", false));
+        doAnswer(invocation -> {
+            OrderCommandEntity entity = invocation.getArgument(0);
+            entity.setId(11L);
+            return 1;
+        }).when(orderCommandMapper).insertOrderCommand(any(OrderCommandEntity.class));
 
         OrderOperateResponse response = orderCommandService.confirmReceiptAsBuyer(1001L, "O202603050002", null);
 
         assertThat(response.idempotent()).isFalse();
         assertThat(response.status()).isEqualTo("FINISHED");
-        verify(paymentServiceClient).settleOrderPayment("O202603050002", "BUYER", 1001L, 1001L, List.of("ROLE_USER"));
+        verify(orderCommandMapper).insertOrderCommand(any(OrderCommandEntity.class));
+        verify(paymentServiceClient, never()).settleOrderPayment(anyString(), anyString(), any(), any(), anyList());
     }
 
     @Test
@@ -414,6 +432,43 @@ class OrderCommandServiceTest {
                 .matches(ex -> ((BizException) ex).getErrorCode().code() == 50004);
         verify(orderMapper, never()).markOrderFinishedByBuyer(anyString(), anyLong(), any(), any());
         verify(paymentServiceClient, never()).settleOrderPayment(anyString(), anyString(), any(), any(), anyList());
+    }
+
+    @Test
+    void shouldGenerateUniqueOrderNosUnderBurstConcurrency() throws Exception {
+        int threads = 32;
+        int perThread = 5000;
+        Set<String> orderNos = ConcurrentHashMap.newKeySet();
+        CountDownLatch ready = new CountDownLatch(threads);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(threads);
+        try {
+            List<Future<?>> futures = new ArrayList<>();
+            for (int index = 0; index < threads; index++) {
+                futures.add(executor.submit(() -> {
+                    ready.countDown();
+                    try {
+                        start.await(5, TimeUnit.SECONDS);
+                    } catch (InterruptedException ex) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException("await interrupted", ex);
+                    }
+                    for (int i = 0; i < perThread; i++) {
+                        orderNos.add(orderCommandService.generateOrderNo());
+                    }
+                }));
+            }
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            for (Future<?> future : futures) {
+                future.get(10, TimeUnit.SECONDS);
+            }
+        } finally {
+            executor.shutdownNow();
+        }
+
+        assertThat(orderNos).hasSize(threads * perThread);
+        assertThat(orderNos).allMatch(orderNo -> orderNo.startsWith("O"));
     }
 
     private ProductDetailSnapshot product(Long productId, String productNo, Long ownerUserId,

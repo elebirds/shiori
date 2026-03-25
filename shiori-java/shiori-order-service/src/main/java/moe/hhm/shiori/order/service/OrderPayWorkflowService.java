@@ -237,25 +237,25 @@ public class OrderPayWorkflowService {
                 requestPayload.buyerUserId(),
                 DEFAULT_ROLES
         );
+        PayProgressPayload progress = new PayProgressPayload(reserved.paymentNo(), reserved.status());
         transactionOperations.executeWithoutResult(status ->
                 orderCommandMapper.markRemoteSucceeded(
                         command.id(),
-                        writeValue(new PayProgressPayload(reserved.paymentNo(), reserved.status()))
+                        writeValue(progress)
                 ));
         orderCommandService.orderMetrics().incOrderCommand(COMMAND_TYPE, "REMOTE_SUCCEEDED");
-        recoverRemoteSucceededCommand(command);
+        recoverRemoteSucceededCommand(command, progress);
     }
 
     private void recoverRemoteSucceededCommand(OrderCommandRecord command) {
+        recoverRemoteSucceededCommand(command, readValue(command.progressPayload(), PayProgressPayload.class));
+    }
+
+    private void recoverRemoteSucceededCommand(OrderCommandRecord command, PayProgressPayload progressPayload) {
         PayRequestPayload requestPayload = readValue(command.requestPayload(), PayRequestPayload.class);
-        PayProgressPayload progressPayload = readValue(command.progressPayload(), PayProgressPayload.class);
         OrderRecord latest = orderCommandService.orderMapper().findOrderByOrderNo(command.orderNo());
-        if (latest != null
-                && OrderStatus.fromCode(latest.status()) == OrderStatus.PAID
-                && Objects.equals(latest.paymentNo(), progressPayload.paymentNo())) {
-            transactionOperations.executeWithoutResult(status ->
-                    orderCommandMapper.markCompleted(command.id(), 0, SUCCESS_MESSAGE));
-            orderCommandService.orderMetrics().incOrderCommand(COMMAND_TYPE, "COMPLETED");
+        if (isPaymentFinalizeApplied(latest, progressPayload.paymentNo())) {
+            completeRecoveredCommand(command.id());
             return;
         }
 
@@ -277,11 +277,22 @@ public class OrderPayWorkflowService {
                     true
             );
         } catch (BizException ex) {
-            compensateRecoveredCommand(command, FailureRecord.from(ex));
+            compensateRecoveredCommand(command, progressPayload, FailureRecord.from(ex));
         }
     }
 
     private void compensateRecoveredCommand(OrderCommandRecord command, FailureRecord fallbackFailure) {
+        compensateRecoveredCommand(command, readValue(command.progressPayload(), PayProgressPayload.class), fallbackFailure);
+    }
+
+    private void compensateRecoveredCommand(OrderCommandRecord command,
+                                            PayProgressPayload progressPayload,
+                                            FailureRecord fallbackFailure) {
+        OrderRecord latest = orderCommandService.orderMapper().findOrderByOrderNo(command.orderNo());
+        if (isPaymentFinalizeApplied(latest, progressPayload.paymentNo())) {
+            completeRecoveredCommand(command.id());
+            return;
+        }
         PayRequestPayload requestPayload = readValue(command.requestPayload(), PayRequestPayload.class);
         orderCommandService.paymentServiceClient().releaseOrderPayment(
                 requestPayload.orderNo(),
@@ -301,6 +312,26 @@ public class OrderPayWorkflowService {
                 ));
         orderCommandService.orderMetrics().incOrderCommand(COMMAND_TYPE, "COMPENSATED");
         orderCommandService.orderMetrics().incOrderCommandCompensation(COMMAND_TYPE, "success");
+    }
+
+    private void completeRecoveredCommand(Long commandId) {
+        transactionOperations.executeWithoutResult(status ->
+                orderCommandMapper.markCompleted(commandId, 0, SUCCESS_MESSAGE));
+        orderCommandService.orderMetrics().incOrderCommand(COMMAND_TYPE, "COMPLETED");
+    }
+
+    private boolean isPaymentFinalizeApplied(OrderRecord order, String paymentNo) {
+        if (order == null || paymentNo == null || paymentNo.isBlank()) {
+            return false;
+        }
+        if (!Objects.equals(order.paymentNo(), paymentNo)) {
+            return false;
+        }
+        OrderStatus status = OrderStatus.fromCode(order.status());
+        return status == OrderStatus.PAID
+                || status == OrderStatus.DELIVERING
+                || status == OrderStatus.FINISHED
+                || status == OrderStatus.REFUNDED;
     }
 
     private OrderOperateResponse finalizePay(OrderRecord order,

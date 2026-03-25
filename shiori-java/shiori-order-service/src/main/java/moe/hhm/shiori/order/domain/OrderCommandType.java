@@ -4,7 +4,8 @@ import org.springframework.util.StringUtils;
 
 public enum OrderCommandType {
     CREATE_ORDER,
-    PAY_BALANCE_ORDER;
+    PAY_BALANCE_ORDER,
+    CONFIRM_RECEIPT_SETTLEMENT;
 
     public static OrderCommandType fromCode(String code) {
         if (!StringUtils.hasText(code)) {

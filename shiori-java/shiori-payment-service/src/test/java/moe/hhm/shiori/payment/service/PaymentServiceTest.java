@@ -7,6 +7,7 @@ import moe.hhm.shiori.payment.domain.TradePaymentStatus;
 import moe.hhm.shiori.payment.dto.RedeemCdkResponse;
 import moe.hhm.shiori.payment.dto.admin.CreateCdkBatchRequest;
 import moe.hhm.shiori.payment.dto.admin.CreateCdkBatchResponse;
+import moe.hhm.shiori.payment.dto.internal.InitWalletAccountResponse;
 import moe.hhm.shiori.payment.dto.internal.ReleaseOrderPaymentResponse;
 import moe.hhm.shiori.payment.dto.internal.ReserveOrderPaymentResponse;
 import moe.hhm.shiori.payment.dto.internal.SettleOrderPaymentResponse;
@@ -32,6 +33,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -53,6 +55,7 @@ class PaymentServiceTest {
         when(paymentMapper.findCdkByHashForUpdate(anyString())).thenReturn(
                 new CdkCodeRecord(1L, 1L, "hash", "CDK****ABCD", 200L, null, CdkCodeStatus.UNUSED.code(), null, null)
         );
+        when(paymentMapper.findWalletByUserId(1001L)).thenReturn(wallet(1001L, 500L, 10L));
         when(paymentMapper.findWalletByUserIdForUpdate(1001L)).thenReturn(wallet(1001L, 500L, 10L));
         when(paymentMapper.markCdkRedeemed(eq(1L), eq(1001L), any(), eq(CdkCodeStatus.UNUSED.code()), eq(CdkCodeStatus.USED.code())))
                 .thenReturn(1);
@@ -119,8 +122,8 @@ class PaymentServiceTest {
 
     @Test
     void shouldReserveOrderPaymentSuccessfully() {
-        when(paymentMapper.findTradeByOrderNo("O1001")).thenReturn(null);
-        when(paymentMapper.findTradeByOrderNoForUpdate("O1001")).thenReturn(null);
+        when(paymentMapper.findTradeByOrderNo("O1001")).thenReturn((TradePaymentRecord) null, (TradePaymentRecord) null);
+        when(paymentMapper.findWalletByUserId(1001L)).thenReturn(wallet(1001L, 500L, 10L));
         when(paymentMapper.findWalletByUserIdForUpdate(1001L)).thenReturn(wallet(1001L, 500L, 10L));
 
         ReserveOrderPaymentResponse response = paymentService.reserveOrderPayment("O1001", 1001L, 2001L, 300L);
@@ -134,7 +137,8 @@ class PaymentServiceTest {
 
     @Test
     void shouldRejectReserveWhenBalanceNotEnough() {
-        when(paymentMapper.findTradeByOrderNo("O1002")).thenReturn(null);
+        when(paymentMapper.findTradeByOrderNo("O1002")).thenReturn((TradePaymentRecord) null, (TradePaymentRecord) null);
+        when(paymentMapper.findWalletByUserId(1001L)).thenReturn(wallet(1001L, 99L, 0L));
         when(paymentMapper.findWalletByUserIdForUpdate(1001L)).thenReturn(wallet(1001L, 99L, 0L));
 
         assertThatThrownBy(() -> paymentService.reserveOrderPayment("O1002", 1001L, 2001L, 100L))
@@ -168,23 +172,27 @@ class PaymentServiceTest {
     @Test
     void shouldReturnIdempotentWhenTradeAppearsAfterWalletLocked() {
         when(paymentMapper.findTradeByOrderNo("O1004"))
-                .thenReturn(null);
-        when(paymentMapper.findTradeByOrderNoForUpdate("O1004"))
-                .thenReturn(trade("O1004", "P-1004", 1001L, 2001L, 100L, TradePaymentStatus.RESERVED.code()));
+                .thenReturn(null, trade("O1004", "P-1004", 1001L, 2001L, 100L, TradePaymentStatus.RESERVED.code()));
+        when(paymentMapper.findWalletByUserId(1001L)).thenReturn(wallet(1001L, 500L, 0L));
         when(paymentMapper.findWalletByUserIdForUpdate(1001L)).thenReturn(wallet(1001L, 500L, 0L));
 
         ReserveOrderPaymentResponse response = paymentService.reserveOrderPayment("O1004", 1001L, 2001L, 100L);
 
         assertThat(response.idempotent()).isTrue();
         assertThat(response.status()).isEqualTo("RESERVED");
+        verify(paymentMapper, never()).findTradeByOrderNoForUpdate("O1004");
         verify(paymentMapper, never()).updateWalletBalance(anyLong(), anyLong(), anyLong());
     }
 
     @Test
     void shouldRejectReserveWhenDuplicateTradeStatusSettled() {
         when(paymentMapper.findTradeByOrderNo("O1005"))
-                .thenReturn(null, trade("O1005", "P-1005", 1001L, 2001L, 100L, TradePaymentStatus.SETTLED.code()));
-        when(paymentMapper.findTradeByOrderNoForUpdate("O1005")).thenReturn(null);
+                .thenReturn(
+                        null,
+                        null,
+                        trade("O1005", "P-1005", 1001L, 2001L, 100L, TradePaymentStatus.SETTLED.code())
+                );
+        when(paymentMapper.findWalletByUserId(1001L)).thenReturn(wallet(1001L, 500L, 0L));
         when(paymentMapper.findWalletByUserIdForUpdate(1001L)).thenReturn(wallet(1001L, 500L, 0L));
         when(paymentMapper.insertTradePayment(eq("O1005"), anyString(), eq(1001L), eq(2001L), eq(100L),
                 eq(TradePaymentStatus.RESERVED.code()), any()))
@@ -198,8 +206,12 @@ class PaymentServiceTest {
     @Test
     void shouldRejectReserveWhenDuplicateTradeReservedButRequestMismatch() {
         when(paymentMapper.findTradeByOrderNo("O1006"))
-                .thenReturn(null, trade("O1006", "P-1006", 1001L, 2001L, 101L, TradePaymentStatus.RESERVED.code()));
-        when(paymentMapper.findTradeByOrderNoForUpdate("O1006")).thenReturn(null);
+                .thenReturn(
+                        null,
+                        null,
+                        trade("O1006", "P-1006", 1001L, 2001L, 101L, TradePaymentStatus.RESERVED.code())
+                );
+        when(paymentMapper.findWalletByUserId(1001L)).thenReturn(wallet(1001L, 500L, 0L));
         when(paymentMapper.findWalletByUserIdForUpdate(1001L)).thenReturn(wallet(1001L, 500L, 0L));
         when(paymentMapper.insertTradePayment(eq("O1006"), anyString(), eq(1001L), eq(2001L), eq(100L),
                 eq(TradePaymentStatus.RESERVED.code()), any()))
@@ -212,34 +224,61 @@ class PaymentServiceTest {
 
     @Test
     void shouldLockWalletBeforeCheckingTradeGapDuringReserve() {
-        when(paymentMapper.findTradeByOrderNo("O1007")).thenReturn(null);
+        when(paymentMapper.findTradeByOrderNo("O1007")).thenReturn((TradePaymentRecord) null, (TradePaymentRecord) null);
+        when(paymentMapper.findWalletByUserId(1001L)).thenReturn(wallet(1001L, 500L, 0L));
         when(paymentMapper.findWalletByUserIdForUpdate(1001L)).thenReturn(wallet(1001L, 500L, 0L));
-        when(paymentMapper.findTradeByOrderNoForUpdate("O1007")).thenReturn(null);
 
         paymentService.reserveOrderPayment("O1007", 1001L, 2001L, 100L);
 
         InOrder inOrder = inOrder(paymentMapper);
         inOrder.verify(paymentMapper).findTradeByOrderNo("O1007");
+        inOrder.verify(paymentMapper).findWalletByUserId(1001L);
         inOrder.verify(paymentMapper).findWalletByUserIdForUpdate(1001L);
-        inOrder.verify(paymentMapper).findTradeByOrderNoForUpdate("O1007");
+        inOrder.verify(paymentMapper).findTradeByOrderNo("O1007");
+        verify(paymentMapper, never()).findTradeByOrderNoForUpdate("O1007");
     }
 
     @Test
     void shouldNotReadWalletAgainAfterReserveBalanceUpdated() {
-        when(paymentMapper.findTradeByOrderNo("O1008")).thenReturn(null);
+        when(paymentMapper.findTradeByOrderNo("O1008")).thenReturn((TradePaymentRecord) null, (TradePaymentRecord) null);
+        when(paymentMapper.findWalletByUserId(1001L)).thenReturn(wallet(1001L, 500L, 0L));
         when(paymentMapper.findWalletByUserIdForUpdate(1001L)).thenReturn(wallet(1001L, 500L, 0L));
-        when(paymentMapper.findTradeByOrderNoForUpdate("O1008")).thenReturn(null);
 
         paymentService.reserveOrderPayment("O1008", 1001L, 2001L, 100L);
 
-        verify(paymentMapper, never()).findWalletByUserId(1001L);
+        verify(paymentMapper, never()).findTradeByOrderNoForUpdate("O1008");
+        verify(paymentMapper, times(1)).findWalletByUserId(1001L);
+    }
+
+    @Test
+    void shouldInitWalletAccountWhenMissing() {
+        when(paymentMapper.findWalletByUserId(1001L)).thenReturn(null, wallet(1001L, 0L, 0L));
+
+        InitWalletAccountResponse response = paymentService.initWalletAccount(1001L);
+
+        assertThat(response.userId()).isEqualTo(1001L);
+        assertThat(response.idempotent()).isFalse();
+        verify(paymentMapper).insertWalletAccount(1001L, 0L, 0L);
+    }
+
+    @Test
+    void shouldReturnIdempotentWhenWalletAccountAlreadyExists() {
+        when(paymentMapper.findWalletByUserId(1001L)).thenReturn(wallet(1001L, 0L, 0L));
+
+        InitWalletAccountResponse response = paymentService.initWalletAccount(1001L);
+
+        assertThat(response.userId()).isEqualTo(1001L);
+        assertThat(response.idempotent()).isTrue();
+        verify(paymentMapper, never()).insertWalletAccount(anyLong(), anyLong(), anyLong());
     }
 
     @Test
     void shouldSettleOrderPaymentSuccessfully() {
         when(paymentMapper.findTradeByOrderNoForUpdate("O2001"))
                 .thenReturn(trade("O2001", "P-2001", 1001L, 2001L, 150L, TradePaymentStatus.RESERVED.code()));
+        when(paymentMapper.findWalletByUserId(1001L)).thenReturn(wallet(1001L, 300L, 200L));
         when(paymentMapper.findWalletByUserIdForUpdate(1001L)).thenReturn(wallet(1001L, 300L, 200L));
+        when(paymentMapper.findWalletByUserId(2001L)).thenReturn(wallet(2001L, 50L, 0L));
         when(paymentMapper.findWalletByUserIdForUpdate(2001L)).thenReturn(wallet(2001L, 50L, 0L));
         when(paymentMapper.markTradeSettled(eq("O2001"), eq(TradePaymentStatus.RESERVED.code()),
                 eq(TradePaymentStatus.SETTLED.code()), any())).thenReturn(1);
@@ -250,6 +289,27 @@ class PaymentServiceTest {
         assertThat(response.status()).isEqualTo("SETTLED");
         verify(paymentMapper).updateWalletBalance(1001L, 300L, 50L);
         verify(paymentMapper).updateWalletBalance(2001L, 200L, 0L);
+    }
+
+    @Test
+    void shouldCreateMissingSellerWalletWithoutGapLockDuringSettle() {
+        when(paymentMapper.findTradeByOrderNoForUpdate("O2010"))
+                .thenReturn(trade("O2010", "P-2010", 1001L, 2001L, 150L, TradePaymentStatus.RESERVED.code()));
+        when(paymentMapper.findWalletByUserId(1001L)).thenReturn(wallet(1001L, 300L, 200L));
+        when(paymentMapper.findWalletByUserIdForUpdate(1001L)).thenReturn(wallet(1001L, 300L, 200L));
+        when(paymentMapper.findWalletByUserId(2001L)).thenReturn(null);
+        when(paymentMapper.findWalletByUserIdForUpdate(2001L)).thenReturn(wallet(2001L, 0L, 0L));
+        when(paymentMapper.markTradeSettled(eq("O2010"), eq(TradePaymentStatus.RESERVED.code()),
+                eq(TradePaymentStatus.SETTLED.code()), any())).thenReturn(1);
+
+        SettleOrderPaymentResponse response = paymentService.settleOrderPayment("O2010", "BUYER", 1001L);
+
+        assertThat(response.idempotent()).isFalse();
+        verify(paymentMapper).insertWalletAccount(2001L, 0L, 0L);
+        InOrder inOrder = inOrder(paymentMapper);
+        inOrder.verify(paymentMapper).findWalletByUserId(2001L);
+        inOrder.verify(paymentMapper).insertWalletAccount(2001L, 0L, 0L);
+        inOrder.verify(paymentMapper).findWalletByUserIdForUpdate(2001L);
     }
 
     @Test
@@ -277,6 +337,7 @@ class PaymentServiceTest {
     void shouldReleaseOrderPaymentSuccessfully() {
         when(paymentMapper.findTradeByOrderNoForUpdate("O3001"))
                 .thenReturn(trade("O3001", "P-3001", 1001L, 2001L, 120L, TradePaymentStatus.RESERVED.code()));
+        when(paymentMapper.findWalletByUserId(1001L)).thenReturn(wallet(1001L, 300L, 200L));
         when(paymentMapper.findWalletByUserIdForUpdate(1001L)).thenReturn(wallet(1001L, 300L, 200L));
         when(paymentMapper.markTradeReleased(eq("O3001"), eq(TradePaymentStatus.RESERVED.code()),
                 eq(TradePaymentStatus.RELEASED.code()), any())).thenReturn(1);

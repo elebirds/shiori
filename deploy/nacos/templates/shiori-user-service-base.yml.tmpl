@@ -52,3 +52,5 @@ user:
       bucket: ${MINIO_PRODUCT_BUCKET}
       path-style-access: true
       public-path-prefix: /api/user/media/avatar/
+  payment-client:
+    service-base-url: ${USER_PAYMENT_SERVICE_BASE_URL:http://shiori-payment-service}

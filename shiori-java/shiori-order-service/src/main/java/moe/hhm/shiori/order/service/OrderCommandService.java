@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicLong;
 import moe.hhm.shiori.common.error.CommonErrorCode;
 import moe.hhm.shiori.common.error.OrderErrorCode;
 import moe.hhm.shiori.common.exception.BizException;
@@ -78,6 +79,10 @@ public class OrderCommandService {
     static final String SOURCE_CHAT = "CHAT";
     static final String OP_CREATE = "CREATE";
     static final String OP_PAY = "PAY";
+    private static final String ORDER_NO_NODE_ID = String.format("%010d",
+            ThreadLocalRandom.current().nextLong(1_000_000_000L, 10_000_000_000L));
+    private static final AtomicLong ORDER_NO_SEQUENCE =
+            new AtomicLong(ThreadLocalRandom.current().nextLong(100_000L, 1_000_000L));
     private static final String OP_CANCEL = "CANCEL";
 
     private final OrderMapper orderMapper;
@@ -91,6 +96,7 @@ public class OrderCommandService {
     private final OrderMetrics orderMetrics;
     private final ObjectProvider<OrderCreateWorkflowService> orderCreateWorkflowServiceProvider;
     private final ObjectProvider<OrderPayWorkflowService> orderPayWorkflowServiceProvider;
+    private final ObjectProvider<OrderConfirmSettlementWorkflowService> orderConfirmSettlementWorkflowServiceProvider;
 
     public OrderCommandService(OrderMapper orderMapper,
                                ProductServiceClient productServiceClient,
@@ -102,7 +108,8 @@ public class OrderCommandService {
                                ObjectMapper objectMapper,
                                OrderMetrics orderMetrics,
                                ObjectProvider<OrderCreateWorkflowService> orderCreateWorkflowServiceProvider,
-                               ObjectProvider<OrderPayWorkflowService> orderPayWorkflowServiceProvider) {
+                               ObjectProvider<OrderPayWorkflowService> orderPayWorkflowServiceProvider,
+                               ObjectProvider<OrderConfirmSettlementWorkflowService> orderConfirmSettlementWorkflowServiceProvider) {
         this.orderMapper = orderMapper;
         this.productServiceClient = productServiceClient;
         this.userServiceClient = userServiceClient;
@@ -114,6 +121,7 @@ public class OrderCommandService {
         this.orderMetrics = orderMetrics;
         this.orderCreateWorkflowServiceProvider = orderCreateWorkflowServiceProvider;
         this.orderPayWorkflowServiceProvider = orderPayWorkflowServiceProvider;
+        this.orderConfirmSettlementWorkflowServiceProvider = orderConfirmSettlementWorkflowServiceProvider;
     }
 
     public CreateOrderResponse createOrder(Long buyerUserId,
@@ -544,7 +552,7 @@ public class OrderCommandService {
             throw new BizException(OrderErrorCode.ORDER_STATUS_INVALID, HttpStatus.CONFLICT);
         }
 
-        settleBalanceEscrowIfNeeded(orderNo, order, SOURCE_BUYER, buyerUserId);
+        enqueueBalanceEscrowSettlementIfNeeded(orderNo, order, buyerUserId);
         orderMetrics.incStateTransition(OrderStatus.DELIVERING.name(), OrderStatus.FINISHED.name(), SOURCE_BUYER);
         insertStatusAudit(orderNo, buyerUserId, SOURCE_BUYER, OrderStatus.DELIVERING, OrderStatus.FINISHED, normalizedReason);
         recordTradeStatusCardSentForChatOrder(order, "ORDER_FINISHED");
@@ -1013,6 +1021,18 @@ public class OrderCommandService {
         );
     }
 
+    private void enqueueBalanceEscrowSettlementIfNeeded(String orderNo,
+                                                        OrderRecord order,
+                                                        Long buyerUserId) {
+        if (order == null || !isBalanceEscrowOrder(orderNo)) {
+            return;
+        }
+        if (OrderRefundStatus.SUCCEEDED == OrderRefundStatus.fromCode(order.refundStatus())) {
+            return;
+        }
+        orderConfirmSettlementWorkflowServiceProvider.getObject().prepare(buyerUserId, orderNo);
+    }
+
     private void safeReleaseReservedPayment(String orderNo, Long userId, String reason) {
         try {
             ReleaseBalancePaymentSnapshot released = paymentServiceClient.releaseOrderPayment(
@@ -1240,7 +1260,7 @@ public class OrderCommandService {
     }
 
     String generateOrderNo() {
-        return "O" + System.currentTimeMillis() + ThreadLocalRandom.current().nextInt(1000, 10000);
+        return "O" + System.currentTimeMillis() + ORDER_NO_NODE_ID + ORDER_NO_SEQUENCE.getAndIncrement();
     }
 
     private record AggregatedOrderItem(Long productId, Long skuId, Integer quantity) {

@@ -28,6 +28,7 @@ import moe.hhm.shiori.payment.dto.admin.CreateCdkBatchResponse;
 import moe.hhm.shiori.payment.dto.admin.ReconcileIssuePageResponse;
 import moe.hhm.shiori.payment.dto.admin.ReconcileIssueResponse;
 import moe.hhm.shiori.payment.dto.internal.RefundOrderPaymentResponse;
+import moe.hhm.shiori.payment.dto.internal.InitWalletAccountResponse;
 import moe.hhm.shiori.payment.dto.internal.ReleaseOrderPaymentResponse;
 import moe.hhm.shiori.payment.dto.internal.ReserveOrderPaymentResponse;
 import moe.hhm.shiori.payment.dto.internal.SettleOrderPaymentResponse;
@@ -77,6 +78,23 @@ public class PaymentService {
         long available = wallet == null || wallet.availableBalanceCent() == null ? 0L : wallet.availableBalanceCent();
         long frozen = wallet == null || wallet.frozenBalanceCent() == null ? 0L : wallet.frozenBalanceCent();
         return new WalletBalanceResponse(available, frozen, available + frozen);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public InitWalletAccountResponse initWalletAccount(Long userId) {
+        if (userId == null || userId <= 0) {
+            throw new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST);
+        }
+        WalletAccountRecord existing = paymentMapper.findWalletByUserId(userId);
+        if (existing != null) {
+            return new InitWalletAccountResponse(userId, "READY", true);
+        }
+        try {
+            paymentMapper.insertWalletAccount(userId, 0L, 0L);
+            return new InitWalletAccountResponse(userId, "READY", false);
+        } catch (DuplicateKeyException ignored) {
+            return new InitWalletAccountResponse(userId, "READY", true);
+        }
     }
 
     public WalletLedgerPageResponse listWalletLedgerByUser(Long userId,
@@ -304,7 +322,7 @@ public class PaymentService {
         }
 
         WalletAccountRecord buyerWallet = ensureWalletForUpdate(buyerUserId);
-        TradePaymentRecord latest = paymentMapper.findTradeByOrderNoForUpdate(normalizedOrderNo);
+        TradePaymentRecord latest = paymentMapper.findTradeByOrderNo(normalizedOrderNo);
         if (latest != null) {
             TradePaymentStatus latestStatus = TradePaymentStatus.fromCode(latest.status());
             if (latestStatus == TradePaymentStatus.RESERVED) {
@@ -614,19 +632,18 @@ public class PaymentService {
     }
 
     private WalletAccountRecord ensureWalletForUpdate(Long userId) {
-        WalletAccountRecord wallet = paymentMapper.findWalletByUserIdForUpdate(userId);
-        if (wallet != null) {
-            return wallet;
+        WalletAccountRecord existing = paymentMapper.findWalletByUserId(userId);
+        if (existing == null) {
+            try {
+                paymentMapper.insertWalletAccount(userId, 0L, 0L);
+            } catch (DuplicateKeyException ignored) {
+            }
         }
-        try {
-            paymentMapper.insertWalletAccount(userId, 0L, 0L);
-        } catch (DuplicateKeyException ignored) {
-        }
-        WalletAccountRecord created = paymentMapper.findWalletByUserIdForUpdate(userId);
-        if (created == null) {
+        WalletAccountRecord locked = paymentMapper.findWalletByUserIdForUpdate(userId);
+        if (locked == null) {
             throw new IllegalStateException("创建钱包账户失败, userId=" + userId);
         }
-        return created;
+        return locked;
     }
 
     private void appendLedger(Long userId,

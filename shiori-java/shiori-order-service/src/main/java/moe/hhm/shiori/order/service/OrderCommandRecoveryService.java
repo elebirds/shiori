@@ -21,17 +21,20 @@ public class OrderCommandRecoveryService {
     private final OrderCommandMapper orderCommandMapper;
     private final OrderCreateWorkflowService orderCreateWorkflowService;
     private final OrderPayWorkflowService orderPayWorkflowService;
+    private final OrderConfirmSettlementWorkflowService orderConfirmSettlementWorkflowService;
     private final OrderProperties orderProperties;
     private final OrderMetrics orderMetrics;
 
     public OrderCommandRecoveryService(OrderCommandMapper orderCommandMapper,
                                        OrderCreateWorkflowService orderCreateWorkflowService,
                                        OrderPayWorkflowService orderPayWorkflowService,
+                                       OrderConfirmSettlementWorkflowService orderConfirmSettlementWorkflowService,
                                        OrderProperties orderProperties,
                                        OrderMetrics orderMetrics) {
         this.orderCommandMapper = orderCommandMapper;
         this.orderCreateWorkflowService = orderCreateWorkflowService;
         this.orderPayWorkflowService = orderPayWorkflowService;
+        this.orderConfirmSettlementWorkflowService = orderConfirmSettlementWorkflowService;
         this.orderProperties = orderProperties;
         this.orderMetrics = orderMetrics;
     }
@@ -72,6 +75,7 @@ public class OrderCommandRecoveryService {
         switch (commandType) {
             case CREATE_ORDER -> orderCreateWorkflowService.recover(command);
             case PAY_BALANCE_ORDER -> orderPayWorkflowService.recover(command);
+            case CONFIRM_RECEIPT_SETTLEMENT -> orderConfirmSettlementWorkflowService.recover(command);
             default -> log.warn("忽略未支持的命令类型, commandNo={}, commandType={}",
                     command.commandNo(), command.commandType());
         }

@@ -68,6 +68,7 @@ class OrderCommandRecoveryServiceTest {
                 orderCommandMapper,
                 createWorkflowService,
                 new OrderPayWorkflowService(orderCommandService, orderCommandMapper, new ObjectMapper(), DIRECT_TX),
+                new OrderConfirmSettlementWorkflowService(orderCommandService, orderCommandMapper, new ObjectMapper(), DIRECT_TX),
                 orderProperties,
                 orderMetrics
         );
@@ -114,6 +115,7 @@ class OrderCommandRecoveryServiceTest {
                 orderCommandMapper,
                 createWorkflowService,
                 new OrderPayWorkflowService(orderCommandService, orderCommandMapper, new ObjectMapper(), DIRECT_TX),
+                new OrderConfirmSettlementWorkflowService(orderCommandService, orderCommandMapper, new ObjectMapper(), DIRECT_TX),
                 orderProperties,
                 orderMetrics
         );
@@ -143,6 +145,7 @@ class OrderCommandRecoveryServiceTest {
                 orderCommandMapper,
                 new OrderCreateWorkflowService(orderCommandService, orderCommandMapper, new ObjectMapper(), DIRECT_TX),
                 payWorkflowService,
+                new OrderConfirmSettlementWorkflowService(orderCommandService, orderCommandMapper, new ObjectMapper(), DIRECT_TX),
                 orderProperties,
                 orderMetrics
         );
@@ -163,6 +166,75 @@ class OrderCommandRecoveryServiceTest {
     }
 
     @Test
+    void shouldCompleteRecoveredPayCommandWhenOrderAlreadyDeliveringWithSamePaymentNo() {
+        OrderProperties orderProperties = new OrderProperties();
+        OrderMetrics orderMetrics = new OrderMetrics(new SimpleMeterRegistry());
+        OrderPayWorkflowService payWorkflowService = new OrderPayWorkflowService(
+                orderCommandService,
+                orderCommandMapper,
+                new ObjectMapper(),
+                DIRECT_TX
+        );
+        OrderCommandRecoveryService recoveryService = new OrderCommandRecoveryService(
+                orderCommandMapper,
+                new OrderCreateWorkflowService(orderCommandService, orderCommandMapper, new ObjectMapper(), DIRECT_TX),
+                payWorkflowService,
+                new OrderConfirmSettlementWorkflowService(orderCommandService, orderCommandMapper, new ObjectMapper(), DIRECT_TX),
+                orderProperties,
+                orderMetrics
+        );
+        String orderNo = "O202603250205";
+        OrderCommandRecord command = payRemoteSucceededCommand(orderNo);
+        OrderRecord order = deliveringOrder(orderNo, "P-201");
+        when(orderCommandService.orderMetrics()).thenReturn(orderMetrics);
+        when(orderCommandService.orderMapper()).thenReturn(orderMapper);
+        when(orderCommandMapper.listRecoveryCandidates(any(), anyInt())).thenReturn(List.of(command));
+        when(orderMapper.findOrderByOrderNo(orderNo)).thenReturn(order);
+
+        recoveryService.recoverDueCommands();
+
+        verify(orderCommandMapper).markCompleted(3L, 0, "SUCCESS");
+        verify(orderMapper, never()).markOrderPaidByBalance(anyString(), anyLong(), anyString(), any(), anyInt(), anyInt());
+        verify(paymentServiceClient, never()).releaseOrderPayment(anyString(), anyString(), anyLong(), any());
+    }
+
+    @Test
+    void shouldUseFreshReserveSnapshotWhenRecoveringPreparedPayCommand() {
+        OrderProperties orderProperties = new OrderProperties();
+        OrderMetrics orderMetrics = new OrderMetrics(new SimpleMeterRegistry());
+        OrderPayWorkflowService payWorkflowService = new OrderPayWorkflowService(
+                orderCommandService,
+                orderCommandMapper,
+                new ObjectMapper(),
+                DIRECT_TX
+        );
+        OrderCommandRecoveryService recoveryService = new OrderCommandRecoveryService(
+                orderCommandMapper,
+                new OrderCreateWorkflowService(orderCommandService, orderCommandMapper, new ObjectMapper(), DIRECT_TX),
+                payWorkflowService,
+                new OrderConfirmSettlementWorkflowService(orderCommandService, orderCommandMapper, new ObjectMapper(), DIRECT_TX),
+                orderProperties,
+                orderMetrics
+        );
+        String orderNo = "O202603250206";
+        OrderCommandRecord command = payPreparedCommand(orderNo);
+        OrderRecord order = paidOrder(orderNo, "P-301");
+        when(orderCommandService.orderMetrics()).thenReturn(orderMetrics);
+        when(orderCommandService.orderMapper()).thenReturn(orderMapper);
+        when(orderCommandService.paymentServiceClient()).thenReturn(paymentServiceClient);
+        when(orderCommandMapper.listRecoveryCandidates(any(), anyInt())).thenReturn(List.of(command));
+        when(orderMapper.findOrderByOrderNo(orderNo)).thenReturn(order);
+        when(paymentServiceClient.reserveOrderPayment(orderNo, 1001L, 2001L, 2399L, 1001L, List.of("ROLE_USER")))
+                .thenReturn(new moe.hhm.shiori.order.client.ReserveBalancePaymentSnapshot(orderNo, "P-301", "RESERVED", false));
+
+        recoveryService.recoverDueCommands();
+
+        verify(orderCommandMapper).markRemoteSucceeded(eq(5L), anyString());
+        verify(orderCommandMapper).markCompleted(5L, 0, "SUCCESS");
+        verify(paymentServiceClient, never()).releaseOrderPayment(anyString(), anyString(), anyLong(), any());
+    }
+
+    @Test
     void shouldBackoffWhenCompensationFails() {
         OrderProperties orderProperties = new OrderProperties();
         OrderMetrics orderMetrics = new OrderMetrics(new SimpleMeterRegistry());
@@ -176,6 +248,7 @@ class OrderCommandRecoveryServiceTest {
                 orderCommandMapper,
                 createWorkflowService,
                 new OrderPayWorkflowService(orderCommandService, orderCommandMapper, new ObjectMapper(), DIRECT_TX),
+                new OrderConfirmSettlementWorkflowService(orderCommandService, orderCommandMapper, new ObjectMapper(), DIRECT_TX),
                 orderProperties,
                 orderMetrics
         );
@@ -256,6 +329,27 @@ class OrderCommandRecoveryServiceTest {
         );
     }
 
+    private OrderCommandRecord payPreparedCommand(String orderNo) {
+        return new OrderCommandRecord(
+                5L,
+                "CMD-PAY-PREPARED",
+                OrderCommandType.PAY_BALANCE_ORDER.name(),
+                1001L,
+                "idem-pay-prepared",
+                orderNo,
+                OrderCommandState.PREPARED.name(),
+                "{\"buyerUserId\":1001,\"idempotencyKey\":\"idem-pay-prepared\",\"orderNo\":\"" + orderNo + "\",\"sellerUserId\":2001,\"amountCent\":2399}",
+                "{\"paymentNo\":null,\"reserveStatus\":null}",
+                null,
+                null,
+                0,
+                null,
+                null,
+                LocalDateTime.now().minusSeconds(10),
+                LocalDateTime.now().minusSeconds(5)
+        );
+    }
+
     private OrderRecord unpaidOrder(String orderNo) {
         return new OrderRecord(
                 1L,
@@ -289,6 +383,80 @@ class OrderCommandRecoveryServiceTest {
                 null,
                 0,
                 LocalDateTime.now().minusMinutes(1),
+                LocalDateTime.now().minusMinutes(1)
+        );
+    }
+
+    private OrderRecord paidOrder(String orderNo, String paymentNo) {
+        return new OrderRecord(
+                1L,
+                orderNo,
+                1001L,
+                2001L,
+                2,
+                2399L,
+                1,
+                paymentNo,
+                null,
+                null,
+                null,
+                null,
+                null,
+                LocalDateTime.now().plusMinutes(15),
+                LocalDateTime.now().minusMinutes(2),
+                null,
+                null,
+                null,
+                null,
+                1,
+                1,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                LocalDateTime.now().minusMinutes(3),
+                LocalDateTime.now().minusMinutes(1)
+        );
+    }
+
+    private OrderRecord deliveringOrder(String orderNo, String paymentNo) {
+        return new OrderRecord(
+                1L,
+                orderNo,
+                1001L,
+                2001L,
+                4,
+                2399L,
+                1,
+                paymentNo,
+                null,
+                null,
+                null,
+                null,
+                null,
+                LocalDateTime.now().plusMinutes(15),
+                LocalDateTime.now().minusMinutes(3),
+                LocalDateTime.now().minusMinutes(2),
+                null,
+                null,
+                null,
+                1,
+                1,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                LocalDateTime.now().minusMinutes(4),
                 LocalDateTime.now().minusMinutes(1)
         );
     }
