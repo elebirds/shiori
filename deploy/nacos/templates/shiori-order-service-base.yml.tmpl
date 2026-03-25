@@ -36,6 +36,12 @@ order:
     relay-fixed-delay-ms: 3000
     relay-batch-size: 100
     max-backoff-seconds: 300
+  command:
+    enabled: true
+    recovery-fixed-delay-ms: ${ORDER_COMMAND_RECOVERY_FIXED_DELAY_MS:3000}
+    recovery-batch-size: ${ORDER_COMMAND_RECOVERY_BATCH_SIZE:100}
+    stale-prepared-seconds: ${ORDER_COMMAND_STALE_PREPARED_SECONDS:30}
+    max-backoff-seconds: ${ORDER_COMMAND_MAX_BACKOFF_SECONDS:300}
   mq:
     enabled: true
     event-exchange: shiori.order.event

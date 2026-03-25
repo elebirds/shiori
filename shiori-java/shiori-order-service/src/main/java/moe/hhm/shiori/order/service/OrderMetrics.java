@@ -19,6 +19,10 @@ public class OrderMetrics {
     private static final String ORDER_REVIEW_UPDATE_TOTAL = "shiori_order_review_update_total";
     private static final String ORDER_REVIEW_MODERATION_TOTAL = "shiori_order_review_moderation_total";
     private static final String ORDER_CREDIT_QUERY_TOTAL = "shiori_order_credit_query_total";
+    private static final String ORDER_COMMAND_TOTAL = "shiori_order_command_total";
+    private static final String ORDER_COMMAND_RECOVERY_TOTAL = "shiori_order_command_recovery_total";
+    private static final String ORDER_COMMAND_COMPENSATION_TOTAL = "shiori_order_command_compensation_total";
+    private static final String ORDER_COMMAND_PROCESSING_TOTAL = "shiori_order_command_processing_total";
 
     private final MeterRegistry meterRegistry;
 
@@ -125,6 +129,37 @@ public class OrderMetrics {
         meterRegistry.counter(
                 ORDER_CREDIT_QUERY_TOTAL,
                 "endpoint", sanitize(endpoint)
+        ).increment();
+    }
+
+    public void incOrderCommand(String type, String state) {
+        meterRegistry.counter(
+                ORDER_COMMAND_TOTAL,
+                "type", sanitize(type),
+                "state", sanitize(state)
+        ).increment();
+    }
+
+    public void incOrderCommandRecovery(String type, String result) {
+        meterRegistry.counter(
+                ORDER_COMMAND_RECOVERY_TOTAL,
+                "type", sanitize(type),
+                "result", sanitize(result)
+        ).increment();
+    }
+
+    public void incOrderCommandCompensation(String type, String result) {
+        meterRegistry.counter(
+                ORDER_COMMAND_COMPENSATION_TOTAL,
+                "type", sanitize(type),
+                "result", sanitize(result)
+        ).increment();
+    }
+
+    public void incOrderCommandProcessing(String type) {
+        meterRegistry.counter(
+                ORDER_COMMAND_PROCESSING_TOTAL,
+                "type", sanitize(type)
         ).increment();
     }
 
