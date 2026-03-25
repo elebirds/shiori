@@ -17,6 +17,7 @@ import moe.hhm.shiori.payment.repository.PaymentMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
@@ -29,6 +30,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -117,7 +119,8 @@ class PaymentServiceTest {
 
     @Test
     void shouldReserveOrderPaymentSuccessfully() {
-        when(paymentMapper.findTradeByOrderNoForUpdate("O1001")).thenReturn(null).thenReturn(null);
+        when(paymentMapper.findTradeByOrderNo("O1001")).thenReturn(null);
+        when(paymentMapper.findTradeByOrderNoForUpdate("O1001")).thenReturn(null);
         when(paymentMapper.findWalletByUserIdForUpdate(1001L)).thenReturn(wallet(1001L, 500L, 10L));
 
         ReserveOrderPaymentResponse response = paymentService.reserveOrderPayment("O1001", 1001L, 2001L, 300L);
@@ -131,7 +134,7 @@ class PaymentServiceTest {
 
     @Test
     void shouldRejectReserveWhenBalanceNotEnough() {
-        when(paymentMapper.findTradeByOrderNoForUpdate("O1002")).thenReturn(null).thenReturn(null);
+        when(paymentMapper.findTradeByOrderNo("O1002")).thenReturn(null);
         when(paymentMapper.findWalletByUserIdForUpdate(1001L)).thenReturn(wallet(1001L, 99L, 0L));
 
         assertThatThrownBy(() -> paymentService.reserveOrderPayment("O1002", 1001L, 2001L, 100L))
@@ -141,7 +144,7 @@ class PaymentServiceTest {
 
     @Test
     void shouldReturnIdempotentWhenTradeAlreadyReserved() {
-        when(paymentMapper.findTradeByOrderNoForUpdate("O1003"))
+        when(paymentMapper.findTradeByOrderNo("O1003"))
                 .thenReturn(trade("O1003", "P-1003", 1001L, 2001L, 100L, TradePaymentStatus.RESERVED.code()));
 
         ReserveOrderPaymentResponse response = paymentService.reserveOrderPayment("O1003", 1001L, 2001L, 100L);
@@ -153,7 +156,7 @@ class PaymentServiceTest {
 
     @Test
     void shouldRejectIdempotentReserveWhenRequestMismatch() {
-        when(paymentMapper.findTradeByOrderNoForUpdate("O1003"))
+        when(paymentMapper.findTradeByOrderNo("O1003"))
                 .thenReturn(trade("O1003", "P-1003", 1001L, 2001L, 100L, TradePaymentStatus.RESERVED.code()));
 
         assertThatThrownBy(() -> paymentService.reserveOrderPayment("O1003", 1001L, 2001L, 101L))
@@ -164,8 +167,9 @@ class PaymentServiceTest {
 
     @Test
     void shouldReturnIdempotentWhenTradeAppearsAfterWalletLocked() {
+        when(paymentMapper.findTradeByOrderNo("O1004")).thenReturn(null);
         when(paymentMapper.findTradeByOrderNoForUpdate("O1004"))
-                .thenReturn(null, trade("O1004", "P-1004", 1001L, 2001L, 100L, TradePaymentStatus.RESERVED.code()));
+                .thenReturn(trade("O1004", "P-1004", 1001L, 2001L, 100L, TradePaymentStatus.RESERVED.code()));
         when(paymentMapper.findWalletByUserIdForUpdate(1001L)).thenReturn(wallet(1001L, 500L, 0L));
 
         ReserveOrderPaymentResponse response = paymentService.reserveOrderPayment("O1004", 1001L, 2001L, 100L);
@@ -177,13 +181,13 @@ class PaymentServiceTest {
 
     @Test
     void shouldRejectReserveWhenDuplicateTradeStatusSettled() {
-        when(paymentMapper.findTradeByOrderNoForUpdate("O1005")).thenReturn(null).thenReturn(null);
+        when(paymentMapper.findTradeByOrderNo("O1005"))
+                .thenReturn(null, trade("O1005", "P-1005", 1001L, 2001L, 100L, TradePaymentStatus.SETTLED.code()));
+        when(paymentMapper.findTradeByOrderNoForUpdate("O1005")).thenReturn(null);
         when(paymentMapper.findWalletByUserIdForUpdate(1001L)).thenReturn(wallet(1001L, 500L, 0L));
         when(paymentMapper.insertTradePayment(eq("O1005"), anyString(), eq(1001L), eq(2001L), eq(100L),
                 eq(TradePaymentStatus.RESERVED.code()), any()))
                 .thenThrow(new DuplicateKeyException("duplicate"));
-        when(paymentMapper.findTradeByOrderNo("O1005"))
-                .thenReturn(trade("O1005", "P-1005", 1001L, 2001L, 100L, TradePaymentStatus.SETTLED.code()));
 
         assertThatThrownBy(() -> paymentService.reserveOrderPayment("O1005", 1001L, 2001L, 100L))
                 .isInstanceOf(BizException.class)
@@ -192,17 +196,31 @@ class PaymentServiceTest {
 
     @Test
     void shouldRejectReserveWhenDuplicateTradeReservedButRequestMismatch() {
-        when(paymentMapper.findTradeByOrderNoForUpdate("O1006")).thenReturn(null).thenReturn(null);
+        when(paymentMapper.findTradeByOrderNo("O1006"))
+                .thenReturn(null, trade("O1006", "P-1006", 1001L, 2001L, 101L, TradePaymentStatus.RESERVED.code()));
+        when(paymentMapper.findTradeByOrderNoForUpdate("O1006")).thenReturn(null);
         when(paymentMapper.findWalletByUserIdForUpdate(1001L)).thenReturn(wallet(1001L, 500L, 0L));
         when(paymentMapper.insertTradePayment(eq("O1006"), anyString(), eq(1001L), eq(2001L), eq(100L),
                 eq(TradePaymentStatus.RESERVED.code()), any()))
                 .thenThrow(new DuplicateKeyException("duplicate"));
-        when(paymentMapper.findTradeByOrderNo("O1006"))
-                .thenReturn(trade("O1006", "P-1006", 1001L, 2001L, 101L, TradePaymentStatus.RESERVED.code()));
 
         assertThatThrownBy(() -> paymentService.reserveOrderPayment("O1006", 1001L, 2001L, 100L))
                 .isInstanceOf(BizException.class)
                 .matches(ex -> ((BizException) ex).getErrorCode().code() == 60003);
+    }
+
+    @Test
+    void shouldLockWalletBeforeLockingTradeGapDuringReserve() {
+        when(paymentMapper.findTradeByOrderNo("O1007")).thenReturn(null);
+        when(paymentMapper.findWalletByUserIdForUpdate(1001L)).thenReturn(wallet(1001L, 500L, 0L));
+        when(paymentMapper.findTradeByOrderNoForUpdate("O1007")).thenReturn(null);
+
+        paymentService.reserveOrderPayment("O1007", 1001L, 2001L, 100L);
+
+        InOrder inOrder = inOrder(paymentMapper);
+        inOrder.verify(paymentMapper).findTradeByOrderNo("O1007");
+        inOrder.verify(paymentMapper).findWalletByUserIdForUpdate(1001L);
+        inOrder.verify(paymentMapper).findTradeByOrderNoForUpdate("O1007");
     }
 
     @Test

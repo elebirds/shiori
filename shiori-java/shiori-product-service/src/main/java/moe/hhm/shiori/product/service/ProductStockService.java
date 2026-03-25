@@ -34,7 +34,7 @@ public class ProductStockService {
     }
 
     private StockOperateResponse operateStock(String bizNo, Long skuId, Integer quantity, StockOpType opType) {
-        SkuRecord sku = productMapper.findActiveSkuById(skuId);
+        SkuRecord sku = productMapper.findActiveSkuByIdForUpdate(skuId);
         if (sku == null) {
             throw new BizException(ProductErrorCode.SKU_NOT_FOUND, HttpStatus.NOT_FOUND);
         }

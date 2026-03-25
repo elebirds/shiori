@@ -292,7 +292,11 @@ public class PaymentService {
             throw new BizException(CommonErrorCode.INVALID_PARAM, HttpStatus.BAD_REQUEST);
         }
 
-        TradePaymentRecord existed = paymentMapper.findTradeByOrderNoForUpdate(orderNo.trim());
+        // Avoid taking the trade lock before the buyer wallet lock.
+        // The order service only calls reserve on UNPAID orders, while settle/release/refund
+        // are reached from later states, so same-order reserve vs. settle concurrency is
+        // blocked by the upstream order state machine.
+        TradePaymentRecord existed = paymentMapper.findTradeByOrderNo(orderNo.trim());
         if (existed != null) {
             TradePaymentStatus status = TradePaymentStatus.fromCode(existed.status());
             if (status == TradePaymentStatus.RESERVED) {

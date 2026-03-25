@@ -10,11 +10,13 @@ import moe.hhm.shiori.product.repository.ProductMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -29,7 +31,7 @@ class ProductStockServiceTest {
 
     @Test
     void shouldDeductStockSuccess() {
-        when(productMapper.findActiveSkuById(10L)).thenReturn(
+        when(productMapper.findActiveSkuByIdForUpdate(10L)).thenReturn(
                 new SkuRecord(10L, 1L, "S001", "标准版", "{}", 3900L, 10, 0)
         );
         when(productMapper.findStockTxnByBizNoAndType("BIZ-1", "DEDUCT")).thenReturn(null);
@@ -46,7 +48,7 @@ class ProductStockServiceTest {
 
     @Test
     void shouldRejectWhenDeductStockNotEnough() {
-        when(productMapper.findActiveSkuById(10L)).thenReturn(
+        when(productMapper.findActiveSkuByIdForUpdate(10L)).thenReturn(
                 new SkuRecord(10L, 1L, "S001", "标准版", "{}", 3900L, 1, 0)
         );
         when(productMapper.findStockTxnByBizNoAndType("BIZ-2", "DEDUCT")).thenReturn(null);
@@ -60,7 +62,7 @@ class ProductStockServiceTest {
 
     @Test
     void shouldReturnIdempotentWhenTxnAlreadySuccess() {
-        when(productMapper.findActiveSkuById(10L)).thenReturn(
+        when(productMapper.findActiveSkuByIdForUpdate(10L)).thenReturn(
                 new SkuRecord(10L, 1L, "S001", "标准版", "{}", 3900L, 10, 0)
         );
         when(productMapper.findStockTxnByBizNoAndType("BIZ-3", "DEDUCT")).thenReturn(
@@ -76,7 +78,7 @@ class ProductStockServiceTest {
 
     @Test
     void shouldReleaseStockSuccess() {
-        when(productMapper.findActiveSkuById(10L)).thenReturn(
+        when(productMapper.findActiveSkuByIdForUpdate(10L)).thenReturn(
                 new SkuRecord(10L, 1L, "S001", "标准版", "{}", 3900L, 10, 0)
         );
         when(productMapper.findStockTxnByBizNoAndType("BIZ-4", "RELEASE")).thenReturn(null);
@@ -88,5 +90,21 @@ class ProductStockServiceTest {
         assertThat(response.success()).isTrue();
         assertThat(response.currentStock()).isEqualTo(12);
         verify(productMapper).updateStockTxnSuccess("BIZ-4", "RELEASE", 1);
+    }
+
+    @Test
+    void shouldLockSkuBeforeTouchingStockTxn() {
+        SkuRecord sku = new SkuRecord(10L, 1L, "S001", "标准版", "{}", 3900L, 10, 0);
+        when(productMapper.findActiveSkuByIdForUpdate(10L)).thenReturn(sku);
+        when(productMapper.findStockTxnByBizNoAndType("BIZ-LOCK", "DEDUCT")).thenReturn(null);
+        when(productMapper.deductStockAtomic(10L, 2)).thenReturn(1);
+        when(productMapper.findStockBySkuId(10L)).thenReturn(8);
+
+        productStockService.deduct(new StockDeductRequest(10L, 2, "BIZ-LOCK"));
+
+        InOrder inOrder = inOrder(productMapper);
+        inOrder.verify(productMapper).findActiveSkuByIdForUpdate(10L);
+        inOrder.verify(productMapper).findStockTxnByBizNoAndType("BIZ-LOCK", "DEDUCT");
+        inOrder.verify(productMapper).insertStockTxn("BIZ-LOCK", 10L, "DEDUCT", 2, 0);
     }
 }

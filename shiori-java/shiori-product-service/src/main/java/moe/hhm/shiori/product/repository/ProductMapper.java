@@ -792,6 +792,26 @@ public interface ProductMapper {
             """)
     SkuRecord findActiveSkuById(@Param("skuId") Long skuId);
 
+    @Select("""
+            SELECT id,
+                   product_id AS productId,
+                   sku_no AS skuNo,
+                   display_name AS displayName,
+                   spec_items_json AS specItemsJson,
+                   spec_signature AS specSignature,
+                   sku_name AS skuName,
+                   spec_json AS specJson,
+                   price_cent AS priceCent,
+                   stock,
+                   is_deleted AS isDeleted
+            FROM p_sku
+            WHERE id = #{skuId}
+              AND is_deleted = 0
+            LIMIT 1
+            FOR UPDATE
+            """)
+    SkuRecord findActiveSkuByIdForUpdate(@Param("skuId") Long skuId);
+
     @Update("""
             UPDATE p_sku
             SET is_deleted = 1,
