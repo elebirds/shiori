@@ -90,6 +90,7 @@ spring:
 security:
   auth:
     whitelist:
+      - /actuator/**
       - /actuator/health/**
       - /v3/api-docs/**
       - /swagger-ui/**
@@ -219,6 +220,7 @@ security:
       - method: POST
         path-pattern: /api/v2/admin/orders/refunds/*/retry
         permission-code: order.refund.manage
+
       - method: POST
         path-pattern: /api/v2/product/products
         permission-code: product.create
@@ -249,6 +251,23 @@ security:
       - method: GET
         path-pattern: /api/v2/admin/permissions/**
         permission-code: admin.user.permission_override.manage
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
 
 server:
   port: 8080

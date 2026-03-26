@@ -8,17 +8,20 @@
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "30s",
   "time": {
     "from": "now-30m",
     "to": "now"
   },
+  "templating": {
+    "list": []
+  },
   "panels": [
     {
       "id": 1,
       "type": "timeseries",
-      "title": "HTTP QPS (Gateway/User/Product/Order)",
+      "title": "Order Create QPS",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -29,10 +32,16 @@
         "x": 0,
         "y": 0
       },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
       "targets": [
         {
-          "expr": "sum(rate(http_server_requests_seconds_count{job=~\"shiori-(gateway|user|product|order)-metrics\"}[1m])) by (job)",
-          "legendFormat": "{{job}}",
+          "expr": "sum(rate(shiori_order_transition_total{job=\"shiori-order-metrics\",from=\"NEW\",to=\"UNPAID\"}[1m]))",
+          "legendFormat": "create-qps",
           "refId": "A"
         }
       ]
@@ -40,7 +49,7 @@
     {
       "id": 2,
       "type": "timeseries",
-      "title": "HTTP p95 Latency (s)",
+      "title": "Stock Deduct p95 Latency",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -51,10 +60,16 @@
         "x": 12,
         "y": 0
       },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{job=~\"shiori-(gateway|user|product|order)-metrics\"}[5m])) by (job, le))",
-          "legendFormat": "{{job}}",
+          "expr": "histogram_quantile(0.95, sum(rate(shiori_product_stock_deduct_latency_seconds_bucket{job=\"shiori-product-metrics\",result=\"success\"}[5m])) by (le))",
+          "legendFormat": "stock-deduct-p95",
           "refId": "A"
         }
       ]
@@ -62,7 +77,7 @@
     {
       "id": 3,
       "type": "timeseries",
-      "title": "HTTP 5xx Ratio",
+      "title": "Kafka Consumer Lag",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -75,15 +90,14 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "percentunit",
-          "min": 0
+          "unit": "s"
         },
         "overrides": []
       },
       "targets": [
         {
-          "expr": "sum(rate(http_server_requests_seconds_count{job=~\"shiori-(gateway|user|product|order)-metrics\",status=~\"5..\"}[5m])) by (job) / clamp_min(sum(rate(http_server_requests_seconds_count{job=~\"shiori-(gateway|user|product|order)-metrics\"}[5m])) by (job), 1e-9)",
-          "legendFormat": "{{job}}",
+          "expr": "max(shiori_order_kafka_consumer_lag_seconds{job=\"shiori-order-metrics\"}) by (consumer)",
+          "legendFormat": "{{consumer}}",
           "refId": "A"
         }
       ]
@@ -91,7 +105,7 @@
     {
       "id": 4,
       "type": "timeseries",
-      "title": "Notify WS Connections",
+      "title": "Hikari Active Connections",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -104,8 +118,8 @@
       },
       "targets": [
         {
-          "expr": "shiori_notify_ws_connections",
-          "legendFormat": "connections",
+          "expr": "hikaricp_connections_active{job=~\"shiori-(user|product|order|payment)-metrics\"}",
+          "legendFormat": "{{job}}",
           "refId": "A"
         }
       ]
@@ -113,7 +127,7 @@
     {
       "id": 5,
       "type": "timeseries",
-      "title": "Notify WS Push Rate (/s)",
+      "title": "HTTP QPS",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -124,23 +138,24 @@
         "x": 0,
         "y": 16
       },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
       "targets": [
         {
-          "expr": "sum(rate(shiori_notify_ws_push_total{result=\"success\"}[5m]))",
-          "legendFormat": "success",
+          "expr": "sum(rate(http_server_requests_seconds_count{job=~\"shiori-(gateway|user|product|order|payment)-metrics\"}[1m])) by (job)",
+          "legendFormat": "{{job}}",
           "refId": "A"
-        },
-        {
-          "expr": "sum(rate(shiori_notify_ws_push_total{result!=\"success\"}[5m]))",
-          "legendFormat": "non_success",
-          "refId": "B"
         }
       ]
     },
     {
       "id": 6,
       "type": "timeseries",
-      "title": "Notify MQ Route Duration p95 (s)",
+      "title": "HTTP p95 Latency",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -151,10 +166,16 @@
         "x": 12,
         "y": 16
       },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(shiori_notify_mq_route_duration_seconds_bucket[5m])) by (le))",
-          "legendFormat": "notify-route-p95",
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{job=~\"shiori-(gateway|user|product|order|payment)-metrics\"}[5m])) by (job, le))",
+          "legendFormat": "{{job}}",
           "refId": "A"
         }
       ]
@@ -162,7 +183,7 @@
     {
       "id": 7,
       "type": "timeseries",
-      "title": "Order Outbox Relay (5m Increase)",
+      "title": "HTTP 5xx Ratio",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -173,10 +194,17 @@
         "x": 0,
         "y": 24
       },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0
+        },
+        "overrides": []
+      },
       "targets": [
         {
-          "expr": "sum(increase(shiori_order_outbox_relay_total[5m])) by (result, type)",
-          "legendFormat": "{{result}}/{{type}}",
+          "expr": "sum(rate(http_server_requests_seconds_count{job=~\"shiori-(gateway|user|product|order|payment)-metrics\",status=~\"5..\"}[5m])) by (job) / clamp_min(sum(rate(http_server_requests_seconds_count{job=~\"shiori-(gateway|user|product|order|payment)-metrics\"}[5m])) by (job), 1e-9)",
+          "legendFormat": "{{job}}",
           "refId": "A"
         }
       ]
@@ -184,7 +212,7 @@
     {
       "id": 8,
       "type": "timeseries",
-      "title": "Order Timeout Consumer (5m Increase)",
+      "title": "Order Command Processing",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -195,18 +223,21 @@
         "x": 12,
         "y": 24
       },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
       "targets": [
         {
-          "expr": "sum(increase(shiori_order_timeout_consume_total[5m])) by (result)",
-          "legendFormat": "{{result}}",
+          "expr": "sum(rate(shiori_order_command_processing_total{job=\"shiori-order-metrics\"}[5m])) by (type)",
+          "legendFormat": "{{type}}",
           "refId": "A"
         }
       ]
     }
   ],
-  "templating": {
-    "list": []
-  },
   "annotations": {
     "list": [
       {

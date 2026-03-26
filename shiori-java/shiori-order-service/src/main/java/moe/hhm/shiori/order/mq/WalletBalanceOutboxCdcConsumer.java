@@ -2,7 +2,9 @@ package moe.hhm.shiori.order.mq;
 
 import moe.hhm.shiori.order.event.EventEnvelope;
 import moe.hhm.shiori.order.event.WalletBalanceChangedPayload;
+import moe.hhm.shiori.order.service.OrderMetrics;
 import moe.hhm.shiori.order.service.OrderRefundService;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -20,11 +22,14 @@ public class WalletBalanceOutboxCdcConsumer {
     private static final Logger log = LoggerFactory.getLogger(WalletBalanceOutboxCdcConsumer.class);
 
     private final ObjectMapper objectMapper;
+    private final OrderMetrics orderMetrics;
     private final OrderRefundService orderRefundService;
 
     public WalletBalanceOutboxCdcConsumer(ObjectMapper objectMapper,
+                                          OrderMetrics orderMetrics,
                                           OrderRefundService orderRefundService) {
         this.objectMapper = objectMapper;
+        this.orderMetrics = orderMetrics;
         this.orderRefundService = orderRefundService;
     }
 
@@ -32,9 +37,14 @@ public class WalletBalanceOutboxCdcConsumer {
             topics = "${order.kafka.wallet-balance-outbox-topic:shiori.cdc.payment.outbox.raw}",
             groupId = "${order.kafka.wallet-balance-outbox-group-id:shiori-order-wallet-cdc}"
     )
-    public void onMessage(String message) {
+    public void onMessage(ConsumerRecord<String, String> record) {
+        String message = record == null ? null : record.value();
         if (!StringUtils.hasText(message)) {
             return;
+        }
+        if (record != null && record.timestamp() > 0) {
+            double lagSeconds = Math.max((System.currentTimeMillis() - record.timestamp()) / 1000.0d, 0.0d);
+            orderMetrics.recordKafkaConsumerLagSeconds("wallet_balance_outbox", lagSeconds);
         }
         JsonNode cdcRecord;
         try {

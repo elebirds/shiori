@@ -28,3 +28,20 @@ payment:
     cron: ${PAYMENT_RECONCILE_CRON:0 30 2 * * *}
     zone: ${PAYMENT_RECONCILE_ZONE:Asia/Shanghai}
     batch-size: ${PAYMENT_RECONCILE_BATCH_SIZE:500}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}

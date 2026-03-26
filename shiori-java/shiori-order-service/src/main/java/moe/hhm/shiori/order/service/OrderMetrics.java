@@ -1,6 +1,10 @@
 package moe.hhm.shiori.order.service;
 
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tags;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -22,8 +26,10 @@ public class OrderMetrics {
     private static final String ORDER_COMMAND_RECOVERY_TOTAL = "shiori_order_command_recovery_total";
     private static final String ORDER_COMMAND_COMPENSATION_TOTAL = "shiori_order_command_compensation_total";
     private static final String ORDER_COMMAND_PROCESSING_TOTAL = "shiori_order_command_processing_total";
+    private static final String KAFKA_CONSUMER_LAG_SECONDS = "shiori_order_kafka_consumer_lag_seconds";
 
     private final MeterRegistry meterRegistry;
+    private final Map<String, AtomicLong> kafkaConsumerLagGaugeValues = new ConcurrentHashMap<>();
 
     public OrderMetrics(MeterRegistry meterRegistry) {
         this.meterRegistry = meterRegistry;
@@ -153,6 +159,19 @@ public class OrderMetrics {
                 ORDER_COMMAND_PROCESSING_TOTAL,
                 "type", sanitize(type)
         ).increment();
+    }
+
+    public void recordKafkaConsumerLagSeconds(String consumer, double lagSeconds) {
+        AtomicLong gaugeValue = kafkaConsumerLagGaugeValues.computeIfAbsent(
+                sanitize(consumer),
+                key -> meterRegistry.gauge(
+                        KAFKA_CONSUMER_LAG_SECONDS,
+                        Tags.of("consumer", key),
+                        new AtomicLong(0L),
+                        value -> value.doubleValue() / 1000.0d
+                )
+        );
+        gaugeValue.set(Math.round(Math.max(lagSeconds, 0.0d) * 1000.0d));
     }
 
     private String sanitize(String value) {

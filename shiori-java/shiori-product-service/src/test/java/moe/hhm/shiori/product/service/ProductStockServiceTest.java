@@ -1,5 +1,7 @@
 package moe.hhm.shiori.product.service;
 
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import moe.hhm.shiori.common.exception.BizException;
 import moe.hhm.shiori.product.dto.StockDeductRequest;
 import moe.hhm.shiori.product.dto.StockOperateResponse;
@@ -9,8 +11,10 @@ import moe.hhm.shiori.product.model.StockTxnRecord;
 import moe.hhm.shiori.product.repository.ProductMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
 import org.mockito.InOrder;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -22,21 +26,19 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class ProductStockServiceTest {
 
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+
     @Mock
     private ProductMapper productMapper;
 
     @Mock
     private ProductDetailCacheService productDetailCacheService;
 
-    private ProductStockService productStockService;
+    @Spy
+    private ProductMetrics productMetrics = new ProductMetrics(meterRegistry);
 
-    @org.junit.jupiter.api.BeforeEach
-    void setUp() {
-        productStockService = new ProductStockService(
-                productMapper,
-                productDetailCacheService
-        );
-    }
+    @InjectMocks
+    private ProductStockService productStockService;
 
     @Test
     void shouldDeductStockSuccess() {
@@ -56,6 +58,11 @@ class ProductStockServiceTest {
         verify(productMapper).updateStockTxnSuccess("BIZ-1", "DEDUCT", 1);
         verify(productMapper).findProductIdBySkuId(10L);
         verify(productDetailCacheService).evictProductDetail(1L);
+        Timer timer = meterRegistry.find("shiori_product_stock_deduct_latency_seconds")
+                .tag("result", "success")
+                .timer();
+        assertThat(timer).isNotNull();
+        assertThat(timer.count()).isEqualTo(1L);
     }
 
     @Test
@@ -110,7 +117,6 @@ class ProductStockServiceTest {
         when(productMapper.findStockTxnByBizNoAndType("BIZ-LOCK", "DEDUCT")).thenReturn(null);
         when(productMapper.deductStockAtomic(10L, 2)).thenReturn(1);
         when(productMapper.findStockBySkuId(10L)).thenReturn(8);
-        when(productMapper.findProductIdBySkuId(10L)).thenReturn(1L);
 
         productStockService.deduct(new StockDeductRequest(10L, 2, "BIZ-LOCK"));
 
@@ -129,7 +135,6 @@ class ProductStockServiceTest {
         when(productMapper.findStockTxnByBizNoAndType("BIZ-FAST", "DEDUCT")).thenReturn(null);
         when(productMapper.deductStockAtomic(10L, 2)).thenReturn(1);
         when(productMapper.findStockBySkuId(10L)).thenReturn(8);
-        when(productMapper.findProductIdBySkuId(10L)).thenReturn(1L);
 
         productStockService.deduct(new StockDeductRequest(10L, 2, "BIZ-FAST"));
 

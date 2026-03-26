@@ -38,3 +38,20 @@ product:
   mq:
     event-exchange: ${PRODUCT_EVENT_EXCHANGE:shiori.product.event}
     product-published-routing-key: ${PRODUCT_PUBLISHED_ROUTING_KEY:product.published}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}

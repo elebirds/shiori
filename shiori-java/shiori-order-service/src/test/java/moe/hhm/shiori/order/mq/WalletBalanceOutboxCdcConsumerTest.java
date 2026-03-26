@@ -1,6 +1,13 @@
 package moe.hhm.shiori.order.mq;
 
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.util.Optional;
+import moe.hhm.shiori.order.service.OrderMetrics;
 import moe.hhm.shiori.order.service.OrderRefundService;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.record.TimestampType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -8,11 +15,14 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import tools.jackson.databind.ObjectMapper;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class WalletBalanceOutboxCdcConsumerTest {
+
+    private SimpleMeterRegistry meterRegistry;
 
     @Mock
     private OrderRefundService orderRefundService;
@@ -21,7 +31,12 @@ class WalletBalanceOutboxCdcConsumerTest {
 
     @BeforeEach
     void setUp() {
-        consumer = new WalletBalanceOutboxCdcConsumer(new ObjectMapper(), orderRefundService);
+        meterRegistry = new SimpleMeterRegistry();
+        consumer = new WalletBalanceOutboxCdcConsumer(
+                new ObjectMapper(),
+                new OrderMetrics(meterRegistry),
+                orderRefundService
+        );
     }
 
     @Test
@@ -40,9 +55,26 @@ class WalletBalanceOutboxCdcConsumerTest {
                 }
                 """;
 
-        consumer.onMessage(message);
+        consumer.onMessage(new ConsumerRecord<>(
+                "shiori.cdc.payment.outbox.raw",
+                0,
+                10L,
+                System.currentTimeMillis() - 2_000L,
+                TimestampType.CREATE_TIME,
+                0,
+                message.length(),
+                null,
+                message,
+                new RecordHeaders(),
+                Optional.empty()
+        ));
 
         verify(orderRefundService).retryPendingRefundsBySeller(2001L);
+        Gauge gauge = meterRegistry.find("shiori_order_kafka_consumer_lag_seconds")
+                .tag("consumer", "wallet_balance_outbox")
+                .gauge();
+        assertThat(gauge).isNotNull();
+        assertThat(gauge.value()).isBetween(1.0d, 10.0d);
     }
 
     @Test
@@ -61,7 +93,7 @@ class WalletBalanceOutboxCdcConsumerTest {
                 }
                 """;
 
-        consumer.onMessage(message);
+        consumer.onMessage(new ConsumerRecord<String, String>("shiori.cdc.payment.outbox.raw", 0, 11L, null, message));
 
         verifyNoInteractions(orderRefundService);
     }
@@ -82,7 +114,7 @@ class WalletBalanceOutboxCdcConsumerTest {
                 }
                 """;
 
-        consumer.onMessage(message);
+        consumer.onMessage(new ConsumerRecord<String, String>("shiori.cdc.payment.outbox.raw", 0, 12L, null, message));
 
         verifyNoInteractions(orderRefundService);
     }

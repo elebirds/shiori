@@ -60,3 +60,20 @@ order:
     order-created-routing-key: ${ORDER_CREATED_ROUTING_KEY:order.created}
     order-paid-routing-key: ${ORDER_PAID_ROUTING_KEY:order.paid}
     order-canceled-routing-key: ${ORDER_CANCELED_ROUTING_KEY:order.canceled}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}

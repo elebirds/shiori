@@ -1049,7 +1049,7 @@ sh sql/manual/grant_admin_role.sh <username>
 * `perf/k6-order-hotspot.js`：单 buyer / 单 seller / 单热点 SKU 的订单链路压测
 * `perf/k6-order-realistic.js`：多 buyer / 多 seller / 多商品分布的订单链路压测
 * `perf/k6-ws.js`：WebSocket 连接与推送压测
-* Prometheus 抓取 Spring Boot Actuator 与 notify 指标，Grafana 面板展示 p95、错误率、队列堆积与在线连接数
+* Prometheus 抓取 Spring Boot Actuator 与 notify 指标，Grafana 面板展示订单创建 QPS、库存扣减 p95、Kafka 消费 lag、连接池活跃连接数、HTTP p95 与错误率
 
 可观测性栈启动（容器）：
 
@@ -1062,6 +1062,12 @@ docker compose --profile app --profile obs up -d --build
 - Prometheus Targets: `http://localhost:9090/targets`
 - Grafana: `http://localhost:3002`
 - 默认 dashboard: `Shiori / Shiori Overview`
+- 关键业务指标：
+  - `shiori_order_transition_total{from="NEW",to="UNPAID"}`：订单创建 QPS
+  - `shiori_product_stock_deduct_latency_seconds{result="success"}`：库存扣减耗时分布
+  - `shiori_order_kafka_consumer_lag_seconds{consumer="wallet_balance_outbox"}`：订单服务 Kafka 消费 lag
+  - `hikaricp_connections_active`：JDBC 连接池活跃连接数
+- Spring Boot Prometheus endpoint：`/actuator/prometheus`
 
 默认 Grafana 账号（可在 `deploy/.env` 覆盖）：
 - 用户名：`GRAFANA_ADMIN_USER`（默认 `admin`）

@@ -8,6 +8,7 @@ import moe.hhm.shiori.product.dto.StockOperateResponse;
 import moe.hhm.shiori.product.dto.StockReleaseRequest;
 import moe.hhm.shiori.product.model.StockTxnRecord;
 import moe.hhm.shiori.product.repository.ProductMapper;
+import java.time.Duration;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -17,17 +18,34 @@ import org.springframework.transaction.annotation.Transactional;
 public class ProductStockService {
 
     private final ProductMapper productMapper;
+    private final ProductMetrics productMetrics;
     private final ProductDetailCacheService productDetailCacheService;
 
     public ProductStockService(ProductMapper productMapper,
+                               ProductMetrics productMetrics,
                                ProductDetailCacheService productDetailCacheService) {
         this.productMapper = productMapper;
+        this.productMetrics = productMetrics;
         this.productDetailCacheService = productDetailCacheService;
     }
 
     @Transactional(rollbackFor = Exception.class)
     public StockOperateResponse deduct(StockDeductRequest request) {
-        return operateStock(request.bizNo(), request.skuId(), request.quantity(), StockOpType.DEDUCT);
+        long startNanos = System.nanoTime();
+        String result = "unknown";
+        try {
+            StockOperateResponse response = operateStock(request.bizNo(), request.skuId(), request.quantity(), StockOpType.DEDUCT);
+            result = response.idempotent() ? "idempotent_success" : "success";
+            return response;
+        } catch (BizException ex) {
+            result = ProductErrorCode.STOCK_NOT_ENOUGH.equals(ex.getErrorCode()) ? "stock_not_enough" : "error";
+            throw ex;
+        } catch (RuntimeException ex) {
+            result = "error";
+            throw ex;
+        } finally {
+            productMetrics.recordStockDeductLatency(result, Duration.ofNanos(System.nanoTime() - startNanos));
+        }
     }
 
     @Transactional(rollbackFor = Exception.class)
