@@ -60,7 +60,7 @@ func (s *Server) handleWS(c *gin.Context) {
 	s.hub.Register(userID, client)
 	connections := s.hub.ConnectionCount()
 	metrics.SetWSConnections(connections)
-	s.logger.Info().
+	s.logger.Debug().
 		Str("userId", userID).
 		Str("lastEventId", lastEventID).
 		Int("connections", connections).
@@ -85,7 +85,7 @@ func (s *Server) handleWS(c *gin.Context) {
 		s.hub.Remove(userID, client)
 		connections := s.hub.ConnectionCount()
 		metrics.SetWSConnections(connections)
-		s.logger.Info().
+		s.logger.Debug().
 			Str("userId", userID).
 			Int("connections", connections).
 			Msg("WebSocket 连接已断开")
@@ -437,7 +437,7 @@ func (s *Server) replayForWS(userID, afterEventID string, client *ws.Client) {
 		delivered++
 	}
 
-	s.logger.Info().
+	s.logger.Debug().
 		Str("userId", userID).
 		Str("afterEventId", afterEventID).
 		Str("nextEventId", nextEventID).

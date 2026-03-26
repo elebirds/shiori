@@ -20,7 +20,6 @@ import moe.hhm.shiori.user.config.UserOutboxProperties;
 import moe.hhm.shiori.user.event.EventEnvelope;
 import moe.hhm.shiori.user.event.UserAuthzChangedPayload;
 import moe.hhm.shiori.user.outbox.model.UserOutboxEventEntity;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.lang.Nullable;
@@ -31,7 +30,6 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
 @Service
-@ConditionalOnBean(UserAuthzMapper.class)
 public class UserPermissionOverrideService {
 
     private static final String OUTBOX_AGGREGATE_TYPE_USER = "user";

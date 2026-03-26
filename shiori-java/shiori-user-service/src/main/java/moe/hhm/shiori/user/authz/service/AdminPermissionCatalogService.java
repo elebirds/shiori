@@ -4,11 +4,9 @@ import java.util.List;
 import moe.hhm.shiori.user.authz.dto.AdminPermissionCatalogItemResponse;
 import moe.hhm.shiori.user.authz.model.PermissionCatalogRecord;
 import moe.hhm.shiori.user.authz.repository.UserAuthzMapper;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Service;
 
 @Service
-@ConditionalOnBean(UserAuthzMapper.class)
 public class AdminPermissionCatalogService {
 
     private final UserAuthzMapper userAuthzMapper;
