@@ -12,6 +12,7 @@ const debugFailSample = __ENV.K6_DEBUG_FAIL_SAMPLE === '1';
 const debugFailLimit = Number(__ENV.K6_DEBUG_FAIL_LIMIT || 20);
 
 let failLogCount = 0;
+const perfUserPassword = 'PerfPwd123!';
 
 export const orderCreateDuration = new Trend('shiori_perf_order_create_duration_ms', true);
 export const orderPayDuration = new Trend('shiori_perf_order_pay_duration_ms', true);
@@ -156,7 +157,7 @@ export function ensureGatewayHealth() {
 
 export function registerAndLoginUser(usernamePrefix, nickname) {
   const username = uniqueUsername(usernamePrefix);
-  const password = uniqueText(`${usernamePrefix}_pwd`);
+  const password = perfUserPassword;
 
   const register = mustOk(
     apiRequest('POST', '/api/user/auth/register', '', {
