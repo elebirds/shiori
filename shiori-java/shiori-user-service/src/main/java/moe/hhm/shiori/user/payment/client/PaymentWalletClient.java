@@ -8,6 +8,7 @@ import java.util.UUID;
 import moe.hhm.shiori.common.api.Result;
 import moe.hhm.shiori.common.error.CommonErrorCode;
 import moe.hhm.shiori.common.exception.BizException;
+import moe.hhm.shiori.common.http.ServiceRequestUris;
 import moe.hhm.shiori.common.security.GatewaySignProperties;
 import moe.hhm.shiori.common.security.GatewaySignUtils;
 import moe.hhm.shiori.common.security.GatewaySignVerifyFilter;
@@ -38,17 +39,17 @@ public class PaymentWalletClient {
     private final GatewaySignProperties gatewaySignProperties;
     private final ObjectMapper objectMapper;
     private final String internalToken;
+    private final String serviceBaseUrl;
 
     public PaymentWalletClient(RestClient.Builder loadBalancedRestClientBuilder,
                                UserPaymentClientProperties userPaymentClientProperties,
                                GatewaySignProperties gatewaySignProperties,
                                ObjectMapper objectMapper) {
-        this.restClient = loadBalancedRestClientBuilder
-                .baseUrl(userPaymentClientProperties.getServiceBaseUrl())
-                .build();
+        this.restClient = loadBalancedRestClientBuilder.build();
         this.gatewaySignProperties = gatewaySignProperties;
         this.objectMapper = objectMapper;
         this.internalToken = userPaymentClientProperties.getInternalToken();
+        this.serviceBaseUrl = userPaymentClientProperties.getServiceBaseUrl();
     }
 
     public void initWalletAccount(Long userId) {
@@ -61,7 +62,7 @@ public class PaymentWalletClient {
         String path = "/api/payment/internal/wallets/" + userId + "/init";
         try {
             Result<InitWalletAccountSnapshot> result = restClient.post()
-                    .uri(path)
+                    .uri(ServiceRequestUris.resolve(serviceBaseUrl, path))
                     .headers(headers -> fillSignedHeaders(headers, "POST", path, null, userId))
                     .retrieve()
                     .body(INIT_WALLET_TYPE);

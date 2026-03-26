@@ -15,20 +15,20 @@ spring:
         server-addr: ${NACOS_ADDR:nacos:8848}
       username: ${NACOS_USERNAME}
       password: ${NACOS_PASSWORD}
-  rabbitmq:
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:127.0.0.1:9092}
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: latest
     listener:
-      simple:
-        default-requeue-rejected: false
+      missing-topics-fatal: false
 
 server:
   port: 8085
 
 social:
-  mq:
-    enabled: ${SOCIAL_MQ_ENABLED:true}
-    product-event-exchange: ${PRODUCT_EVENT_EXCHANGE:shiori.product.event}
-    product-published-routing-key: ${PRODUCT_PUBLISHED_ROUTING_KEY:product.published}
-    product-published-queue: ${SOCIAL_PRODUCT_PUBLISHED_QUEUE:q.social.product.published}
-    product-published-dlx-exchange: ${SOCIAL_PRODUCT_PUBLISHED_DLX_EXCHANGE:shiori.social.product.dlx}
-    product-published-dlq-routing-key: ${SOCIAL_PRODUCT_PUBLISHED_DLQ_ROUTING_KEY:product.published.dlq}
-    product-published-dlq-queue: ${SOCIAL_PRODUCT_PUBLISHED_DLQ_QUEUE:q.social.product.published.dlq}
+  kafka:
+    enabled: ${SOCIAL_KAFKA_ENABLED:true}
+    product-outbox-topic: ${SOCIAL_PRODUCT_OUTBOX_TOPIC:shiori.cdc.product.outbox.raw}
+    product-outbox-group-id: ${SOCIAL_PRODUCT_OUTBOX_GROUP_ID:shiori-social-product-cdc}

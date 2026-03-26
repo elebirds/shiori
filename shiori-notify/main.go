@@ -64,15 +64,13 @@ func run() error {
 		Str("nacosNamespace", nacosConn.Namespace).
 		Str("httpAddr", cfg.HTTPAddr).
 		Str("wsPath", cfg.WSPath).
-		Strs("rabbitmqExchanges", cfg.RabbitMQExchanges).
-		Str("rabbitmqExchange", cfg.RabbitMQExchange).
-		Str("rabbitmqQueue", cfg.RabbitMQQueue).
-		Strs("rabbitmqRoutingKeys", cfg.RabbitMQRoutingKeys).
 		Str("storeDriver", cfg.StoreDriver).
+		Bool("kafkaEnabled", cfg.KafkaEnabled).
+		Strs("kafkaTopics", cfg.KafkaTopics).
 		Bool("authEnabled", cfg.AuthEnabled).
 		Bool("chatEnabled", cfg.ChatEnabled).
-		Bool("chatMQEnabled", cfg.ChatMQEnabled).
-		Str("chatMQExchange", cfg.ChatMQExchange).
+		Bool("chatPubSubEnabled", cfg.ChatPubSubEnabled).
+		Str("chatPubSubChannel", cfg.ChatPubSubChannel).
 		Str("instanceID", cfg.InstanceID).
 		Msg("服务启动中")
 

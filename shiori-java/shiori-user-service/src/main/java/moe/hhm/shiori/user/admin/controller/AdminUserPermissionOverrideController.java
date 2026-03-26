@@ -4,10 +4,8 @@ import jakarta.validation.Valid;
 import java.util.List;
 import moe.hhm.shiori.user.authz.dto.AdminUserPermissionOverrideResponse;
 import moe.hhm.shiori.user.authz.dto.AdminUserPermissionOverrideUpsertRequest;
-import moe.hhm.shiori.user.authz.repository.UserAuthzMapper;
 import moe.hhm.shiori.user.authz.service.UserPermissionOverrideService;
 import moe.hhm.shiori.user.security.CurrentUserSupport;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -22,7 +20,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Validated
 @RestController
-@ConditionalOnBean(UserAuthzMapper.class)
 @RequestMapping("/api/v2/admin/users")
 public class AdminUserPermissionOverrideController {
 

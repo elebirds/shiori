@@ -5,7 +5,9 @@ import java.time.LocalDateTime;
 public record OutboxEventRecord(
         Long id,
         String eventId,
+        String aggregateType,
         String aggregateId,
+        String messageKey,
         String type,
         String payload,
         String exchangeName,

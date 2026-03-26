@@ -5,7 +5,6 @@ import moe.hhm.shiori.user.admin.model.AdminUserAuditRecord;
 import moe.hhm.shiori.user.admin.model.AdminRoleRecord;
 import moe.hhm.shiori.user.admin.model.AdminUserRecord;
 import moe.hhm.shiori.user.outbox.model.UserOutboxEventEntity;
-import moe.hhm.shiori.user.outbox.model.UserOutboxEventRecord;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Options;
@@ -312,7 +311,9 @@ public interface AdminUserMapper {
     @Insert("""
             INSERT INTO u_outbox_event (
                 event_id,
+                aggregate_type,
                 aggregate_id,
+                message_key,
                 type,
                 payload,
                 exchange_name,
@@ -325,7 +326,9 @@ public interface AdminUserMapper {
                 sent_at
             ) VALUES (
                 #{eventId},
+                #{aggregateType},
                 #{aggregateId},
+                #{messageKey},
                 #{type},
                 #{payload},
                 #{exchangeName},
@@ -340,51 +343,4 @@ public interface AdminUserMapper {
             """)
     @Options(useGeneratedKeys = true, keyProperty = "id", keyColumn = "id")
     int insertOutboxEvent(UserOutboxEventEntity outboxEventEntity);
-
-    @Select("""
-            SELECT id,
-                   event_id AS eventId,
-                   aggregate_id AS aggregateId,
-                   type,
-                   payload,
-                   exchange_name AS exchangeName,
-                   routing_key AS routingKey,
-                   status,
-                   retry_count AS retryCount,
-                   last_error AS lastError,
-                   next_retry_at AS nextRetryAt,
-                   created_at AS createdAt,
-                   sent_at AS sentAt
-            FROM u_outbox_event
-            WHERE status = 'PENDING'
-               OR (status = 'FAILED'
-                   AND (next_retry_at IS NULL OR next_retry_at <= CURRENT_TIMESTAMP(3)))
-            ORDER BY id ASC
-            LIMIT #{limit}
-            """)
-    List<UserOutboxEventRecord> listOutboxRelayCandidates(@Param("limit") int limit);
-
-    @Update("""
-            UPDATE u_outbox_event
-            SET status = 'SENT',
-                sent_at = CURRENT_TIMESTAMP(3),
-                last_error = NULL,
-                next_retry_at = NULL
-            WHERE id = #{id}
-              AND status IN ('PENDING', 'FAILED')
-            """)
-    int markOutboxSent(@Param("id") Long id);
-
-    @Update("""
-            UPDATE u_outbox_event
-            SET status = 'FAILED',
-                retry_count = #{retryCount},
-                last_error = #{lastError},
-                next_retry_at = #{nextRetryAt}
-            WHERE id = #{id}
-            """)
-    int markOutboxFailed(@Param("id") Long id,
-                         @Param("retryCount") int retryCount,
-                         @Param("lastError") String lastError,
-                         @Param("nextRetryAt") java.time.LocalDateTime nextRetryAt);
 }

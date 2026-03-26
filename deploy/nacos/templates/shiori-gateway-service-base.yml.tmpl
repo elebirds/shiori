@@ -28,11 +28,11 @@ security:
     order-create-per-second: ${GATEWAY_RATE_LIMIT_ORDER_CREATE_PER_SECOND:30}
     order-pay-per-second: ${GATEWAY_RATE_LIMIT_ORDER_PAY_PER_SECOND:50}
   authz:
-    user-service-base-url: http://shiori-user-service
+    user-service-base-url: ${SECURITY_AUTHZ_USER_SERVICE_BASE_URL:http://shiori-user-service}
     cache:
       redis:
         enabled: ${SECURITY_AUTHZ_CACHE_REDIS_ENABLED:true}
-        key-prefix: ${SECURITY_AUTHZ_CACHE_REDIS_KEY_PREFIX:authz:snapshot:}
+        key-prefix: "${SECURITY_AUTHZ_CACHE_REDIS_KEY_PREFIX:authz:snapshot:}"
         ttl-seconds: ${SECURITY_AUTHZ_CACHE_REDIS_TTL_SECONDS:30}
         stale-ttl-seconds: ${SECURITY_AUTHZ_CACHE_REDIS_STALE_TTL_SECONDS:300}
     event:

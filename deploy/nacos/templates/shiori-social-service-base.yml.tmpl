@@ -1,13 +1,8 @@
 spring:
   datasource:
     url: ${SOCIAL_DB_URL}
-  rabbitmq:
-    host: ${SOCIAL_RMQ_HOST}
-    port: ${SOCIAL_RMQ_PORT}
-    virtual-host: /
-    listener:
-      simple:
-        default-requeue-rejected: false
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:127.0.0.1:9092}
   data:
     redis:
       host: ${REDIS_HOST}
@@ -33,14 +28,10 @@ storage:
     presign-get-expire-seconds: 300
 
 social:
-  mq:
-    enabled: ${SOCIAL_MQ_ENABLED:true}
-    product-event-exchange: ${PRODUCT_EVENT_EXCHANGE:shiori.product.event}
-    product-published-routing-key: ${PRODUCT_PUBLISHED_ROUTING_KEY:product.published}
-    product-published-queue: ${SOCIAL_PRODUCT_PUBLISHED_QUEUE:q.social.product.published}
-    product-published-dlx-exchange: ${SOCIAL_PRODUCT_PUBLISHED_DLX_EXCHANGE:shiori.social.product.dlx}
-    product-published-dlq-routing-key: ${SOCIAL_PRODUCT_PUBLISHED_DLQ_ROUTING_KEY:product.published.dlq}
-    product-published-dlq-queue: ${SOCIAL_PRODUCT_PUBLISHED_DLQ_QUEUE:q.social.product.published.dlq}
+  kafka:
+    enabled: ${SOCIAL_KAFKA_ENABLED:true}
+    product-outbox-topic: ${SOCIAL_PRODUCT_OUTBOX_TOPIC:shiori.cdc.product.outbox.raw}
+    product-outbox-group-id: ${SOCIAL_PRODUCT_OUTBOX_GROUP_ID:shiori-social-product-cdc}
 
 management:
   endpoints:

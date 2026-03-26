@@ -52,6 +52,7 @@ import tools.jackson.databind.ObjectMapper;
 public class AdminUserService {
 
     private static final String ROLE_ADMIN = "ROLE_ADMIN";
+    private static final String OUTBOX_AGGREGATE_TYPE_USER = "user";
     private static final String EVENT_USER_STATUS_CHANGED = "UserStatusChanged";
     private static final String EVENT_USER_ROLE_CHANGED = "UserRoleChanged";
     private static final String EVENT_USER_PASSWORD_RESET = "UserPasswordReset";
@@ -518,7 +519,7 @@ public class AdminUserService {
     }
 
     private void appendOutbox(Long targetUserId, String type, Object payload, String routingKey) {
-        if (!userOutboxProperties.isEnabled() || !userMqProperties.isEnabled()) {
+        if (!userOutboxProperties.isEnabled()) {
             return;
         }
         if (!StringUtils.hasText(routingKey)) {
@@ -541,7 +542,9 @@ public class AdminUserService {
 
         UserOutboxEventEntity entity = new UserOutboxEventEntity();
         entity.setEventId(envelope.eventId());
+        entity.setAggregateType(OUTBOX_AGGREGATE_TYPE_USER);
         entity.setAggregateId(envelope.aggregateId());
+        entity.setMessageKey(envelope.aggregateId());
         entity.setType(envelope.type());
         entity.setPayload(envelopeJson);
         entity.setExchangeName(userMqProperties.getEventExchange());

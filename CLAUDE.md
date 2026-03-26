@@ -11,12 +11,12 @@ Goal: keep the codebase **consistent, secure, testable, and interview-ready**.
 **Shiori** is a Core/Edge polyglot microservices project:
 
 - **Core (Java / Spring Boot + Spring Cloud)**: gateway, user, product(stock), order(outbox, timeout cancel), admin.
-- **Edge (Go / Gin + WebSocket)**: notify service that consumes MQ events and pushes notifications to clients.
+- **Edge (Go / Gin + WebSocket)**: notify service that consumes Kafka CDC events, uses Redis Pub/Sub for multi-instance chat fanout, and pushes notifications to clients.
 
 **Key engineering principles:**
 - Inventory correctness relies on **DB atomic update**, not on distributed locks.
-- Cross-service consistency is **event-driven + eventual consistency** via **Transactional Outbox + Relay**.
-- Timeout cancellation uses **RabbitMQ TTL + DLX** and **re-checks order status** on consumption.
+- Cross-service consistency is **event-driven + eventual consistency** via **Transactional Outbox + Kafka CDC**.
+- Timeout cancellation uses **DB scheduled scan + status re-check**, not delayed MQ.
 - Messaging is **at-least-once**, therefore **idempotency** is mandatory.
 
 ---
@@ -50,7 +50,7 @@ Goal: keep the codebase **consistent, secure, testable, and interview-ready**.
 
 AI must not implement cross-service DB joins. All cross-service reads/writes must happen via:
 - synchronous API calls (Feign) **or**
-- asynchronous events (RabbitMQ).
+- asynchronous events (Kafka CDC / Redis PubSub where applicable).
 
 ### 2.2 Inventory Correctness (Hard Rule)
 Inventory decrement must use a DB-atomic pattern similar to:
@@ -66,7 +66,7 @@ WHERE sku_id = :skuId AND stock >= :qty;
 
 ### 2.3 Messaging Semantics (Hard Rule)
 
-* MQ delivery is **At-Least-Once**.
+* Messaging delivery is **At-Least-Once**.
 * Consumers must be **idempotent**:
 
   * each event includes `eventId` and `type`
@@ -77,13 +77,13 @@ WHERE sku_id = :skuId AND stock >= :qty;
 When core services publish domain events:
 
 * Write business data + outbox record in **one local DB transaction**.
-* Use a relay (scheduler/worker) to publish outbox events to RabbitMQ and mark them sent.
+* Publish outbox changes through Debezium + Kafka Connect into Kafka.
 * Outbox table must include at least: `id`, `event_id`, `aggregate_id`, `type`, `payload`, `status`, `retry_count`, `created_at`, `sent_at`.
 
-### 2.5 Timeout Cancellation via TTL + DLX
+### 2.5 Timeout Cancellation via DB Scan
 
-* Do **not** “cancel” already-published delayed messages.
-* On consuming `OrderTimeout` from DLQ:
+* Do **not** rely on delayed MQ for unpaid timeout cancellation.
+* On handling timed-out `OrderTimeout` semantics:
 
   * **re-check** current order status
   * if `PAID`, ignore (idempotent)

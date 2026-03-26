@@ -268,16 +268,16 @@ public interface OrderReviewMapper {
               AND visibility_status = #{visibilityStatus}
             </if>
             <if test="minOverallStar != null">
-              AND overall_star <![CDATA[ >= ]]> #{minOverallStar}
+              AND overall_star &gt;= #{minOverallStar}
             </if>
             <if test="maxOverallStar != null">
-              AND overall_star <![CDATA[ <= ]]> #{maxOverallStar}
+              AND overall_star &lt;= #{maxOverallStar}
             </if>
             <if test="createdFrom != null">
-              AND created_at <![CDATA[ >= ]]> #{createdFrom}
+              AND created_at &gt;= #{createdFrom}
             </if>
             <if test="createdTo != null">
-              AND created_at <![CDATA[ <= ]]> #{createdTo}
+              AND created_at &lt;= #{createdTo}
             </if>
             </script>
             """)
@@ -326,16 +326,16 @@ public interface OrderReviewMapper {
               AND visibility_status = #{visibilityStatus}
             </if>
             <if test="minOverallStar != null">
-              AND overall_star <![CDATA[ >= ]]> #{minOverallStar}
+              AND overall_star &gt;= #{minOverallStar}
             </if>
             <if test="maxOverallStar != null">
-              AND overall_star <![CDATA[ <= ]]> #{maxOverallStar}
+              AND overall_star &lt;= #{maxOverallStar}
             </if>
             <if test="createdFrom != null">
-              AND created_at <![CDATA[ >= ]]> #{createdFrom}
+              AND created_at &gt;= #{createdFrom}
             </if>
             <if test="createdTo != null">
-              AND created_at <![CDATA[ <= ]]> #{createdTo}
+              AND created_at &lt;= #{createdTo}
             </if>
             ORDER BY created_at DESC, id DESC
             LIMIT #{size} OFFSET #{offset}

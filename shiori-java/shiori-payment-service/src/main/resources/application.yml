@@ -23,15 +23,6 @@ payment:
   internal-api:
     token: ${ORDER_PAYMENT_INTERNAL_TOKEN:}
     require-token: ${PAYMENT_INTERNAL_API_REQUIRE_TOKEN:true}
-  outbox:
-    enabled: ${PAYMENT_OUTBOX_ENABLED:true}
-    relay-fixed-delay-ms: ${PAYMENT_OUTBOX_RELAY_FIXED_DELAY_MS:3000}
-    relay-batch-size: ${PAYMENT_OUTBOX_RELAY_BATCH_SIZE:100}
-    max-backoff-seconds: ${PAYMENT_OUTBOX_MAX_BACKOFF_SECONDS:300}
-  mq:
-    enabled: ${PAYMENT_MQ_ENABLED:true}
-    event-exchange: ${PAYMENT_EVENT_EXCHANGE:shiori.payment.event}
-    wallet-balance-changed-routing-key: ${PAYMENT_WALLET_BALANCE_CHANGED_ROUTING_KEY:wallet.balance.changed}
   reconcile:
     enabled: ${PAYMENT_RECONCILE_ENABLED:true}
     cron: ${PAYMENT_RECONCILE_CRON:0 30 2 * * *}

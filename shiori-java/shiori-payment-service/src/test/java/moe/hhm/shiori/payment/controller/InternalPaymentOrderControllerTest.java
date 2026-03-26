@@ -26,8 +26,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "security.gateway-sign.max-skew-seconds=300",
         "payment.internal-api.token=test-order-payment-internal-token-000000000001",
         "payment.internal-api.require-token=true",
-        "payment.outbox.enabled=false",
-        "payment.mq.enabled=false",
         "payment.reconcile.enabled=false"
 })
 @AutoConfigureMockMvc

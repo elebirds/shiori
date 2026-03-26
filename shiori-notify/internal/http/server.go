@@ -19,14 +19,14 @@ import (
 )
 
 type Server struct {
-	cfg        config.Config
-	hub        *ws.Hub
-	eventStore store.EventStore
-	auth       *notifyauth.JWTVerifier
-	chat       *chat.Service
-	chatMQ     chat.Broadcaster
-	logger     *zerolog.Logger
-	engine     *gin.Engine
+	cfg         config.Config
+	hub         *ws.Hub
+	eventStore  store.EventStore
+	auth        *notifyauth.JWTVerifier
+	chat        *chat.Service
+	broadcaster chat.Broadcaster
+	logger      *zerolog.Logger
+	engine      *gin.Engine
 }
 
 func NewServer(
@@ -59,7 +59,7 @@ func NewServer(
 
 func (s *Server) WithChat(chatService *chat.Service, broadcaster chat.Broadcaster) *Server {
 	s.chat = chatService
-	s.chatMQ = broadcaster
+	s.broadcaster = broadcaster
 	return s
 }
 

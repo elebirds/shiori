@@ -15,12 +15,28 @@ spring:
         server-addr: ${NACOS_ADDR:nacos:8848}
       username: ${NACOS_USERNAME}
       password: ${NACOS_PASSWORD}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:127.0.0.1:9092}
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: latest
+    listener:
+      missing-topics-fatal: false
 
 server:
   port: 8083
 
 order:
   timeout-minutes: ${ORDER_TIMEOUT_MINUTES:15}
+  timeout-scheduler:
+    enabled: ${ORDER_TIMEOUT_SCHEDULER_ENABLED:true}
+    fixed-delay-ms: ${ORDER_TIMEOUT_SCHEDULER_FIXED_DELAY_MS:3000}
+    batch-size: ${ORDER_TIMEOUT_SCHEDULER_BATCH_SIZE:100}
+  kafka:
+    enabled: ${ORDER_KAFKA_ENABLED:false}
+    wallet-balance-outbox-topic: ${ORDER_WALLET_BALANCE_OUTBOX_TOPIC:shiori.cdc.payment.outbox.raw}
+    wallet-balance-outbox-group-id: ${ORDER_WALLET_BALANCE_OUTBOX_GROUP_ID:shiori-order-wallet-cdc}
   review:
     window-days: ${ORDER_REVIEW_WINDOW_DAYS:15}
     edit-hours: ${ORDER_REVIEW_EDIT_HOURS:24}
@@ -34,28 +50,13 @@ order:
     internal-token: ${ORDER_PAYMENT_INTERNAL_TOKEN:}
   notify-client:
     service-base-url: ${ORDER_NOTIFY_SERVICE_BASE_URL:http://shiori-notify-service}
-  outbox:
-    enabled: ${ORDER_OUTBOX_ENABLED:true}
-    relay-fixed-delay-ms: ${ORDER_OUTBOX_RELAY_FIXED_DELAY_MS:3000}
-    relay-batch-size: ${ORDER_OUTBOX_RELAY_BATCH_SIZE:100}
-    max-backoff-seconds: ${ORDER_OUTBOX_MAX_BACKOFF_SECONDS:300}
   refund:
     review-sla-hours: ${ORDER_REFUND_REVIEW_SLA_HOURS:48}
     auto-approve-fixed-delay-ms: ${ORDER_REFUND_AUTO_APPROVE_FIXED_DELAY_MS:60000}
     auto-approve-batch-size: ${ORDER_REFUND_AUTO_APPROVE_BATCH_SIZE:100}
     retry-batch-size: ${ORDER_REFUND_RETRY_BATCH_SIZE:100}
   mq:
-    enabled: ${ORDER_MQ_ENABLED:true}
     event-exchange: ${ORDER_EVENT_EXCHANGE:shiori.order.event}
     order-created-routing-key: ${ORDER_CREATED_ROUTING_KEY:order.created}
     order-paid-routing-key: ${ORDER_PAID_ROUTING_KEY:order.paid}
     order-canceled-routing-key: ${ORDER_CANCELED_ROUTING_KEY:order.canceled}
-    delay-exchange: ${ORDER_DELAY_EXCHANGE:shiori.order.delay}
-    delay-routing-key: ${ORDER_DELAY_ROUTING_KEY:order.timeout}
-    timeout-dlx-exchange: ${ORDER_TIMEOUT_DLX_EXCHANGE:shiori.order.timeout.dlx}
-    timeout-delay-queue: ${ORDER_TIMEOUT_DELAY_QUEUE:q.order.timeout.delay}
-    timeout-consume-queue: ${ORDER_TIMEOUT_CONSUME_QUEUE:q.order.timeout.consume}
-    timeout-ttl-ms: ${ORDER_TIMEOUT_TTL_MS:900000}
-    payment-event-exchange: ${PAYMENT_EVENT_EXCHANGE:shiori.payment.event}
-    wallet-balance-changed-routing-key: ${PAYMENT_WALLET_BALANCE_CHANGED_ROUTING_KEY:wallet.balance.changed}
-    wallet-balance-changed-queue: ${ORDER_WALLET_BALANCE_CHANGED_QUEUE:q.order.wallet.balance.changed}

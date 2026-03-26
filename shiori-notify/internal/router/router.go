@@ -155,7 +155,7 @@ func (r *Router) routeToUsers(_ context.Context, env event.Envelope, targetUserI
 		if totalKicked > 0 {
 			metrics.AddNotifyWSKick(totalKicked)
 		}
-		r.logger.Info().
+		r.logger.Debug().
 			Str("eventId", env.EventID).
 			Str("type", env.Type).
 			Int("targets", len(targetUserIDs)).
@@ -207,7 +207,7 @@ func (r *Router) routeToUsers(_ context.Context, env event.Envelope, targetUserI
 		}
 	}
 
-	r.logger.Info().
+	r.logger.Debug().
 		Str("eventId", env.EventID).
 		Str("type", env.Type).
 		Int("targets", len(targetUserIDs)).

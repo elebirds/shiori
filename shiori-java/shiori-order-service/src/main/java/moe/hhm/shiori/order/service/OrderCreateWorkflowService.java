@@ -381,7 +381,6 @@ public class OrderCreateWorkflowService {
                         context.totalAmountCent(),
                         context.itemCount()
                 );
-                orderCommandService.appendOrderTimeoutOutbox(context.orderNo(), context.buyerUserId());
                 orderCommandService.orderMetrics().incStateTransition("NEW", "UNPAID", OrderCommandService.SOURCE_BUYER);
                 if (OrderCommandService.SOURCE_CHAT.equals(context.source()) && context.chatConversationId() != null) {
                     orderCommandService.orderMetrics().incChatToOrderSubmit(context.source());

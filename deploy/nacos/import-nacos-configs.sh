@@ -60,9 +60,19 @@ render_template() {
   awk '
   {
     line = $0
-    while (match(line, /\$\{[A-Za-z_][A-Za-z0-9_]*\}/)) {
-      var = substr(line, RSTART + 2, RLENGTH - 3)
+    while (match(line, /\$\{[A-Za-z_][A-Za-z0-9_]*(:[^}]*)?\}/)) {
+      expr = substr(line, RSTART + 2, RLENGTH - 3)
+      var = expr
+      fallback = ""
+      colon = index(expr, ":")
+      if (colon > 0) {
+        var = substr(expr, 1, colon - 1)
+        fallback = substr(expr, colon + 1)
+      }
       val = ENVIRON[var]
+      if (val == "" && fallback != "") {
+        val = fallback
+      }
       line = substr(line, 1, RSTART - 1) val substr(line, RSTART + RLENGTH)
     }
     print line

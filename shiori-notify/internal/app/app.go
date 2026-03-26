@@ -8,10 +8,10 @@ import (
 
 	notifyauth "github.com/hhm/shiori/shiori-notify/internal/auth"
 	"github.com/hhm/shiori/shiori-notify/internal/chat"
-	"github.com/hhm/shiori/shiori-notify/internal/chatmq"
+	"github.com/hhm/shiori/shiori-notify/internal/chatredis"
 	"github.com/hhm/shiori/shiori-notify/internal/config"
 	notifyhttp "github.com/hhm/shiori/shiori-notify/internal/http"
-	"github.com/hhm/shiori/shiori-notify/internal/mq"
+	"github.com/hhm/shiori/shiori-notify/internal/kafkaevent"
 	"github.com/hhm/shiori/shiori-notify/internal/router"
 	"github.com/hhm/shiori/shiori-notify/internal/store"
 	"github.com/hhm/shiori/shiori-notify/internal/ws"
@@ -21,9 +21,13 @@ import (
 type App struct {
 	logger   *zerolog.Logger
 	httpSrv  *notifyhttp.Server
-	consumer *mq.Consumer
-	chatSub  *chatmq.Consumer
+	consumer componentRunner
+	chatSub  *chatredis.Consumer
 	closeFns []func() error
+}
+
+type componentRunner interface {
+	Run(context.Context) error
 }
 
 func New(cfg config.Config, logger *zerolog.Logger) (*App, error) {
@@ -50,8 +54,8 @@ func New(cfg config.Config, logger *zerolog.Logger) (*App, error) {
 	hub := ws.NewHub()
 	var (
 		chatService    *chat.Service
-		chatPublisher  chat.Broadcaster
-		chatSubscriber *chatmq.Consumer
+		chatPublisher  *chatredis.Publisher
+		chatSubscriber *chatredis.Consumer
 	)
 	if cfg.ChatEnabled {
 		if strings.ToLower(strings.TrimSpace(cfg.StoreDriver)) != "mysql" {
@@ -79,27 +83,28 @@ func New(cfg config.Config, logger *zerolog.Logger) (*App, error) {
 			return nil, verifyErr
 		}
 		chatService = chat.NewService(chatRepo, ticketVerifier, cfg.ChatMaxLimit)
-		chatPublisher = chatmq.NewPublisher(
-			cfg.ChatMQEnabled,
-			cfg.RabbitMQAddr,
-			cfg.ChatMQExchange,
+		chatPublisher = chatredis.NewPublisher(
+			cfg.ChatPubSubEnabled,
+			cfg.RedisAddr,
+			cfg.ChatPubSubChannel,
 			cfg.InstanceID,
 			logger,
 		)
-		chatSubscriber = chatmq.NewConsumer(
-			cfg.ChatMQEnabled,
-			cfg.RabbitMQAddr,
-			cfg.ChatMQExchange,
+		chatSubscriber = chatredis.NewConsumer(
+			cfg.ChatPubSubEnabled,
+			cfg.RedisAddr,
+			cfg.ChatPubSubChannel,
 			cfg.InstanceID,
 			hub,
 			logger,
 		)
+		closeFns = append(closeFns, chatPublisher.Close, chatSubscriber.Close)
 	}
 
 	r := router.New(hub, eventStore, logger)
 	httpSrv := notifyhttp.NewServer(cfg, hub, eventStore, authVerifier, logger)
 	httpSrv.WithChat(chatService, chatPublisher)
-	consumer := mq.NewConsumer(cfg, r, logger)
+	consumer := kafkaevent.NewConsumer(kafkaevent.NewReaderFactory(cfg), r, logger)
 
 	return &App{
 		logger:   logger,

@@ -14,10 +14,9 @@ const (
 	defaultNacosAddr                 = "nacos:8848"
 	defaultNacosConfigGroup          = "SHIORI_DEV_DOCKER"
 	defaultHTTPAddr                  = ":8090"
-	defaultRabbitMQExchange          = "shiori.order.event"
-	defaultRabbitMQExchanges         = "shiori.order.event,shiori.user.event"
-	defaultRabbitMQQueue             = "notify.order.event"
-	defaultRabbitMQRouteKeys         = "order.created,order.paid,order.canceled,order.delivered,order.finished,user.status.changed,user.role.changed,user.password.reset,user.permission-override.changed,user.role-bindings.changed"
+	defaultKafkaBrokers              = "127.0.0.1:9092"
+	defaultKafkaTopics               = "shiori.cdc.order.outbox.raw,shiori.cdc.user.outbox.raw"
+	defaultKafkaGroupID              = "shiori-notify-cdc"
 	defaultMetricsEnabled            = true
 	defaultStoreMaxPerUser           = 1000
 	defaultReplayLimit               = 50
@@ -29,8 +28,8 @@ const (
 	defaultChatPageLimit             = 20
 	defaultChatMaxPageLimit          = 100
 	defaultChatTicketIssuer          = "shiori-chat-ticket"
-	defaultChatMQEnabled             = true
-	defaultChatMQExchange            = "shiori.chat.event"
+	defaultChatPubSubEnabled         = true
+	defaultChatPubSubChannel         = "shiori.chat.event"
 	defaultJWTIssuer                 = "shiori"
 	defaultGatewaySignMaxSkewSeconds = 300
 )
@@ -51,12 +50,11 @@ type NacosConnConfig struct {
 
 type Config struct {
 	HTTPAddr                  string
-	RabbitMQAddr              string
-	RabbitMQExchange          string
-	RabbitMQQueue             string
-	RabbitMQRoutingKey        string
-	RabbitMQExchanges         []string
-	RabbitMQRoutingKeys       []string
+	KafkaEnabled              bool
+	KafkaBrokers              []string
+	KafkaTopics               []string
+	KafkaGroupID              string
+	RedisAddr                 string
 	LogLevel                  zerolog.Level
 	WSWriteTimeout            time.Duration
 	WSPingInterval            time.Duration
@@ -79,8 +77,8 @@ type Config struct {
 	ChatMaxLimit              int
 	ChatTicketIssuer          string
 	ChatTicketPublicKey       string
-	ChatMQEnabled             bool
-	ChatMQExchange            string
+	ChatPubSubEnabled         bool
+	ChatPubSubChannel         string
 	InstanceID                string
 	GatewaySignSecret         string
 	GatewaySignMaxSkewSeconds int64
@@ -93,7 +91,8 @@ type NotifyNacosConfig struct {
 
 type notifySection struct {
 	HTTP     notifyHTTPSection     `yaml:"http"`
-	RabbitMQ notifyRabbitMQSection `yaml:"rabbitmq"`
+	Kafka    notifyKafkaSection    `yaml:"kafka"`
+	Redis    notifyRedisSection    `yaml:"redis"`
 	Log      notifyLogSection      `yaml:"log"`
 	WS       notifyWSSection       `yaml:"ws"`
 	Metrics  notifyMetricsSection  `yaml:"metrics"`
@@ -109,13 +108,15 @@ type notifyHTTPSection struct {
 	Addr string `yaml:"addr"`
 }
 
-type notifyRabbitMQSection struct {
-	Addr        string `yaml:"addr"`
-	Exchange    string `yaml:"exchange"`
-	Queue       string `yaml:"queue"`
-	RoutingKey  string `yaml:"routing-key"`
-	Exchanges   string `yaml:"exchanges"`
-	RoutingKeys string `yaml:"routing-keys"`
+type notifyKafkaSection struct {
+	Enabled *bool  `yaml:"enabled"`
+	Brokers string `yaml:"brokers"`
+	Topics  string `yaml:"topics"`
+	GroupID string `yaml:"group-id"`
+}
+
+type notifyRedisSection struct {
+	Addr string `yaml:"addr"`
 }
 
 type notifyLogSection struct {
@@ -155,13 +156,13 @@ type notifyMySQLSection struct {
 }
 
 type notifyChatSection struct {
-	Enabled              *bool  `yaml:"enabled"`
-	DefaultLimit         int    `yaml:"default-limit"`
-	MaxLimit             int    `yaml:"max-limit"`
-	TicketIssuer         string `yaml:"ticket-issuer"`
-	TicketPublicKey      string `yaml:"ticket-public-key-pem-base64"`
-	MQEnabled            *bool  `yaml:"mq-enabled"`
-	MQExchange           string `yaml:"mq-exchange"`
+	Enabled         *bool  `yaml:"enabled"`
+	DefaultLimit    int    `yaml:"default-limit"`
+	MaxLimit        int    `yaml:"max-limit"`
+	TicketIssuer    string `yaml:"ticket-issuer"`
+	TicketPublicKey string `yaml:"ticket-public-key-pem-base64"`
+	PubSubEnabled   *bool  `yaml:"pubsub-enabled"`
+	PubSubChannel   string `yaml:"pubsub-channel"`
 }
 
 type notifyInstanceSection struct {
@@ -207,22 +208,21 @@ func LoadNacosConnFromEnv() (NacosConnConfig, error) {
 }
 
 func (c NotifyNacosConfig) ToRuntimeConfig() (Config, error) {
-	exchanges := parseCSV(strings.TrimSpace(c.Notify.RabbitMQ.Exchanges))
-	if len(exchanges) == 0 {
-		exchanges = parseCSV(defaultRabbitMQExchanges)
+	kafkaBrokers := parseCSV(strings.TrimSpace(c.Notify.Kafka.Brokers))
+	if len(kafkaBrokers) == 0 {
+		kafkaBrokers = parseCSV(defaultKafkaBrokers)
 	}
-	routingKeys := parseCSV(strings.TrimSpace(c.Notify.RabbitMQ.RoutingKeys))
-	if len(routingKeys) == 0 {
-		routingKeys = parseCSV(defaultRabbitMQRouteKeys)
+	kafkaTopics := parseCSV(strings.TrimSpace(c.Notify.Kafka.Topics))
+	if len(kafkaTopics) == 0 {
+		kafkaTopics = parseCSV(defaultKafkaTopics)
 	}
 	cfg := Config{
 		HTTPAddr:                  stringOrDefault(c.Notify.HTTP.Addr, defaultHTTPAddr),
-		RabbitMQAddr:              strings.TrimSpace(c.Notify.RabbitMQ.Addr),
-		RabbitMQExchange:          stringOrDefault(c.Notify.RabbitMQ.Exchange, firstOrDefault(exchanges, defaultRabbitMQExchange)),
-		RabbitMQQueue:             stringOrDefault(c.Notify.RabbitMQ.Queue, defaultRabbitMQQueue),
-		RabbitMQRoutingKey:        stringOrDefault(c.Notify.RabbitMQ.RoutingKey, firstOrDefault(routingKeys, "")),
-		RabbitMQExchanges:         exchanges,
-		RabbitMQRoutingKeys:       routingKeys,
+		KafkaEnabled:              boolOrDefault(c.Notify.Kafka.Enabled, true),
+		KafkaBrokers:              kafkaBrokers,
+		KafkaTopics:               kafkaTopics,
+		KafkaGroupID:              stringOrDefault(c.Notify.Kafka.GroupID, defaultKafkaGroupID),
+		RedisAddr:                 strings.TrimSpace(c.Notify.Redis.Addr),
 		LogLevel:                  parseLogLevel(stringOrDefault(c.Notify.Log.Level, "info")),
 		WSWriteTimeout:            parseDurationOrDefaultValue(c.Notify.WS.WriteTimeout, defaultWSWriteTimeout),
 		WSPingInterval:            parseDurationOrDefaultValue(c.Notify.WS.PingInterval, defaultWSPingInterval),
@@ -245,8 +245,8 @@ func (c NotifyNacosConfig) ToRuntimeConfig() (Config, error) {
 		ChatMaxLimit:              intOrDefault(c.Notify.Chat.MaxLimit, defaultChatMaxPageLimit),
 		ChatTicketIssuer:          stringOrDefault(c.Notify.Chat.TicketIssuer, defaultChatTicketIssuer),
 		ChatTicketPublicKey:       strings.TrimSpace(c.Notify.Chat.TicketPublicKey),
-		ChatMQEnabled:             boolOrDefault(c.Notify.Chat.MQEnabled, defaultChatMQEnabled),
-		ChatMQExchange:            stringOrDefault(c.Notify.Chat.MQExchange, defaultChatMQExchange),
+		ChatPubSubEnabled:         boolOrDefault(c.Notify.Chat.PubSubEnabled, defaultChatPubSubEnabled),
+		ChatPubSubChannel:         stringOrDefault(c.Notify.Chat.PubSubChannel, defaultChatPubSubChannel),
 		InstanceID:                strings.TrimSpace(c.Notify.Instance.ID),
 		GatewaySignSecret:         strings.TrimSpace(c.Security.GatewaySign.InternalSecret),
 		GatewaySignMaxSkewSeconds: int64OrDefault(c.Security.GatewaySign.MaxSkewSeconds, defaultGatewaySignMaxSkewSeconds),
@@ -264,17 +264,20 @@ func validateRuntimeConfig(cfg Config) error {
 	if strings.TrimSpace(cfg.HTTPAddr) == "" {
 		return fmt.Errorf("notify.http.addr is required")
 	}
-	if strings.TrimSpace(cfg.RabbitMQAddr) == "" {
-		return fmt.Errorf("notify.rabbitmq.addr is required")
+	if !cfg.KafkaEnabled {
+		return fmt.Errorf("notify.kafka.enabled must be true")
 	}
-	if len(cfg.RabbitMQExchanges) == 0 {
-		return fmt.Errorf("notify.rabbitmq.exchanges is required")
+	if len(cfg.KafkaBrokers) == 0 {
+		return fmt.Errorf("notify.kafka.brokers is required when kafka enabled")
 	}
-	if len(cfg.RabbitMQRoutingKeys) == 0 {
-		return fmt.Errorf("notify.rabbitmq.routing-keys is required")
+	if len(cfg.KafkaTopics) == 0 {
+		return fmt.Errorf("notify.kafka.topics is required when kafka enabled")
 	}
-	if strings.TrimSpace(cfg.RabbitMQQueue) == "" {
-		return fmt.Errorf("notify.rabbitmq.queue is required")
+	if strings.TrimSpace(cfg.KafkaGroupID) == "" {
+		return fmt.Errorf("notify.kafka.group-id is required when kafka enabled")
+	}
+	if cfg.ChatEnabled && cfg.ChatPubSubEnabled && strings.TrimSpace(cfg.RedisAddr) == "" {
+		return fmt.Errorf("notify.redis.addr is required when chat pubsub enabled")
 	}
 	if strings.TrimSpace(cfg.StoreDriver) == "" {
 		return fmt.Errorf("notify.store.driver is required")

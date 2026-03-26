@@ -3,7 +3,7 @@
 ## 1. 目标与验收
 本次目标是把以下链路跑通并可重复验证：
 
-1. 基础设施一键启动（MySQL/Redis/RabbitMQ/Nacos/MinIO）。
+1. 基础设施一键启动（MySQL/Redis/Kafka/Nacos/MinIO）。
 2. `nacos-config-init` 自动导入 `deploy/nacos/*.yml` 成功。
 3. Java 四服务 + Go notify 可本机启动并互通。
 4. `scripts/smoke/e2e_trade_notify.sh` 成功：

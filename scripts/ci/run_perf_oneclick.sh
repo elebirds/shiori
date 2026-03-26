@@ -26,6 +26,7 @@ K6_WS_VUS="${K6_WS_VUS:-2}"
 K6_WS_ITERATIONS="${K6_WS_ITERATIONS:-10}"
 K6_WS_TIMEOUT_MS="${K6_WS_TIMEOUT_MS:-10000}"
 K6_WS_LATENCY_P95_MS="${K6_WS_LATENCY_P95_MS:-3000}"
+K6_PHASE_COOLDOWN_SECONDS="${K6_PHASE_COOLDOWN_SECONDS:-15}"
 K6_DEBUG_FAIL_SAMPLE="${K6_DEBUG_FAIL_SAMPLE:-1}"
 K6_DEBUG_FAIL_LIMIT="${K6_DEBUG_FAIL_LIMIT:-200}"
 
@@ -252,6 +253,10 @@ main() {
 
   if [[ "${RUN_ORDER}" == "1" ]]; then
     run_k6_order "${order_codes}" || order_rc=$?
+  fi
+  if [[ "${RUN_ORDER}" == "1" && "${RUN_WS}" == "1" && "${K6_PHASE_COOLDOWN_SECONDS}" -gt 0 ]]; then
+    log "订单阶段结束，等待 ${K6_PHASE_COOLDOWN_SECONDS}s 让事件消费与推送链路排空"
+    sleep "${K6_PHASE_COOLDOWN_SECONDS}"
   fi
   if [[ "${RUN_WS}" == "1" ]]; then
     run_k6_ws "${ws_codes}" || ws_rc=$?

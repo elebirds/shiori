@@ -13,7 +13,6 @@ import moe.hhm.shiori.payment.model.ReconcileWalletMismatchRecord;
 import moe.hhm.shiori.payment.model.TradePaymentRecord;
 import moe.hhm.shiori.payment.model.TradeRefundRecord;
 import moe.hhm.shiori.payment.model.WalletAccountRecord;
-import moe.hhm.shiori.payment.model.WalletBalanceOutboxRecord;
 import moe.hhm.shiori.payment.model.WalletLedgerRecord;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
@@ -133,10 +132,10 @@ public interface PaymentMapper {
               AND change_type = #{changeType}
             </if>
             <if test="createdFrom != null">
-              AND created_at <![CDATA[ >= ]]> #{createdFrom}
+              AND created_at &gt;= #{createdFrom}
             </if>
             <if test="createdTo != null">
-              AND created_at <![CDATA[ <= ]]> #{createdTo}
+              AND created_at &lt;= #{createdTo}
             </if>
             </script>
             """)
@@ -172,10 +171,10 @@ public interface PaymentMapper {
               AND change_type = #{changeType}
             </if>
             <if test="createdFrom != null">
-              AND created_at <![CDATA[ >= ]]> #{createdFrom}
+              AND created_at &gt;= #{createdFrom}
             </if>
             <if test="createdTo != null">
-              AND created_at <![CDATA[ <= ]]> #{createdTo}
+              AND created_at &lt;= #{createdTo}
             </if>
             ORDER BY id DESC
             LIMIT #{size} OFFSET #{offset}
@@ -208,10 +207,10 @@ public interface PaymentMapper {
               AND change_type = #{changeType}
             </if>
             <if test="createdFrom != null">
-              AND created_at <![CDATA[ >= ]]> #{createdFrom}
+              AND created_at &gt;= #{createdFrom}
             </if>
             <if test="createdTo != null">
-              AND created_at <![CDATA[ <= ]]> #{createdTo}
+              AND created_at &lt;= #{createdTo}
             </if>
             </script>
             """)
@@ -250,10 +249,10 @@ public interface PaymentMapper {
               AND change_type = #{changeType}
             </if>
             <if test="createdFrom != null">
-              AND created_at <![CDATA[ >= ]]> #{createdFrom}
+              AND created_at &gt;= #{createdFrom}
             </if>
             <if test="createdTo != null">
-              AND created_at <![CDATA[ <= ]]> #{createdTo}
+              AND created_at &lt;= #{createdTo}
             </if>
             ORDER BY id DESC
             LIMIT #{size} OFFSET #{offset}
@@ -472,6 +471,9 @@ public interface PaymentMapper {
     @Insert("""
             INSERT INTO p_wallet_balance_outbox (
                 event_id,
+                aggregate_type,
+                aggregate_id,
+                message_key,
                 user_id,
                 biz_no,
                 payload,
@@ -483,6 +485,9 @@ public interface PaymentMapper {
                 sent_at
             ) VALUES (
                 #{eventId},
+                #{aggregateType},
+                #{aggregateId},
+                #{messageKey},
                 #{userId},
                 #{bizNo},
                 #{payload},
@@ -495,6 +500,9 @@ public interface PaymentMapper {
             )
             """)
     int insertWalletBalanceOutbox(@Param("eventId") String eventId,
+                                  @Param("aggregateType") String aggregateType,
+                                  @Param("aggregateId") String aggregateId,
+                                  @Param("messageKey") String messageKey,
                                   @Param("userId") Long userId,
                                   @Param("bizNo") String bizNo,
                                   @Param("payload") String payload,
@@ -503,42 +511,6 @@ public interface PaymentMapper {
                                   @Param("lastError") String lastError,
                                   @Param("nextRetryAt") LocalDateTime nextRetryAt,
                                   @Param("sentAt") LocalDateTime sentAt);
-
-    @Select("""
-            SELECT id,
-                   event_id AS eventId,
-                   payload,
-                   status,
-                   retry_count AS retryCount
-            FROM p_wallet_balance_outbox
-            WHERE (status = 'PENDING' AND (next_retry_at IS NULL OR next_retry_at <= CURRENT_TIMESTAMP(3)))
-               OR (status = 'FAILED' AND next_retry_at <= CURRENT_TIMESTAMP(3))
-            ORDER BY id ASC
-            LIMIT #{size}
-            """)
-    List<WalletBalanceOutboxRecord> listWalletBalanceOutboxRelayCandidates(@Param("size") int size);
-
-    @Update("""
-            UPDATE p_wallet_balance_outbox
-            SET status = 'SENT',
-                sent_at = CURRENT_TIMESTAMP(3),
-                updated_at = CURRENT_TIMESTAMP(3)
-            WHERE id = #{id}
-            """)
-    int markWalletBalanceOutboxSent(@Param("id") Long id);
-
-    @Update("""
-            UPDATE p_wallet_balance_outbox
-            SET status = 'FAILED',
-                retry_count = #{retryCount},
-                last_error = #{lastError},
-                next_retry_at = #{nextRetryAt}
-            WHERE id = #{id}
-            """)
-    int markWalletBalanceOutboxFailed(@Param("id") Long id,
-                                      @Param("retryCount") Integer retryCount,
-                                      @Param("lastError") String lastError,
-                                      @Param("nextRetryAt") LocalDateTime nextRetryAt);
 
     @Insert("""
             INSERT INTO p_reconcile_issue (

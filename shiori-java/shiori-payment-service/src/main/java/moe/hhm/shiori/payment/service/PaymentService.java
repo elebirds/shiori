@@ -691,6 +691,9 @@ public class PaymentService {
             String body = objectMapper.writeValueAsString(envelope);
             paymentMapper.insertWalletBalanceOutbox(
                     eventId,
+                    "wallet",
+                    String.valueOf(userId),
+                    String.valueOf(userId),
                     userId,
                     payload.bizNo(),
                     body,

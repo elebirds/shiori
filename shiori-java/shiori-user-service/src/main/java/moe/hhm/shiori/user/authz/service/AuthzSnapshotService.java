@@ -13,12 +13,10 @@ import moe.hhm.shiori.user.authz.model.UserAuthzVersionRecord;
 import moe.hhm.shiori.user.authz.model.UserPermissionOverrideRecord;
 import moe.hhm.shiori.user.authz.repository.UserAuthzMapper;
 import moe.hhm.shiori.user.config.UserAuthzProperties;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 @Service
-@ConditionalOnBean(UserAuthzMapper.class)
 public class AuthzSnapshotService {
 
     private final UserAuthzMapper userAuthzMapper;
