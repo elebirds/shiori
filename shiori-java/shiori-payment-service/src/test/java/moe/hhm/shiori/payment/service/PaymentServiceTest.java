@@ -133,6 +133,20 @@ class PaymentServiceTest {
         verify(paymentMapper).updateWalletBalance(1001L, 200L, 310L);
         verify(paymentMapper).insertTradePayment(eq("O1001"), anyString(), eq(1001L), eq(2001L), eq(300L),
                 eq(TradePaymentStatus.RESERVED.code()), any());
+        verify(paymentMapper).insertWalletBalanceOutbox(
+                anyString(),
+                eq("wallet"),
+                eq("1001"),
+                eq("1001"),
+                eq(1001L),
+                eq("O1001"),
+                anyString(),
+                eq("PENDING"),
+                eq(0),
+                eq(null),
+                eq(null),
+                eq(null)
+        );
     }
 
     @Test

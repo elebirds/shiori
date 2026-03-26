@@ -8,6 +8,40 @@
 
 项目目标：以可落地、可验证的方式实践分布式系统关键问题：**防超卖、最终一致性、超时关单、幂等、可观测性与压测资产**。
 
+## 🧭 Kafka CDC 迁移进度（进行中）
+
+1. 基础设施已就绪：
+   1. `deploy/docker-compose.yml` 已加入 `kafka`、`kafka-connect`、Debezium Connect 初始化。
+   2. `deploy/kafka/connect/*.json` 已为 `order/payment/product/user` outbox 准备 CDC connector。
+2. Outbox 元数据标准化已完成：
+   1. `order-service`：`o_outbox_event` 已补 `aggregate_type/message_key`
+   2. `payment-service`：`p_wallet_balance_outbox` 已补 `aggregate_type/aggregate_id/message_key`
+   3. `product-service`：`p_outbox_event` 已补 `aggregate_type/message_key`
+   4. `user-service`：`u_outbox_event` 已补 `aggregate_type/message_key`
+3. 第一条 Kafka 消费链已落地：
+   1. `social-service` 新增 `ProductOutboxCdcConsumer`
+   2. 读取 topic：`shiori.cdc.product.outbox.raw`
+   3. 开关：`SOCIAL_KAFKA_ENABLED=true`
+4. 第二条 Kafka 消费链已落地：
+   1. `order-service` 新增 `WalletBalanceOutboxCdcConsumer`
+   2. 读取 topic：`shiori.cdc.payment.outbox.raw`
+   3. 开关：`ORDER_KAFKA_ENABLED=true`
+   4. `order-service` 已不再消费 Rabbit 的 `WalletBalanceChanged` 事件
+   5. `OrderTimeout` 已改为 DB 定时扫描，不再依赖 Rabbit TTL/DLX
+5. 第三条 Kafka 消费链已落地：
+   1. `shiori-notify` 新增 `internal/kafkaevent.Consumer`
+   2. 读取 topics：`shiori.cdc.order.outbox.raw`、`shiori.cdc.user.outbox.raw`
+   3. 开关：`NOTIFY_KAFKA_ENABLED=true`
+   4. order/user 业务事件订阅已完成 Kafka CDC 切换
+6. CDC 消费注意事项：
+   1. Debezium 会输出 outbox 行后续的 `SENT/FAILED` 更新
+   2. 消费端必须只处理 `status=PENDING` 的记录
+   3. 当前已落地的 Kafka 消费器均已加入该过滤，避免重复消费
+7. 当前策略：
+   1. 已切换链路优先删除对应 Rabbit fallback，而不是长期保留双通道
+   2. 当前业务事件链路已收敛到 Kafka CDC
+   3. notify 多实例 chat 广播已切到 Redis Pub/Sub，仓库运行时消息基础设施收敛为 Kafka + Redis
+
 ## ✨ 核心架构与技术亮点
 
 ### 🚀 核心/边缘异构微服务 (Core & Edge Polyglot)
@@ -32,9 +66,9 @@
 
 通过检查 `affected_rows` 判断是否扣减成功，天然支持多实例并发扣减不超卖。
 
-* **事件驱动与最终一致性（Transactional Outbox + Relay）**
+* **事件驱动与最终一致性（Transactional Outbox + Kafka CDC）**
   订单服务在**同一数据库事务**中写入业务数据与 Outbox 事件（如 `OrderCreated / OrderPaid / OrderCanceled / OrderDelivered / OrderFinished`），避免“写库成功但发消息失败”。
-  通过 **Outbox Relay** 可靠投递到 MQ（可重试/可观测），实现最终一致性而不引入重型强事务框架。
+  通过 **Debezium + Kafka Connect** 订阅 Outbox 变更并投递到 Kafka，消费端按 `status=PENDING` 过滤处理，实现最终一致性而不引入重型强事务框架。
 
 * **At-Least-Once 投递语义下的幂等闭环**
   MQ 投递采用 at-least-once（允许重复），因此系统通过幂等设计消除重复副作用：
@@ -42,15 +76,16 @@
   * **HTTP 幂等**：下单/支付回调支持 `Idempotency-Key` 或业务唯一键（如 `order_no`、`payment_no`），重复请求不重复扣库存/不重复改状态
   * **消息幂等**：事件携带 `event_id`，消费端通过（DB 唯一键/去重表/Redis SETNX）保证重复消息不重复通知
 
-### ⏳ 超时关单（TTL + DLX，二次校验避免误关单）
+### ⏳ 超时关单（DB 扫描 + 幂等关单）
 
-* 下单后投递延迟事件 `OrderTimeout`（TTL=15min），到期进入 DLQ（死信队列）。
-* 订单服务消费 DLQ 消息时**二次校验订单状态**：
+* 下单时仅写入 `o_order.timeout_at`，不再额外发送 `OrderTimeout` 延迟消息。
+* `order-service` 内部定时任务按批扫描 `status=UNPAID and timeout_at<=now` 的订单号。
+* 调度器逐条调用 `handleTimeout(orderNo)`：
 
-  * 若已支付：直接忽略（幂等）
-  * 若未支付：关单 + 回滚库存 + 写入 `OrderCanceled` Outbox 事件
+  * 若已支付或已取消：直接忽略（幂等）
+  * 若仍未支付：关单 + 回滚库存 + 写入 `OrderCanceled` Outbox 事件
 
-> 注：RabbitMQ（TTL+DLX）模式通常不“取消已发送的延迟消息”。本项目采用到期消费时二次校验状态的方式，简单可靠且可解释。
+> 注：该方案把超时处理收敛回订单库自身，避免 Rabbit TTL/DLX 队列堆积与重复投递干扰；多实例下即便重复扫描，也由状态更新条件保证只会成功关单一次。
 
 ### 📦 现代化工程规范（交付友好 + 易演示）
 
@@ -70,7 +105,7 @@
 
 ## 🔄 核心订单流转与事件流 (State & Event Flow)
 
-本项目通过 RabbitMQ 将同步业务转化为异步事件驱动，核心链路如下：
+本项目通过事务内 Outbox、Kafka CDC 与必要的异步总线完成事件驱动，核心链路如下：
 
 ```text
 [用户下单] 
@@ -79,14 +114,14 @@
    │      │
    │      ├─▶ [Java 商品/库存服务] 原子扣减库存（成功/失败由 affected_rows 判断）
    │      │
-   │      └─▶ (异步投递) 发送延迟超时事件 OrderTimeout 至 MQ (TTL=15min, DLX)
+   │      └─▶ 持久化 timeout_at，等待定时扫描到期处理
    │
 [用户支付成功（v2 余额托管支付）]
    │
    ├─▶ [Java 订单服务] 幂等校验(Idempotency-Key)
    │      ├─▶ 调用 [Java 支付服务] 余额托管（available -> frozen）
    │      ├─▶ 更新订单状态 (Status: PAID)
-   │      └─▶ 写入 Outbox(OrderPaid) → Relay 投递 MQ
+   │      └─▶ 写入 Outbox(OrderPaid) → Debezium CDC → Kafka
    │
 [Go 消息推送边缘服务] 
    │
@@ -94,7 +129,7 @@
 
 [15 分钟到期未支付]
    │
-   └─▶ [Java 订单服务] 消费 DLQ `OrderTimeout` -> 二次校验订单状态
+   └─▶ [Java 订单服务] 定时扫描到期 UNPAID 订单 -> 二次校验订单状态
           ├─ 已支付：忽略（幂等）
           └─ 未支付：关单 + 回滚库存 + Outbox(OrderCanceled) → MQ
 ```
@@ -344,12 +379,12 @@
 ### 边缘微服务 (Edge Services)
 
 * **语言 & 框架:** Go 1.26 / Gin / Gorilla WebSocket
-* **通信机制:** 基于 RabbitMQ 订阅消费 Java 侧投递的业务事件
+* **通信机制:** 订单/用户/商品相关业务事件走 Kafka CDC；notify 多实例 chat 广播走 Redis Pub/Sub
 
 ### 中间件与基础设施 (Infrastructure)
 
 * **缓存:** Redis（缓存/防刷/短期幂等/热点保护）
-* **消息队列:** RabbitMQ（事件总线、TTL+DLX、DLQ）
+* **消息总线:** Kafka / Kafka Connect / Debezium（业务事件 CDC 总线）
 * **可观测性:** Prometheus + Grafana（指标可视化）
 * **压测资产:** k6（脚本化压测，纳入仓库便于复现）
 * **容器化部署:** Docker & Docker Compose (一键拉起整套基建)
@@ -376,14 +411,15 @@ shiori/
 │   ├── shiori-order-service/         # 订单交易服务（Outbox + 超时关单）
 │   └── shiori-payment-service/       # 支付服务（余额托管 + CDK）
 ├── shiori-notify/                    # 🐹 [推送边缘服务] 请使用 GoLand 打开
-│   └── main.go                       # 监听 MQ 并通过 WebSocket 推送前端
+│   └── main.go                       # 监听 Kafka CDC / Redis PubSub 并通过 WebSocket 推送前端
 ├── shiori-app/                       # 🌐 [用户端 Web] 请使用 VSCode / WebStorm 打开
 ├── shiori-admin-web/                 # 💻 [管理端后台 Web] 请使用 WebStorm / VSCode 打开
 ├── deploy/                           # 🐳 [基础设施部署]
-│   ├── docker-compose.yml            # MySQL, Redis, RabbitMQ, (可选 Nacos/Prom/Grafana)
+│   ├── docker-compose.yml            # MySQL, Redis, Kafka, Kafka Connect, (可选 Nacos/Prom/Grafana)
+│   ├── kafka/                        # Kafka Connect connector 模板与注册脚本
 │   ├── nacos/                        # Nacos 配置导入脚本与模板（templates/*.yml.tmpl）
+│   ├── mysql/                        # MySQL 额外配置（binlog / CDC）
 │   ├── observability/                # Prometheus/Grafana 配置与预置 dashboard
-│   ├── rabbitmq/                     # RabbitMQ 最小权限账号初始化脚本
 │   └── sql/                          # MySQL 初始化脚本（创建多库）与后续运维 SQL
 └── perf/                             # ⚡ [压测资产] k6 脚本与结果记录
     ├── k6-order-hotspot.js
@@ -419,7 +455,7 @@ cp .env.example .env
 ```
 
 说明：
-- 默认 `docker compose up -d` 只启动基础设施（MySQL/Redis/RabbitMQ/Nacos/MinIO + 初始化容器）。
+- 默认 `docker compose up -d` 只启动基础设施（MySQL/Redis/Kafka/Kafka Connect/Nacos/MinIO + 初始化容器）。
 - 如需一键启动“基础设施 + Java/Go 服务”，使用：
 
 ```bash
@@ -502,9 +538,13 @@ cd deploy
 docker compose run --rm nacos-config-init
 ```
 
-RabbitMQ 与 MinIO 也会通过一次性容器完成最小权限初始化：
-- `rabbitmq-auth-init`：创建 `order-service`、`payment-service`、`user-service` 与 `notify-service` 独立账号并写入受限权限。
+Kafka Connect 与 MinIO 也会通过一次性容器完成基础初始化：
+- `kafka-connect-init`：向 Kafka Connect 注册 order/payment/product/user 四个 Debezium CDC connector。
 - `minio-init`：创建商品桶、商品服务专用访问账号与桶级读写策略。
+
+Kafka / CDC 相关默认入口：
+- Kafka Bootstrap: `127.0.0.1:${KAFKA_HOST_PORT:-9092}`
+- Kafka Connect REST: `http://127.0.0.1:${KAFKA_CONNECT_HOST_PORT:-18083}`
 
 并启动 MinIO（商品图片对象存储）：
 - S3 API: `http://localhost:9000`
@@ -526,19 +566,11 @@ RabbitMQ 与 MinIO 也会通过一次性容器完成最小权限初始化：
 | `PRODUCT_DB_PASSWORD` | 是 | `.env` | CI Secret | Secret 管理系统 | `shiori-product-service-secret.yml` |
 | `ORDER_DB_USERNAME` | 否（建议最小权限） | `.env` | CI Secret/变量 | Secret 管理系统 | `shiori-order-service-secret.yml` |
 | `ORDER_DB_PASSWORD` | 是 | `.env` | CI Secret | Secret 管理系统 | `shiori-order-service-secret.yml` |
-| `ORDER_RMQ_USERNAME` | 否（建议最小权限） | `.env` | CI Secret/变量 | Secret 管理系统 | `shiori-order-service-secret.yml` |
-| `ORDER_RMQ_PASSWORD` | 是 | `.env` | CI Secret | Secret 管理系统 | `shiori-order-service-secret.yml` |
-| `PAYMENT_RMQ_USERNAME` | 否（建议最小权限） | `.env` | CI Secret/变量 | Secret 管理系统 | `shiori-payment-service-secret.yml` |
-| `PAYMENT_RMQ_PASSWORD` | 是 | `.env` | CI Secret | Secret 管理系统 | `shiori-payment-service-secret.yml` |
-| `NOTIFY_RMQ_USERNAME` | 否（建议最小权限） | `.env` | CI Secret/变量 | Secret 管理系统 | notify 运行时环境 |
-| `NOTIFY_RMQ_PASSWORD` | 是 | `.env` | CI Secret | Secret 管理系统 | notify 运行时环境 |
 | `MINIO_PRODUCT_ACCESS_KEY` | 否（凭证标识） | `.env` | CI Secret/变量 | Secret 管理系统 | `shiori-product-service-secret.yml` |
 | `MINIO_PRODUCT_SECRET_KEY` | 是 | `.env` | CI Secret | Secret 管理系统 | `shiori-product-service-secret.yml` |
 | `MYSQL_OPS_USERNAME` | 否（运维/烟测账号） | `.env` | CI Secret/变量 | Secret 管理系统 | MySQL 初始化与烟测 |
 | `MYSQL_OPS_PASSWORD` | 是 | `.env` | CI Secret | Secret 管理系统 | MySQL 初始化与烟测 |
 | `MYSQL_ROOT_PASSWORD` | 是 | `.env` | CI 运行时生成/Secret | Secret 管理系统 | docker compose |
-| `RABBITMQ_DEFAULT_USER` | 否（RabbitMQ 管理账号） | `.env` | CI Secret/变量 | Secret 管理系统 | docker compose |
-| `RABBITMQ_DEFAULT_PASS` | 是 | `.env` | CI 运行时生成/Secret | Secret 管理系统 | docker compose |
 | `MINIO_ROOT_USER` | 否（MinIO 管理账号） | `.env` | CI Secret/变量 | Secret 管理系统 | docker compose |
 | `MINIO_ROOT_PASSWORD` | 是 | `.env` | CI 运行时生成/Secret | Secret 管理系统 | docker compose |
 | `NACOS_AUTH_TOKEN` | 是 | `.env` | CI 运行时生成/Secret | Secret 管理系统 | docker compose |
@@ -624,9 +656,9 @@ export GATEWAY_SIGN_SECRET='<your-secret>'
 ### 3) Run Edge Notify (Go)
 
 ```bash
-# ensure RabbitMQ is up
+# ensure Redis / Kafka / Nacos are up
 cd deploy
-docker compose up -d rabbitmq
+docker compose up -d redis kafka kafka-connect nacos
 
 cd ../shiori-notify
 ./gen-env.sh -f
@@ -638,10 +670,10 @@ go run .
 
 ```bash
 export NOTIFY_HTTP_ADDR=:8090
-export RABBITMQ_ADDR=amqp://<rmq-username>:<rmq-password>@localhost:5672/
-export RABBITMQ_EXCHANGES=shiori.order.event,shiori.user.event
-export RABBITMQ_QUEUE=notify.order.event
-export RABBITMQ_ROUTING_KEYS=order.created,order.paid,order.canceled,order.delivered,order.finished,user.status.changed,user.role.changed,user.password.reset
+export NOTIFY_REDIS_ADDR=127.0.0.1:6379
+export NOTIFY_KAFKA_ENABLED=true
+export NOTIFY_KAFKA_TOPICS=shiori.cdc.order.outbox.raw,shiori.cdc.user.outbox.raw
+export NOTIFY_KAFKA_GROUP_ID=shiori-notify-cdc
 export NOTIFY_STORE_DRIVER=mysql
 export NOTIFY_MYSQL_DSN='<notify-mysql-dsn>'
 export NOTIFY_AUTH_ENABLED=true
@@ -650,8 +682,8 @@ export NOTIFY_JWT_ISSUER=shiori
 export NOTIFY_CHAT_ENABLED=true
 export NOTIFY_CHAT_TICKET_ISSUER=shiori-chat-ticket
 export NOTIFY_CHAT_TICKET_PUBLIC_KEY_PEM_BASE64='<public-key-pem-base64>'
-export NOTIFY_CHAT_MQ_ENABLED=true
-export NOTIFY_CHAT_MQ_EXCHANGE=shiori.chat.event
+export NOTIFY_CHAT_PUBSUB_ENABLED=true
+export NOTIFY_CHAT_PUBSUB_CHANNEL=shiori.chat.event
 ```
 
 ### 3.6) Chat Ticket（RS256）密钥生成与本地验收
@@ -762,7 +794,7 @@ curl -X POST http://localhost:8080/api/product/media/presign-upload \
 - 卖家履约：`POST /api/order/seller/orders/{orderNo}/deliver|finish`
 - 管理端履约：`POST /api/admin/orders/{orderNo}/deliver|finish`
 - 状态迁移审计查询：`GET /api/admin/orders/{orderNo}/status-audits`
-- 超时关单：通过 `OrderTimeout` 延迟消息（TTL + DLX）自动触发，消费时二次校验状态
+- 超时关单：通过 `timeout_at + 定时扫描` 自动触发，执行时二次校验状态
 - Outbox 事件投递：`OrderCreated` / `OrderPaid` / `OrderCanceled`（`OrderPaid` 会分别给买家和卖家写事件）
 - 状态机：`UNPAID -> PAID -> DELIVERING -> FINISHED`（`UNPAID` 可取消为 `CANCELED`）
 
@@ -893,10 +925,6 @@ export K6_NOTIFY_HTTP_BASE_URL=http://host.docker.internal:8090
 - `USER_DB_PASSWORD`
 - `PRODUCT_DB_PASSWORD`
 - `ORDER_DB_PASSWORD`
-- `RABBITMQ_DEFAULT_PASS`
-- `ORDER_RMQ_PASSWORD`
-- `PAYMENT_RMQ_PASSWORD`
-- `NOTIFY_RMQ_PASSWORD`
 - `MINIO_ROOT_PASSWORD`
 - `MINIO_PRODUCT_SECRET_KEY`
 - `NACOS_AUTH_TOKEN`

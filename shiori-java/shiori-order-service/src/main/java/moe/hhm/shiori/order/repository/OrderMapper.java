@@ -2,6 +2,7 @@ package moe.hhm.shiori.order.repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import moe.hhm.shiori.order.domain.OrderStatus;
 import moe.hhm.shiori.order.model.CartEntity;
 import moe.hhm.shiori.order.model.CartItemEntity;
 import moe.hhm.shiori.order.model.CartItemRecord;
@@ -436,6 +437,24 @@ public interface OrderMapper {
             """)
     OrderRecord findOrderByOrderNoForUpdate(@Param("orderNo") String orderNo);
 
+    default List<String> listExpiredUnpaidOrderNos(LocalDateTime deadline, int limit) {
+        return listExpiredUnpaidOrderNos(deadline, limit, OrderStatus.UNPAID.getCode());
+    }
+
+    @Select("""
+            SELECT order_no
+            FROM o_order
+            WHERE status = #{unpaidStatus}
+              AND is_deleted = 0
+              AND timeout_at IS NOT NULL
+              AND timeout_at <= #{deadline}
+            ORDER BY timeout_at ASC, id ASC
+            LIMIT #{limit}
+            """)
+    List<String> listExpiredUnpaidOrderNos(@Param("deadline") LocalDateTime deadline,
+                                           @Param("limit") int limit,
+                                           @Param("unpaidStatus") Integer unpaidStatus);
+
     @Select("""
             SELECT payment_mode
             FROM o_order
@@ -567,10 +586,10 @@ public interface OrderMapper {
               AND status = #{status}
             </if>
             <if test="createdFrom != null">
-              AND created_at <![CDATA[ >= ]]> #{createdFrom}
+              AND created_at &gt;= #{createdFrom}
             </if>
             <if test="createdTo != null">
-              AND created_at <![CDATA[ <= ]]> #{createdTo}
+              AND created_at &lt;= #{createdTo}
             </if>
             </script>
             """)
@@ -624,10 +643,10 @@ public interface OrderMapper {
               AND status = #{status}
             </if>
             <if test="createdFrom != null">
-              AND created_at <![CDATA[ >= ]]> #{createdFrom}
+              AND created_at &gt;= #{createdFrom}
             </if>
             <if test="createdTo != null">
-              AND created_at <![CDATA[ <= ]]> #{createdTo}
+              AND created_at &lt;= #{createdTo}
             </if>
             ORDER BY id DESC
             LIMIT #{size} OFFSET #{offset}
@@ -1368,7 +1387,9 @@ public interface OrderMapper {
     @Insert("""
             INSERT INTO o_outbox_event (
                 event_id,
+                aggregate_type,
                 aggregate_id,
+                message_key,
                 type,
                 payload,
                 exchange_name,
@@ -1381,7 +1402,9 @@ public interface OrderMapper {
                 sent_at
             ) VALUES (
                 #{eventId},
+                #{aggregateType},
                 #{aggregateId},
+                #{messageKey},
                 #{type},
                 #{payload},
                 #{exchangeName},
@@ -1400,7 +1423,9 @@ public interface OrderMapper {
     @Select("""
             SELECT id,
                    event_id AS eventId,
+                   aggregate_type AS aggregateType,
                    aggregate_id AS aggregateId,
+                   message_key AS messageKey,
                    type,
                    payload,
                    exchange_name AS exchangeName,

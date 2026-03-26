@@ -1,6 +1,8 @@
 package moe.hhm.shiori.user.admin.service;
 
+import java.lang.reflect.Field;
 import java.time.LocalDateTime;
+import java.util.List;
 import moe.hhm.shiori.common.exception.BizException;
 import moe.hhm.shiori.user.admin.dto.AdminUserAdminRoleUpdateRequest;
 import moe.hhm.shiori.user.admin.dto.AdminUserStatusUpdateRequest;
@@ -12,9 +14,11 @@ import moe.hhm.shiori.user.authz.service.AuthzSnapshotService;
 import moe.hhm.shiori.user.auth.service.TokenService;
 import moe.hhm.shiori.user.config.UserMqProperties;
 import moe.hhm.shiori.user.config.UserOutboxProperties;
+import moe.hhm.shiori.user.outbox.model.UserOutboxEventEntity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -22,9 +26,11 @@ import org.mockito.quality.Strictness;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import tools.jackson.databind.ObjectMapper;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -65,7 +71,6 @@ class AdminUserServiceTest {
         when(userMqProperties.getUserPasswordResetRoutingKey()).thenReturn("user.password.reset");
         when(userMqProperties.getUserPermissionOverrideChangedRoutingKey()).thenReturn("user.permission-override.changed");
         when(userMqProperties.getUserRoleBindingsChangedRoutingKey()).thenReturn("user.role-bindings.changed");
-        when(userMqProperties.isEnabled()).thenReturn(true);
         when(userOutboxProperties.isEnabled()).thenReturn(true);
         when(userSecurityProperties.getLockMinutes()).thenReturn(15L);
         when(authzSnapshotService.bumpVersion(org.mockito.ArgumentMatchers.anyLong())).thenReturn(2L);
@@ -132,6 +137,13 @@ class AdminUserServiceTest {
 
         assertTrue(response.admin());
         verify(adminUserMapper).addUserRole(2L, 11L);
+        ArgumentCaptor<UserOutboxEventEntity> outboxCaptor = ArgumentCaptor.forClass(UserOutboxEventEntity.class);
+        verify(adminUserMapper, times(2)).insertOutboxEvent(outboxCaptor.capture());
+        assertThat(outboxCaptor.getAllValues()).hasSize(2).allSatisfy(event -> {
+            assertThat(readStringField(event, "aggregateType")).isEqualTo("user");
+            assertThat(readStringField(event, "aggregateId")).isEqualTo("2");
+            assertThat(readStringField(event, "messageKey")).isEqualTo("2");
+        });
     }
 
     private AdminUserRecord userRecord(Long userId, Integer status, String roleCodes) {
@@ -152,5 +164,16 @@ class AdminUserServiceTest {
                 LocalDateTime.now(),
                 0
         );
+    }
+
+    private String readStringField(Object target, String fieldName) {
+        try {
+            Field field = target.getClass().getDeclaredField(fieldName);
+            field.setAccessible(true);
+            Object value = field.get(target);
+            return value == null ? null : value.toString();
+        } catch (ReflectiveOperationException ex) {
+            return null;
+        }
     }
 }

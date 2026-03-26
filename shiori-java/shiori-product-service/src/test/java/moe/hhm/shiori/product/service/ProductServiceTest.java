@@ -1,5 +1,6 @@
 package moe.hhm.shiori.product.service;
 
+import java.lang.reflect.Field;
 import java.util.List;
 import moe.hhm.shiori.common.exception.BizException;
 import moe.hhm.shiori.product.config.ProductMqProperties;
@@ -138,7 +139,12 @@ class ProductServiceTest {
 
         assertThat(response.status()).isEqualTo(ProductStatus.ON_SALE.name());
         verify(productMapper).updateProductStatusById(1L, ProductStatus.ON_SALE.getCode());
-        verify(productMapper).insertProductOutboxEvent(any(ProductOutboxEventEntity.class));
+        ArgumentCaptor<ProductOutboxEventEntity> outboxCaptor = ArgumentCaptor.forClass(ProductOutboxEventEntity.class);
+        verify(productMapper).insertProductOutboxEvent(outboxCaptor.capture());
+        ProductOutboxEventEntity outbox = outboxCaptor.getValue();
+        assertThat(readStringField(outbox, "aggregateType")).isEqualTo("product");
+        assertThat(readStringField(outbox, "aggregateId")).isEqualTo("P001");
+        assertThat(readStringField(outbox, "messageKey")).isEqualTo("P001");
     }
 
     @Test
@@ -241,5 +247,16 @@ class ProductServiceTest {
 
     private SkuInput skuInput(Long id, String specName, String specValue, long priceCent, int stock) {
         return new SkuInput(id, List.of(new SpecItemInput(specName, specValue)), priceCent, stock);
+    }
+
+    private String readStringField(Object target, String fieldName) {
+        try {
+            Field field = target.getClass().getDeclaredField(fieldName);
+            field.setAccessible(true);
+            Object value = field.get(target);
+            return value == null ? null : value.toString();
+        } catch (ReflectiveOperationException ex) {
+            return null;
+        }
     }
 }

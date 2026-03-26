@@ -11,6 +11,7 @@ import moe.hhm.shiori.common.error.CommonErrorCode;
 import moe.hhm.shiori.common.error.OrderErrorCode;
 import moe.hhm.shiori.common.error.ProductErrorCode;
 import moe.hhm.shiori.common.exception.BizException;
+import moe.hhm.shiori.common.http.ServiceRequestUris;
 import moe.hhm.shiori.common.security.GatewaySignProperties;
 import moe.hhm.shiori.common.security.GatewaySignVerifyFilter;
 import moe.hhm.shiori.common.security.GatewaySignUtils;
@@ -40,23 +41,23 @@ public class ProductServiceClient {
     private final RestClient restClient;
     private final GatewaySignProperties gatewaySignProperties;
     private final ObjectMapper objectMapper;
+    private final String serviceBaseUrl;
 
     public ProductServiceClient(RestClient.Builder loadBalancedRestClientBuilder,
                                 ProductClientProperties productClientProperties,
                                 GatewaySignProperties gatewaySignProperties,
                                 ObjectMapper objectMapper) {
-        this.restClient = loadBalancedRestClientBuilder
-                .baseUrl(productClientProperties.getServiceBaseUrl())
-                .build();
+        this.restClient = loadBalancedRestClientBuilder.build();
         this.gatewaySignProperties = gatewaySignProperties;
         this.objectMapper = objectMapper;
+        this.serviceBaseUrl = productClientProperties.getServiceBaseUrl();
     }
 
     public ProductDetailSnapshot getProductDetail(Long productId, Long userId, List<String> roles) {
         String path = "/api/v2/product/products/" + productId;
         try {
             Result<ProductDetailSnapshot> result = restClient.get()
-                    .uri(path)
+                    .uri(ServiceRequestUris.resolve(serviceBaseUrl, path))
                     .headers(headers -> fillSignedHeaders(headers, "GET", path, null, userId, roles))
                     .retrieve()
                     .body(PRODUCT_DETAIL_TYPE);
@@ -123,7 +124,7 @@ public class ProductServiceClient {
     private StockOperateSnapshot executeStockOperate(String path, Object command, Long userId, List<String> roles) {
         try {
             Result<StockOperateSnapshot> result = restClient.post()
-                    .uri(path)
+                    .uri(ServiceRequestUris.resolve(serviceBaseUrl, path))
                     .headers(headers -> fillSignedHeaders(headers, "POST", path, null, userId, roles))
                     .body(command)
                     .retrieve()

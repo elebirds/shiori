@@ -9,6 +9,7 @@ import java.util.UUID;
 import moe.hhm.shiori.common.api.Result;
 import moe.hhm.shiori.common.error.CommonErrorCode;
 import moe.hhm.shiori.common.exception.BizException;
+import moe.hhm.shiori.common.http.ServiceRequestUris;
 import moe.hhm.shiori.common.security.GatewaySignProperties;
 import moe.hhm.shiori.common.security.GatewaySignVerifyFilter;
 import moe.hhm.shiori.common.security.GatewaySignUtils;
@@ -31,21 +32,21 @@ public class NotifyChatClient {
 
     private final RestClient restClient;
     private final GatewaySignProperties gatewaySignProperties;
+    private final String serviceBaseUrl;
 
     public NotifyChatClient(RestClient.Builder loadBalancedRestClientBuilder,
                             NotifyClientProperties notifyClientProperties,
                             GatewaySignProperties gatewaySignProperties) {
-        this.restClient = loadBalancedRestClientBuilder
-                .baseUrl(notifyClientProperties.getServiceBaseUrl())
-                .build();
+        this.restClient = loadBalancedRestClientBuilder.build();
         this.gatewaySignProperties = gatewaySignProperties;
+        this.serviceBaseUrl = notifyClientProperties.getServiceBaseUrl();
     }
 
     public ChatConversationSnapshot getConversationForUser(Long conversationId, Long userId, List<String> roles) {
         String path = "/internal/chat/conversations/" + conversationId;
         try {
             Result<ChatConversationSnapshot> result = restClient.get()
-                    .uri(path)
+                    .uri(ServiceRequestUris.resolve(serviceBaseUrl, path))
                     .headers(headers -> fillSignedHeaders(headers, "GET", path, null, userId, roles))
                     .retrieve()
                     .body(CONVERSATION_TYPE);

@@ -1,10 +1,6 @@
 spring:
   datasource:
     url: ${PAYMENT_DB_URL}
-  rabbitmq:
-    host: ${PAYMENT_RMQ_HOST}
-    port: ${PAYMENT_RMQ_PORT}
-    virtual-host: /
   flyway:
     enabled: true
     baseline-on-migrate: true

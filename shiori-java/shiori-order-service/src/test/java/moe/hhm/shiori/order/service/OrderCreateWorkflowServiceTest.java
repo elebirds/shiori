@@ -143,6 +143,55 @@ class OrderCreateWorkflowServiceTest {
     }
 
     @Test
+    void shouldFinalizeCreateWithoutTimeoutRelayStep() {
+        OrderCreateWorkflowService workflowService = new OrderCreateWorkflowService(
+                orderCommandService,
+                orderCommandMapper,
+                new ObjectMapper(),
+                DIRECT_TX
+        );
+        CreateOrderRequest request = new CreateOrderRequest(List.of(new CreateOrderItem(1L, 11L, 2)), null, null);
+        OrderCommandService.PreparedOrderLine line = new OrderCommandService.PreparedOrderLine(
+                1L,
+                "P-1",
+                11L,
+                "SKU-11",
+                "黑色 L",
+                "[]",
+                2000L,
+                2,
+                4000L,
+                2001L,
+                true,
+                true
+        );
+        when(orderCommandService.orderMetrics()).thenReturn(new OrderMetrics(new SimpleMeterRegistry()));
+        when(orderCommandService.orderProperties()).thenReturn(new OrderProperties());
+        when(orderCommandService.requireIdempotencyKey("idem-timeout-outbox")).thenReturn("idem-timeout-outbox");
+        when(orderCommandService.normalizeSource(null)).thenReturn(null);
+        when(orderCommandService.normalizeConversationId(null, null)).thenReturn(null);
+        when(orderCommandService.orderMapper()).thenReturn(orderMapper);
+        when(orderCommandService.prepareOrderLines(1001L, List.of("ROLE_USER"), request)).thenReturn(List.of(line));
+        when(orderMapper.findOrderNoByBuyerAndIdempotencyKey(1001L, "idem-timeout-outbox")).thenReturn(null);
+        when(orderCommandService.generateOrderNo()).thenReturn("O202603260101");
+        doAnswer(invocation -> {
+            OrderCommandEntity entity = invocation.getArgument(0);
+            entity.setId(11L);
+            return 1;
+        }).when(orderCommandMapper).insertOrderCommand(any(OrderCommandEntity.class));
+        when(orderCommandMapper.findByCommandNo(anyString()))
+                .thenReturn(commandRecord("PREPARED", "O202603260101", 11L));
+        when(orderCommandService.productServiceClient()).thenReturn(productServiceClient);
+        when(orderCommandService.stockBizNo("O202603260101", 11L)).thenReturn("O202603260101:11");
+        when(productServiceClient.deductStock(11L, 2, "O202603260101:11", 1001L, List.of("ROLE_USER")))
+                .thenReturn(new StockOperateSnapshot(true, false, "O202603260101:11", 11L, 2, 98));
+
+        workflowService.createOrder(1001L, List.of("ROLE_USER"), "idem-timeout-outbox", request);
+
+        verify(orderCommandService).appendOrderCreatedOutbox("O202603260101", 1001L, 2001L, 4000L, 2);
+    }
+
+    @Test
     void shouldRecordRemoteSucceededCreateCommandWhenFinalLocalPersistFails() {
         OrderCreateWorkflowService workflowService = new OrderCreateWorkflowService(
                 orderCommandService,

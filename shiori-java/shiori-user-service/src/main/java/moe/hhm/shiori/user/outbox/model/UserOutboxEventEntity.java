@@ -5,7 +5,9 @@ import java.time.LocalDateTime;
 public class UserOutboxEventEntity {
     private Long id;
     private String eventId;
+    private String aggregateType;
     private String aggregateId;
+    private String messageKey;
     private String type;
     private String payload;
     private String exchangeName;
@@ -38,6 +40,22 @@ public class UserOutboxEventEntity {
 
     public void setAggregateId(String aggregateId) {
         this.aggregateId = aggregateId;
+    }
+
+    public String getAggregateType() {
+        return aggregateType;
+    }
+
+    public void setAggregateType(String aggregateType) {
+        this.aggregateType = aggregateType;
+    }
+
+    public String getMessageKey() {
+        return messageKey;
+    }
+
+    public void setMessageKey(String messageKey) {
+        this.messageKey = messageKey;
     }
 
     public String getType() {

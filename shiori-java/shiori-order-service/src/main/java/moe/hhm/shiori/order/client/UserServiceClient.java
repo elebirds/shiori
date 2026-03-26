@@ -11,6 +11,7 @@ import moe.hhm.shiori.common.error.CommonErrorCode;
 import moe.hhm.shiori.common.error.OrderErrorCode;
 import moe.hhm.shiori.common.error.UserErrorCode;
 import moe.hhm.shiori.common.exception.BizException;
+import moe.hhm.shiori.common.http.ServiceRequestUris;
 import moe.hhm.shiori.common.security.GatewaySignProperties;
 import moe.hhm.shiori.common.security.GatewaySignUtils;
 import moe.hhm.shiori.common.security.GatewaySignVerifyFilter;
@@ -37,23 +38,23 @@ public class UserServiceClient {
     private final RestClient restClient;
     private final GatewaySignProperties gatewaySignProperties;
     private final ObjectMapper objectMapper;
+    private final String serviceBaseUrl;
 
     public UserServiceClient(RestClient.Builder loadBalancedRestClientBuilder,
                              UserClientProperties userClientProperties,
                              GatewaySignProperties gatewaySignProperties,
                              ObjectMapper objectMapper) {
-        this.restClient = loadBalancedRestClientBuilder
-                .baseUrl(userClientProperties.getServiceBaseUrl())
-                .build();
+        this.restClient = loadBalancedRestClientBuilder.build();
         this.gatewaySignProperties = gatewaySignProperties;
         this.objectMapper = objectMapper;
+        this.serviceBaseUrl = userClientProperties.getServiceBaseUrl();
     }
 
     public UserAddressSnapshot getMyAddress(Long addressId, Long userId, List<String> roles) {
         String path = "/api/user/me/addresses/" + addressId;
         try {
             Result<UserAddressSnapshot> result = restClient.get()
-                    .uri(path)
+                    .uri(ServiceRequestUris.resolve(serviceBaseUrl, path))
                     .headers(headers -> fillSignedHeaders(headers, "GET", path, null, userId, roles))
                     .retrieve()
                     .body(USER_ADDRESS_TYPE);

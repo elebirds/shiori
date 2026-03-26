@@ -45,6 +45,8 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 public class ProductService {
 
+    private static final String OUTBOX_AGGREGATE_TYPE_PRODUCT = "product";
+
     private final ProductMapper productMapper;
     private final OssObjectService ossObjectService;
     private final SkuSpecCodec skuSpecCodec;
@@ -355,7 +357,7 @@ public class ProductService {
     }
 
     private void appendProductPublishedOutbox(ProductV2Record product) {
-        if (!productOutboxProperties.isEnabled() || !productMqProperties.isEnabled()) {
+        if (!productOutboxProperties.isEnabled()) {
             return;
         }
         if (product == null || product.id() == null || product.ownerUserId() == null) {
@@ -388,7 +390,9 @@ public class ProductService {
 
         ProductOutboxEventEntity entity = new ProductOutboxEventEntity();
         entity.setEventId(envelope.eventId());
+        entity.setAggregateType(OUTBOX_AGGREGATE_TYPE_PRODUCT);
         entity.setAggregateId(product.productNo());
+        entity.setMessageKey(product.productNo());
         entity.setType(envelope.type());
         entity.setPayload(envelopeJson);
         entity.setExchangeName(productMqProperties.getEventExchange());

@@ -1,6 +1,6 @@
 # shiori-notify
 
-Go 通知服务（Gin + WebSocket + RabbitMQ + MySQL）。
+Go 通知服务（Gin + WebSocket + Kafka CDC + MySQL）。
 
 ## 已实现能力
 
@@ -31,7 +31,7 @@ Go 通知服务（Gin + WebSocket + RabbitMQ + MySQL）。
 - Chat（可选，默认关闭）：
   - Ticket：RS256 本地验票（Java 签发）
   - 会话表：`conversation` / `message` / `member_state`
-  - 多实例推送：RabbitMQ fanout 广播（`shiori.chat.event`）
+  - 多实例推送：Redis Pub/Sub 广播（channel 默认 `shiori.chat.event`）
 
 ## 运行
 

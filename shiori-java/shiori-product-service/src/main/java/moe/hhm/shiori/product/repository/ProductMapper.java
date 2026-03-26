@@ -4,7 +4,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 import moe.hhm.shiori.product.model.ProductEntity;
 import moe.hhm.shiori.product.model.ProductOutboxEventEntity;
-import moe.hhm.shiori.product.model.ProductOutboxEventRecord;
 import moe.hhm.shiori.product.model.ProductRecord;
 import moe.hhm.shiori.product.model.ProductV2Record;
 import moe.hhm.shiori.product.model.SkuEntity;
@@ -903,7 +902,9 @@ public interface ProductMapper {
     @Insert("""
             INSERT INTO p_outbox_event (
                 event_id,
+                aggregate_type,
                 aggregate_id,
+                message_key,
                 type,
                 payload,
                 exchange_name,
@@ -916,7 +917,9 @@ public interface ProductMapper {
                 sent_at
             ) VALUES (
                 #{eventId},
+                #{aggregateType},
                 #{aggregateId},
+                #{messageKey},
                 #{type},
                 #{payload},
                 #{exchangeName},
@@ -931,54 +934,6 @@ public interface ProductMapper {
             """)
     @Options(useGeneratedKeys = true, keyProperty = "id", keyColumn = "id")
     int insertProductOutboxEvent(ProductOutboxEventEntity outboxEventEntity);
-
-    @Select("""
-            SELECT id,
-                   event_id AS eventId,
-                   aggregate_id AS aggregateId,
-                   type,
-                   payload,
-                   exchange_name AS exchangeName,
-                   routing_key AS routingKey,
-                   status,
-                   retry_count AS retryCount,
-                   last_error AS lastError,
-                   next_retry_at AS nextRetryAt,
-                   created_at AS createdAt,
-                   sent_at AS sentAt
-            FROM p_outbox_event
-            WHERE status = 'PENDING'
-               OR (status = 'FAILED'
-                   AND (next_retry_at IS NULL OR next_retry_at <= CURRENT_TIMESTAMP(3)))
-            ORDER BY id ASC
-            LIMIT #{limit}
-            """)
-    List<ProductOutboxEventRecord> listProductOutboxRelayCandidates(@Param("limit") int limit);
-
-    @Update("""
-            UPDATE p_outbox_event
-            SET status = 'SENT',
-                sent_at = CURRENT_TIMESTAMP(3),
-                last_error = NULL,
-                next_retry_at = NULL
-            WHERE id = #{id}
-              AND status IN ('PENDING', 'FAILED')
-            """)
-    int markProductOutboxSent(@Param("id") Long id);
-
-    @Update("""
-            UPDATE p_outbox_event
-            SET status = 'FAILED',
-                retry_count = #{retryCount},
-                last_error = #{lastError},
-                next_retry_at = #{nextRetryAt}
-            WHERE id = #{id}
-              AND status IN ('PENDING', 'FAILED')
-            """)
-    int markProductOutboxFailed(@Param("id") Long id,
-                                @Param("retryCount") int retryCount,
-                                @Param("lastError") String lastError,
-                                @Param("nextRetryAt") LocalDateTime nextRetryAt);
 
     @Insert("""
             INSERT INTO p_admin_audit_log (

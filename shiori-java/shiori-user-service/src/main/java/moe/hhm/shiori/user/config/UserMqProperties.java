@@ -7,21 +7,12 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "user.mq")
 public class UserMqProperties {
 
-    private boolean enabled = true;
     private String eventExchange = "shiori.user.event";
     private String userStatusChangedRoutingKey = "user.status.changed";
     private String userRoleChangedRoutingKey = "user.role.changed";
     private String userPasswordResetRoutingKey = "user.password.reset";
     private String userPermissionOverrideChangedRoutingKey = "user.permission-override.changed";
     private String userRoleBindingsChangedRoutingKey = "user.role-bindings.changed";
-
-    public boolean isEnabled() {
-        return enabled;
-    }
-
-    public void setEnabled(boolean enabled) {
-        this.enabled = enabled;
-    }
 
     public String getEventExchange() {
         return eventExchange;

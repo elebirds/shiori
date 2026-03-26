@@ -248,8 +248,8 @@ func (s *Server) handleWSSend(client *ws.Client,
 		metrics.ObserveChatDeliveryLatency("realtime", time.Since(message.CreatedAt))
 	}
 
-	if s.chatMQ != nil {
-		if err := s.chatMQ.PublishMessage(chat.BroadcastEvent{
+	if s.broadcaster != nil {
+		if err := s.broadcaster.PublishMessage(chat.BroadcastEvent{
 			ConversationID: message.ConversationID,
 			MessageID:      message.ID,
 			ListingID:      sendResult.Conversation.ListingID,

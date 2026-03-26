@@ -6,6 +6,8 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?missing}
       MYSQL_OPS_USERNAME: ${MYSQL_OPS_USERNAME:?missing}
       MYSQL_OPS_PASSWORD: ${MYSQL_OPS_PASSWORD:?missing}
+      CDC_DB_USERNAME: ${CDC_DB_USERNAME:-debezium}
+      CDC_DB_PASSWORD: ${CDC_DB_PASSWORD:-debezium_cdc_password}
       USER_DB_USERNAME: ${USER_DB_USERNAME:?missing}
       USER_DB_PASSWORD: ${USER_DB_PASSWORD:?missing}
       PRODUCT_DB_USERNAME: ${PRODUCT_DB_USERNAME:?missing}
@@ -22,6 +24,7 @@ services:
       - "3306:3306"
     volumes:
       - mysql-data:/var/lib/mysql
+      - ./mysql/conf.d:/etc/mysql/conf.d:ro
       - ./sql/mysql-init:/docker-entrypoint-initdb.d:ro
     networks:
       - shiori-net
@@ -34,43 +37,72 @@ services:
     networks:
       - shiori-net
 
-  rabbitmq:
-    image: rabbitmq:3.13-management
-    container_name: shiori-rabbitmq
+  kafka:
+    image: apache/kafka:4.0.1
+    container_name: shiori-kafka
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:?missing}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:?missing}
+      CLUSTER_ID: ${KAFKA_CLUSTER_ID:-MkU3OEVBNTcwNTJENDM2Qk}
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:29092,CONTROLLER://:9093,PLAINTEXT_HOST://:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://127.0.0.1:${KAFKA_HOST_PORT:-9092}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "${KAFKA_HOST_PORT:-9092}:9092"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    restart: unless-stopped
     networks:
       - shiori-net
 
-  rabbitmq-auth-init:
-    image: curlimages/curl:8.12.1
-    container_name: shiori-rabbitmq-auth-init
+  kafka-connect:
+    image: quay.io/debezium/connect:3.3
+    container_name: shiori-kafka-connect
     depends_on:
-      rabbitmq:
+      kafka:
+        condition: service_started
+      mysql:
         condition: service_started
     environment:
-      RABBITMQ_API_URL: http://rabbitmq:15672
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:?missing}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:?missing}
-      ORDER_RMQ_USERNAME: ${ORDER_RMQ_USERNAME:?missing}
-      ORDER_RMQ_PASSWORD: ${ORDER_RMQ_PASSWORD:?missing}
-      USER_RMQ_USERNAME: ${USER_RMQ_USERNAME:?missing}
-      USER_RMQ_PASSWORD: ${USER_RMQ_PASSWORD:?missing}
-      NOTIFY_RMQ_USERNAME: ${NOTIFY_RMQ_USERNAME:?missing}
-      NOTIFY_RMQ_PASSWORD: ${NOTIFY_RMQ_PASSWORD:?missing}
-      PAYMENT_RMQ_USERNAME: ${PAYMENT_RMQ_USERNAME:?missing}
-      PAYMENT_RMQ_PASSWORD: ${PAYMENT_RMQ_PASSWORD:?missing}
-      PRODUCT_RMQ_USERNAME: ${PRODUCT_RMQ_USERNAME:?missing}
-      PRODUCT_RMQ_PASSWORD: ${PRODUCT_RMQ_PASSWORD:?missing}
-      SOCIAL_RMQ_USERNAME: ${SOCIAL_RMQ_USERNAME:?missing}
-      SOCIAL_RMQ_PASSWORD: ${SOCIAL_RMQ_PASSWORD:?missing}
+      BOOTSTRAP_SERVERS: kafka:29092
+      GROUP_ID: 1
+      CONFIG_STORAGE_TOPIC: shiori_connect_configs
+      OFFSET_STORAGE_TOPIC: shiori_connect_offsets
+      STATUS_STORAGE_TOPIC: shiori_connect_statuses
+      KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+      VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_REST_ADVERTISED_HOST_NAME: kafka-connect
+      CONNECT_LOG4J_ROOT_LOGLEVEL: INFO
+    ports:
+      - "${KAFKA_CONNECT_HOST_PORT:-18083}:8083"
+    restart: unless-stopped
+    networks:
+      - shiori-net
+
+  kafka-connect-init:
+    image: curlimages/curl:8.12.1
+    container_name: shiori-kafka-connect-init
+    depends_on:
+      kafka-connect:
+        condition: service_started
+    environment:
+      KAFKA_CONNECT_URL: http://kafka-connect:8083
+      CDC_DB_USERNAME: ${CDC_DB_USERNAME:-debezium}
+      CDC_DB_PASSWORD: ${CDC_DB_PASSWORD:-debezium_cdc_password}
     volumes:
-      - ./rabbitmq:/deploy/rabbitmq:ro
-    entrypoint: ["/bin/sh", "/deploy/rabbitmq/init-rabbitmq-users.sh"]
+      - ./kafka/connect:/deploy/kafka/connect:ro
+    entrypoint: ["/bin/sh", "/deploy/kafka/connect/register-connectors.sh"]
     restart: "no"
     networks:
       - shiori-net
@@ -112,6 +144,7 @@ services:
       USER_DB_URL: ${USER_DB_URL_DOCKER:-jdbc:mysql://mysql:3306/shiori_user?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false}
       USER_DB_USERNAME: ${USER_DB_USERNAME:?missing}
       USER_DB_PASSWORD: ${USER_DB_PASSWORD:?missing}
+      USER_PAYMENT_SERVICE_BASE_URL: ${USER_PAYMENT_SERVICE_BASE_URL_DOCKER:-http://shiori-payment-service}
       PRODUCT_DB_URL: ${PRODUCT_DB_URL_DOCKER:-jdbc:mysql://mysql:3306/shiori_product?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false}
       PRODUCT_DB_USERNAME: ${PRODUCT_DB_USERNAME:?missing}
       PRODUCT_DB_PASSWORD: ${PRODUCT_DB_PASSWORD:?missing}
@@ -124,41 +157,23 @@ services:
       SOCIAL_DB_URL: ${SOCIAL_DB_URL_DOCKER:-jdbc:mysql://mysql:3306/shiori_social?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false}
       SOCIAL_DB_USERNAME: ${SOCIAL_DB_USERNAME:?missing}
       SOCIAL_DB_PASSWORD: ${SOCIAL_DB_PASSWORD:?missing}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS_DOCKER:-kafka:29092}
       REDIS_HOST: ${REDIS_HOST_DOCKER:-redis}
       REDIS_PORT: ${REDIS_PORT_DOCKER:-6379}
-      ORDER_RMQ_HOST: ${ORDER_RMQ_HOST_DOCKER:-rabbitmq}
-      ORDER_RMQ_PORT: ${ORDER_RMQ_PORT_DOCKER:-5672}
-      ORDER_RMQ_USERNAME: ${ORDER_RMQ_USERNAME:?missing}
-      ORDER_RMQ_PASSWORD: ${ORDER_RMQ_PASSWORD:?missing}
-      PRODUCT_RMQ_HOST: ${PRODUCT_RMQ_HOST_DOCKER:-rabbitmq}
-      PRODUCT_RMQ_PORT: ${PRODUCT_RMQ_PORT_DOCKER:-5672}
-      PRODUCT_RMQ_USERNAME: ${PRODUCT_RMQ_USERNAME:?missing}
-      PRODUCT_RMQ_PASSWORD: ${PRODUCT_RMQ_PASSWORD:?missing}
-      PAYMENT_RMQ_HOST: ${PAYMENT_RMQ_HOST_DOCKER:-rabbitmq}
-      PAYMENT_RMQ_PORT: ${PAYMENT_RMQ_PORT_DOCKER:-5672}
-      PAYMENT_RMQ_USERNAME: ${PAYMENT_RMQ_USERNAME:?missing}
-      PAYMENT_RMQ_PASSWORD: ${PAYMENT_RMQ_PASSWORD:?missing}
-      USER_RMQ_HOST: ${USER_RMQ_HOST_DOCKER:-rabbitmq}
-      USER_RMQ_PORT: ${USER_RMQ_PORT_DOCKER:-5672}
-      USER_RMQ_USERNAME: ${USER_RMQ_USERNAME:?missing}
-      USER_RMQ_PASSWORD: ${USER_RMQ_PASSWORD:?missing}
-      SOCIAL_RMQ_HOST: ${SOCIAL_RMQ_HOST_DOCKER:-rabbitmq}
-      SOCIAL_RMQ_PORT: ${SOCIAL_RMQ_PORT_DOCKER:-5672}
-      SOCIAL_RMQ_USERNAME: ${SOCIAL_RMQ_USERNAME:?missing}
-      SOCIAL_RMQ_PASSWORD: ${SOCIAL_RMQ_PASSWORD:?missing}
       NOTIFY_HTTP_ADDR: ${NOTIFY_HTTP_ADDR:-:8090}
       NOTIFY_WS_PATH: ${NOTIFY_WS_PATH:-/ws}
       NOTIFY_CHAT_ENABLED: ${NOTIFY_CHAT_ENABLED:-false}
       NOTIFY_CHAT_DEFAULT_LIMIT: ${NOTIFY_CHAT_DEFAULT_LIMIT:-20}
       NOTIFY_CHAT_MAX_LIMIT: ${NOTIFY_CHAT_MAX_LIMIT:-100}
-      NOTIFY_CHAT_MQ_ENABLED: ${NOTIFY_CHAT_MQ_ENABLED:-true}
-      NOTIFY_CHAT_MQ_EXCHANGE: ${NOTIFY_CHAT_MQ_EXCHANGE:-shiori.chat.event}
+      NOTIFY_CHAT_PUBSUB_ENABLED: ${NOTIFY_CHAT_PUBSUB_ENABLED:-true}
+      NOTIFY_CHAT_PUBSUB_CHANNEL: ${NOTIFY_CHAT_PUBSUB_CHANNEL:-shiori.chat.event}
       NOTIFY_INSTANCE_ID: ${NOTIFY_INSTANCE_ID:-}
       NOTIFY_CHAT_TICKET_PUBLIC_KEY_PEM_BASE64: ${NOTIFY_CHAT_TICKET_PUBLIC_KEY_PEM_BASE64:-}
       NOTIFY_MYSQL_DSN: ${NOTIFY_DB_USERNAME:?missing}:${NOTIFY_DB_PASSWORD:?missing}@tcp(${NOTIFY_DB_HOST_DOCKER:-mysql}:${NOTIFY_DB_PORT_DOCKER:-3306})/${NOTIFY_DB_NAME_DOCKER:-shiori_notify}?charset=utf8mb4&parseTime=true&loc=UTC
-      NOTIFY_RABBITMQ_ADDR: amqp://${NOTIFY_RMQ_USERNAME:?missing}:${NOTIFY_RMQ_PASSWORD:?missing}@${NOTIFY_RMQ_HOST_DOCKER:-rabbitmq}:${NOTIFY_RMQ_PORT_DOCKER:-5672}/
+      NOTIFY_REDIS_ADDR: ${REDIS_HOST_DOCKER:-redis}:${REDIS_PORT_DOCKER:-6379}
       PRODUCT_OSS_ENDPOINT: ${PRODUCT_OSS_ENDPOINT_DOCKER:-http://minio:9000}
       ORDER_PRODUCT_SERVICE_BASE_URL: ${ORDER_PRODUCT_SERVICE_BASE_URL_DOCKER:-http://shiori-product-service}
+      ORDER_USER_SERVICE_BASE_URL: ${ORDER_USER_SERVICE_BASE_URL_DOCKER:-http://shiori-user-service}
       ORDER_PAYMENT_SERVICE_BASE_URL: ${ORDER_PAYMENT_SERVICE_BASE_URL_DOCKER:-http://shiori-payment-service}
       ORDER_NOTIFY_SERVICE_BASE_URL: ${ORDER_NOTIFY_SERVICE_BASE_URL_DOCKER:-http://shiori-notify-service}
       SECURITY_AUTHZ_USER_SERVICE_BASE_URL: ${SECURITY_AUTHZ_USER_SERVICE_BASE_URL_DOCKER:-http://shiori-user-service}
@@ -197,6 +212,7 @@ services:
       USER_DB_URL: ${USER_DB_URL_LOCAL:-jdbc:mysql://127.0.0.1:3306/shiori_user?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false}
       USER_DB_USERNAME: ${USER_DB_USERNAME:?missing}
       USER_DB_PASSWORD: ${USER_DB_PASSWORD:?missing}
+      USER_PAYMENT_SERVICE_BASE_URL: ${USER_PAYMENT_SERVICE_BASE_URL_LOCAL:-http://127.0.0.1:8084}
       PRODUCT_DB_URL: ${PRODUCT_DB_URL_LOCAL:-jdbc:mysql://127.0.0.1:3306/shiori_product?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false}
       PRODUCT_DB_USERNAME: ${PRODUCT_DB_USERNAME:?missing}
       PRODUCT_DB_PASSWORD: ${PRODUCT_DB_PASSWORD:?missing}
@@ -209,44 +225,26 @@ services:
       SOCIAL_DB_URL: ${SOCIAL_DB_URL_LOCAL:-jdbc:mysql://127.0.0.1:3306/shiori_social?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false}
       SOCIAL_DB_USERNAME: ${SOCIAL_DB_USERNAME:?missing}
       SOCIAL_DB_PASSWORD: ${SOCIAL_DB_PASSWORD:?missing}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS_LOCAL:-127.0.0.1:9092}
       REDIS_HOST: ${REDIS_HOST_LOCAL:-127.0.0.1}
       REDIS_PORT: ${REDIS_PORT_LOCAL:-6379}
-      ORDER_RMQ_HOST: ${ORDER_RMQ_HOST_LOCAL:-127.0.0.1}
-      ORDER_RMQ_PORT: ${ORDER_RMQ_PORT_LOCAL:-5672}
-      ORDER_RMQ_USERNAME: ${ORDER_RMQ_USERNAME:?missing}
-      ORDER_RMQ_PASSWORD: ${ORDER_RMQ_PASSWORD:?missing}
-      PRODUCT_RMQ_HOST: ${PRODUCT_RMQ_HOST_LOCAL:-127.0.0.1}
-      PRODUCT_RMQ_PORT: ${PRODUCT_RMQ_PORT_LOCAL:-5672}
-      PRODUCT_RMQ_USERNAME: ${PRODUCT_RMQ_USERNAME:?missing}
-      PRODUCT_RMQ_PASSWORD: ${PRODUCT_RMQ_PASSWORD:?missing}
-      PAYMENT_RMQ_HOST: ${PAYMENT_RMQ_HOST_LOCAL:-127.0.0.1}
-      PAYMENT_RMQ_PORT: ${PAYMENT_RMQ_PORT_LOCAL:-5672}
-      PAYMENT_RMQ_USERNAME: ${PAYMENT_RMQ_USERNAME:?missing}
-      PAYMENT_RMQ_PASSWORD: ${PAYMENT_RMQ_PASSWORD:?missing}
-      USER_RMQ_HOST: ${USER_RMQ_HOST_LOCAL:-127.0.0.1}
-      USER_RMQ_PORT: ${USER_RMQ_PORT_LOCAL:-5672}
-      USER_RMQ_USERNAME: ${USER_RMQ_USERNAME:?missing}
-      USER_RMQ_PASSWORD: ${USER_RMQ_PASSWORD:?missing}
-      SOCIAL_RMQ_HOST: ${SOCIAL_RMQ_HOST_LOCAL:-127.0.0.1}
-      SOCIAL_RMQ_PORT: ${SOCIAL_RMQ_PORT_LOCAL:-5672}
-      SOCIAL_RMQ_USERNAME: ${SOCIAL_RMQ_USERNAME:?missing}
-      SOCIAL_RMQ_PASSWORD: ${SOCIAL_RMQ_PASSWORD:?missing}
       NOTIFY_HTTP_ADDR: ${NOTIFY_HTTP_ADDR:-:8090}
       NOTIFY_WS_PATH: ${NOTIFY_WS_PATH:-/ws}
       NOTIFY_CHAT_ENABLED: ${NOTIFY_CHAT_ENABLED:-false}
       NOTIFY_CHAT_DEFAULT_LIMIT: ${NOTIFY_CHAT_DEFAULT_LIMIT:-20}
       NOTIFY_CHAT_MAX_LIMIT: ${NOTIFY_CHAT_MAX_LIMIT:-100}
-      NOTIFY_CHAT_MQ_ENABLED: ${NOTIFY_CHAT_MQ_ENABLED:-true}
-      NOTIFY_CHAT_MQ_EXCHANGE: ${NOTIFY_CHAT_MQ_EXCHANGE:-shiori.chat.event}
+      NOTIFY_CHAT_PUBSUB_ENABLED: ${NOTIFY_CHAT_PUBSUB_ENABLED:-true}
+      NOTIFY_CHAT_PUBSUB_CHANNEL: ${NOTIFY_CHAT_PUBSUB_CHANNEL:-shiori.chat.event}
       NOTIFY_INSTANCE_ID: ${NOTIFY_INSTANCE_ID:-}
       NOTIFY_CHAT_TICKET_PUBLIC_KEY_PEM_BASE64: ${NOTIFY_CHAT_TICKET_PUBLIC_KEY_PEM_BASE64:-}
       NOTIFY_MYSQL_DSN: ${NOTIFY_DB_USERNAME:?missing}:${NOTIFY_DB_PASSWORD:?missing}@tcp(${NOTIFY_DB_HOST_LOCAL:-127.0.0.1}:${NOTIFY_DB_PORT_LOCAL:-3306})/${NOTIFY_DB_NAME_LOCAL:-shiori_notify}?charset=utf8mb4&parseTime=true&loc=UTC
-      NOTIFY_RABBITMQ_ADDR: amqp://${NOTIFY_RMQ_USERNAME:?missing}:${NOTIFY_RMQ_PASSWORD:?missing}@${NOTIFY_RMQ_HOST_LOCAL:-127.0.0.1}:${NOTIFY_RMQ_PORT_LOCAL:-5672}/
+      NOTIFY_REDIS_ADDR: ${REDIS_HOST_LOCAL:-127.0.0.1}:${REDIS_PORT_LOCAL:-6379}
       PRODUCT_OSS_ENDPOINT: ${PRODUCT_OSS_ENDPOINT_LOCAL:-http://127.0.0.1:9000}
-      ORDER_PRODUCT_SERVICE_BASE_URL: ${ORDER_PRODUCT_SERVICE_BASE_URL_LOCAL:-http://shiori-product-service}
-      ORDER_PAYMENT_SERVICE_BASE_URL: ${ORDER_PAYMENT_SERVICE_BASE_URL_LOCAL:-http://shiori-payment-service}
-      ORDER_NOTIFY_SERVICE_BASE_URL: ${ORDER_NOTIFY_SERVICE_BASE_URL_LOCAL:-http://shiori-notify-service}
-      SECURITY_AUTHZ_USER_SERVICE_BASE_URL: ${SECURITY_AUTHZ_USER_SERVICE_BASE_URL_LOCAL:-http://shiori-user-service}
+      ORDER_PRODUCT_SERVICE_BASE_URL: ${ORDER_PRODUCT_SERVICE_BASE_URL_LOCAL:-http://127.0.0.1:8082}
+      ORDER_USER_SERVICE_BASE_URL: ${ORDER_USER_SERVICE_BASE_URL_LOCAL:-http://127.0.0.1:8081}
+      ORDER_PAYMENT_SERVICE_BASE_URL: ${ORDER_PAYMENT_SERVICE_BASE_URL_LOCAL:-http://127.0.0.1:8084}
+      ORDER_NOTIFY_SERVICE_BASE_URL: ${ORDER_NOTIFY_SERVICE_BASE_URL_LOCAL:-http://127.0.0.1:8090}
+      SECURITY_AUTHZ_USER_SERVICE_BASE_URL: ${SECURITY_AUTHZ_USER_SERVICE_BASE_URL_LOCAL:-http://127.0.0.1:8081}
       ORDER_PAYMENT_INTERNAL_TOKEN: ${ORDER_PAYMENT_INTERNAL_TOKEN:?missing}
       MINIO_PRODUCT_BUCKET: ${MINIO_PRODUCT_BUCKET:-shiori-product}
       MINIO_PRODUCT_ACCESS_KEY: ${MINIO_PRODUCT_ACCESS_KEY:?missing}
@@ -380,10 +378,6 @@ services:
     depends_on:
       mysql:
         condition: service_started
-      rabbitmq:
-        condition: service_started
-      rabbitmq-auth-init:
-        condition: service_completed_successfully
       minio:
         condition: service_started
       minio-init:
@@ -415,10 +409,6 @@ services:
     depends_on:
       mysql:
         condition: service_started
-      rabbitmq:
-        condition: service_started
-      rabbitmq-auth-init:
-        condition: service_completed_successfully
       minio:
         condition: service_started
       minio-init:
@@ -452,10 +442,6 @@ services:
     depends_on:
       mysql:
         condition: service_started
-      rabbitmq:
-        condition: service_started
-      rabbitmq-auth-init:
-        condition: service_completed_successfully
       redis:
         condition: service_started
       nacos:
@@ -551,10 +537,8 @@ services:
     depends_on:
       mysql:
         condition: service_started
-      rabbitmq:
+      redis:
         condition: service_started
-      rabbitmq-auth-init:
-        condition: service_completed_successfully
       nacos:
         condition: service_started
       nacos-config-init:
@@ -644,6 +628,7 @@ networks:
 
 volumes:
   mysql-data:
+  kafka-data:
   minio-data:
   prometheus-data:
   grafana-data:

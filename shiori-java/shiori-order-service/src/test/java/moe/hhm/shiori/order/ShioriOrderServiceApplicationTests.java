@@ -1,6 +1,7 @@
 package moe.hhm.shiori.order;
 
 import moe.hhm.shiori.order.service.OrderCommandService;
+import moe.hhm.shiori.order.service.OrderConfirmSettlementWorkflowService;
 import moe.hhm.shiori.order.service.OrderCreateWorkflowService;
 import moe.hhm.shiori.order.service.OrderCartService;
 import moe.hhm.shiori.order.service.OrderPayWorkflowService;
@@ -14,7 +15,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 @SpringBootTest(properties = {
         "security.gateway-sign.internal-secret=test-gateway-sign-secret-32-bytes-0001",
         "order.payment-client.internal-token=test-order-payment-internal-token-000000000001",
-        "order.command.enabled=false"
+        "order.command.enabled=false",
+        "order.timeout-scheduler.enabled=false"
 })
 class ShioriOrderServiceApplicationTests {
 
@@ -26,6 +28,9 @@ class ShioriOrderServiceApplicationTests {
 
     @MockitoBean
     private OrderPayWorkflowService orderPayWorkflowService;
+
+    @MockitoBean
+    private OrderConfirmSettlementWorkflowService orderConfirmSettlementWorkflowService;
 
     @MockitoBean
     private OrderService orderService;

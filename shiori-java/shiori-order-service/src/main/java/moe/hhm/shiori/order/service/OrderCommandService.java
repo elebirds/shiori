@@ -43,7 +43,6 @@ import moe.hhm.shiori.order.event.OrderCreatedPayload;
 import moe.hhm.shiori.order.event.OrderDeliveredPayload;
 import moe.hhm.shiori.order.event.OrderFinishedPayload;
 import moe.hhm.shiori.order.event.OrderPaidPayload;
-import moe.hhm.shiori.order.event.OrderTimeoutPayload;
 import moe.hhm.shiori.order.model.OrderEntity;
 import moe.hhm.shiori.order.model.OrderItemEntity;
 import moe.hhm.shiori.order.model.OrderItemRecord;
@@ -65,10 +64,10 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 public class OrderCommandService {
 
+    private static final String OUTBOX_AGGREGATE_TYPE_ORDER = "order";
     private static final Logger log = LoggerFactory.getLogger(OrderCommandService.class);
     private static final String EVENT_ORDER_CREATED = "OrderCreated";
     private static final String EVENT_ORDER_PAID = "OrderPaid";
-    private static final String EVENT_ORDER_TIMEOUT = "OrderTimeout";
     private static final String EVENT_ORDER_CANCELED = "OrderCanceled";
     private static final String EVENT_ORDER_DELIVERED = "OrderDelivered";
     private static final String EVENT_ORDER_FINISHED = "OrderFinished";
@@ -806,12 +805,6 @@ public class OrderCommandService {
                 orderMqProperties.getOrderCreatedRoutingKey());
     }
 
-    void appendOrderTimeoutOutbox(String orderNo, Long buyerUserId) {
-        OrderTimeoutPayload payload = new OrderTimeoutPayload(orderNo, buyerUserId);
-        appendOutbox(orderNo, EVENT_ORDER_TIMEOUT, payload, orderMqProperties.getDelayExchange(),
-                orderMqProperties.getDelayRoutingKey());
-    }
-
     void appendOrderPaidOutbox(String orderNo, String paymentNo, Long buyerUserId, Long sellerUserId, Long totalAmountCent) {
         OrderPaidPayload buyerPayload = new OrderPaidPayload(
                 orderNo, paymentNo, buyerUserId, "BUYER", buyerUserId, sellerUserId, totalAmountCent);
@@ -881,7 +874,9 @@ public class OrderCommandService {
 
         OutboxEventEntity entity = new OutboxEventEntity();
         entity.setEventId(envelope.eventId());
+        entity.setAggregateType(OUTBOX_AGGREGATE_TYPE_ORDER);
         entity.setAggregateId(aggregateId);
+        entity.setMessageKey(aggregateId);
         entity.setType(type);
         entity.setPayload(envelopeJson);
         entity.setExchangeName(exchange);

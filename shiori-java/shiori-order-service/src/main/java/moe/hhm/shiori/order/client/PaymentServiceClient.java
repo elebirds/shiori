@@ -11,6 +11,7 @@ import moe.hhm.shiori.common.error.CommonErrorCode;
 import moe.hhm.shiori.common.error.OrderErrorCode;
 import moe.hhm.shiori.common.error.PaymentErrorCode;
 import moe.hhm.shiori.common.exception.BizException;
+import moe.hhm.shiori.common.http.ServiceRequestUris;
 import moe.hhm.shiori.common.security.GatewaySignProperties;
 import moe.hhm.shiori.common.security.GatewaySignUtils;
 import moe.hhm.shiori.common.security.GatewaySignVerifyFilter;
@@ -50,17 +51,17 @@ public class PaymentServiceClient {
     private final GatewaySignProperties gatewaySignProperties;
     private final ObjectMapper objectMapper;
     private final String internalToken;
+    private final String serviceBaseUrl;
 
     public PaymentServiceClient(RestClient.Builder loadBalancedRestClientBuilder,
                                 PaymentClientProperties paymentClientProperties,
                                 GatewaySignProperties gatewaySignProperties,
                                 ObjectMapper objectMapper) {
-        this.restClient = loadBalancedRestClientBuilder
-                .baseUrl(paymentClientProperties.getServiceBaseUrl())
-                .build();
+        this.restClient = loadBalancedRestClientBuilder.build();
         this.gatewaySignProperties = gatewaySignProperties;
         this.objectMapper = objectMapper;
         this.internalToken = paymentClientProperties.getInternalToken();
+        this.serviceBaseUrl = paymentClientProperties.getServiceBaseUrl();
     }
 
     public ReserveBalancePaymentSnapshot reserveOrderPayment(String orderNo,
@@ -73,7 +74,7 @@ public class PaymentServiceClient {
         ReserveBalancePaymentCommand command = new ReserveBalancePaymentCommand(buyerUserId, sellerUserId, amountCent);
         try {
             Result<ReserveBalancePaymentSnapshot> result = restClient.post()
-                    .uri(path)
+                    .uri(ServiceRequestUris.resolve(serviceBaseUrl, path))
                     .headers(headers -> fillSignedHeaders(headers, "POST", path, null, userId, roles))
                     .body(command)
                     .retrieve()
@@ -100,7 +101,7 @@ public class PaymentServiceClient {
         SettleBalancePaymentCommand command = new SettleBalancePaymentCommand(operatorType, operatorUserId);
         try {
             Result<SettleBalancePaymentSnapshot> result = restClient.post()
-                    .uri(path)
+                    .uri(ServiceRequestUris.resolve(serviceBaseUrl, path))
                     .headers(headers -> fillSignedHeaders(headers, "POST", path, null, userId, roles))
                     .body(command)
                     .retrieve()
@@ -126,7 +127,7 @@ public class PaymentServiceClient {
         ReleaseBalancePaymentCommand command = new ReleaseBalancePaymentCommand(reason);
         try {
             Result<ReleaseBalancePaymentSnapshot> result = restClient.post()
-                    .uri(path)
+                    .uri(ServiceRequestUris.resolve(serviceBaseUrl, path))
                     .headers(headers -> fillSignedHeaders(headers, "POST", path, null, userId, roles))
                     .body(command)
                     .retrieve()
@@ -155,7 +156,7 @@ public class PaymentServiceClient {
         RefundBalancePaymentCommand command = new RefundBalancePaymentCommand(refundNo, operatorType, operatorUserId, reason);
         try {
             Result<RefundBalancePaymentSnapshot> result = restClient.post()
-                    .uri(path)
+                    .uri(ServiceRequestUris.resolve(serviceBaseUrl, path))
                     .headers(headers -> fillSignedHeaders(headers, "POST", path, null, userId, roles))
                     .body(command)
                     .retrieve()

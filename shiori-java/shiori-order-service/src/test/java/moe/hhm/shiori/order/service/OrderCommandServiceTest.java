@@ -51,6 +51,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
@@ -204,6 +205,12 @@ class OrderCommandServiceTest {
         assertThat(response.idempotent()).isFalse();
         assertThat(response.status()).isEqualTo("DELIVERING");
         verify(orderMapper).insertStatusAuditLog("O202603040001", 2001L, "SELLER", 2, 4, "ship");
+        verify(orderMapper).insertOutboxEvent(argThat(entity ->
+                "order".equals(entity.getAggregateType())
+                        && "O202603040001".equals(entity.getAggregateId())
+                        && "O202603040001".equals(entity.getMessageKey())
+                        && "OrderDelivered".equals(entity.getType())
+        ));
     }
 
     @Test
