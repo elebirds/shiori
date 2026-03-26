@@ -17,9 +17,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class ProductStockService {
 
     private final ProductMapper productMapper;
+    private final ProductDetailCacheService productDetailCacheService;
 
-    public ProductStockService(ProductMapper productMapper) {
+    public ProductStockService(ProductMapper productMapper,
+                               ProductDetailCacheService productDetailCacheService) {
         this.productMapper = productMapper;
+        this.productDetailCacheService = productDetailCacheService;
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -88,6 +91,10 @@ public class ProductStockService {
 
         productMapper.updateStockTxnSuccess(bizNo, opType.name(), 1);
         Integer currentStock = productMapper.findStockBySkuId(skuId);
+        Long productId = productMapper.findProductIdBySkuId(skuId);
+        if (productId != null) {
+            productDetailCacheService.evictProductDetail(productId);
+        }
         return new StockOperateResponse(true, false, bizNo, skuId, quantity, currentStock);
     }
 }

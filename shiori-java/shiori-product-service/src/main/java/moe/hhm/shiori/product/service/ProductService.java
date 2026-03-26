@@ -53,19 +53,22 @@ public class ProductService {
     private final ProductMqProperties productMqProperties;
     private final ProductOutboxProperties productOutboxProperties;
     private final ObjectMapper objectMapper;
+    private final ProductDetailCacheService productDetailCacheService;
 
     public ProductService(ProductMapper productMapper,
                           OssObjectService ossObjectService,
                           SkuSpecCodec skuSpecCodec,
                           ProductMqProperties productMqProperties,
                           ProductOutboxProperties productOutboxProperties,
-                          ObjectMapper objectMapper) {
+                          ObjectMapper objectMapper,
+                          ProductDetailCacheService productDetailCacheService) {
         this.productMapper = productMapper;
         this.ossObjectService = ossObjectService;
         this.skuSpecCodec = skuSpecCodec;
         this.productMqProperties = productMqProperties;
         this.productOutboxProperties = productOutboxProperties;
         this.objectMapper = objectMapper;
+        this.productDetailCacheService = productDetailCacheService;
     }
 
     public ProductPageResponse listOnSaleProducts(String keyword, int page, int size) {
@@ -224,6 +227,7 @@ public class ProductService {
         }
 
         ProductRecord latest = requireProduct(productId);
+        productDetailCacheService.evictProductDetail(productId);
         return new ProductWriteResponse(latest.id(), latest.productNo(), ProductStatus.fromCode(latest.status()).name());
     }
 
@@ -247,6 +251,7 @@ public class ProductService {
             throw new IllegalStateException("商品上架后未找到详情记录");
         }
         appendProductPublishedOutbox(latest);
+        productDetailCacheService.evictProductDetail(productId);
         return new ProductWriteResponse(productId, product.productNo(), ProductStatus.ON_SALE.name());
     }
 
@@ -260,6 +265,7 @@ public class ProductService {
             throw new BizException(ProductErrorCode.INVALID_PRODUCT_STATUS, HttpStatus.BAD_REQUEST);
         }
         productMapper.updateProductStatusById(productId, ProductStatus.OFF_SHELF.getCode());
+        productDetailCacheService.evictProductDetail(productId);
         return new ProductWriteResponse(productId, product.productNo(), ProductStatus.OFF_SHELF.name());
     }
 

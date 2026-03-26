@@ -22,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -43,6 +44,9 @@ class ProductV2ServiceTest {
     @Mock
     private ProductMetaService productMetaService;
 
+    @Mock
+    private ProductDetailCacheService productDetailCacheService;
+
     private ProductV2Service productV2Service;
 
     @BeforeEach
@@ -53,7 +57,8 @@ class ProductV2ServiceTest {
                 productService,
                 productMetrics,
                 new SkuSpecCodec(new ObjectMapper()),
-                productMetaService
+                productMetaService,
+                productDetailCacheService
         );
     }
 
@@ -143,27 +148,27 @@ class ProductV2ServiceTest {
 
     @Test
     void shouldReturnSignedImageUrlInDetailHtml() {
-        when(productMapper.findOnSaleProductV2ById(1L)).thenReturn(new ProductV2Record(
-                1L,
-                "P001",
-                1001L,
-                "Java Book",
-                "summary",
-                "<p style=\"text-align:center\"><span style=\"font-size:18px\">展示内容</span></p>"
-                        + "<p><img src=\"product/1001/202603/ok.jpg\" data-object-key=\"product/1001/202603/ok.jpg\" style=\"width:50%\" /></p>",
-                "product/1001/202603/cover.jpg",
-                "TEXTBOOK",
-                "TEXTBOOK_UNSPEC",
-                "GOOD",
-                "MEETUP",
-                "main_campus",
-                ProductStatus.ON_SALE.getCode(),
-                0,
-                3900L,
-                3900L,
-                8
-        ));
-        when(productMapper.listActiveSkusByProductId(1L)).thenReturn(List.of());
+        when(productDetailCacheService.getOnSaleProductDetail(eq(1L), any())).thenReturn(
+                new ProductDetailCacheService.CachedProductDetail(
+                        1L,
+                        "P001",
+                        1001L,
+                        "Java Book",
+                        "summary",
+                        "<p style=\"text-align:center\"><span style=\"font-size:18px\">展示内容</span></p>"
+                                + "<p><img src=\"product/1001/202603/ok.jpg\" data-object-key=\"product/1001/202603/ok.jpg\" style=\"width:50%\" /></p>",
+                        "product/1001/202603/cover.jpg",
+                        "TEXTBOOK",
+                        "TEXTBOOK_UNSPEC",
+                        "GOOD",
+                        "MEETUP",
+                        "main_campus",
+                        3900L,
+                        3900L,
+                        8,
+                        List.of()
+                )
+        );
         when(ossObjectService.presignGetUrl(eq("product/1001/202603/ok.jpg")))
                 .thenReturn("http://cdn.local/signed-ok.jpg");
         when(ossObjectService.presignGetUrl(eq("product/1001/202603/cover.jpg")))
@@ -176,6 +181,8 @@ class ProductV2ServiceTest {
         assertThat(detail.detailHtml()).contains("width:50%");
         assertThat(detail.detailHtml()).contains("http://cdn.local/signed-ok.jpg");
         assertThat(detail.detailHtml()).contains("data-object-key=\"product/1001/202603/ok.jpg\"");
+        verify(productMapper, never()).findOnSaleProductV2ById(1L);
+        verify(productMapper, never()).listActiveSkusByProductId(1L);
     }
 
     @Test
@@ -209,26 +216,26 @@ class ProductV2ServiceTest {
         assertThat(sanitized).contains("product/1001/202603/legacy.jpg");
         assertThat(sanitized).contains("data-object-key=\"product/1001/202603/legacy.jpg\"");
 
-        when(productMapper.findOnSaleProductV2ById(1L)).thenReturn(new ProductV2Record(
-                1L,
-                "P001",
-                1001L,
-                "Java Book",
-                "summary",
-                "<p><img src=\"http://127.0.0.1:9000/shiori-product/product/1001/202603/legacy.jpg?temp=1\" /></p>",
-                "product/1001/202603/cover.jpg",
-                "TEXTBOOK",
-                "TEXTBOOK_UNSPEC",
-                "GOOD",
-                "MEETUP",
-                "main_campus",
-                ProductStatus.ON_SALE.getCode(),
-                0,
-                3900L,
-                3900L,
-                8
-        ));
-        when(productMapper.listActiveSkusByProductId(1L)).thenReturn(List.of());
+        when(productDetailCacheService.getOnSaleProductDetail(eq(1L), any())).thenReturn(
+                new ProductDetailCacheService.CachedProductDetail(
+                        1L,
+                        "P001",
+                        1001L,
+                        "Java Book",
+                        "summary",
+                        "<p><img src=\"http://127.0.0.1:9000/shiori-product/product/1001/202603/legacy.jpg?temp=1\" /></p>",
+                        "product/1001/202603/cover.jpg",
+                        "TEXTBOOK",
+                        "TEXTBOOK_UNSPEC",
+                        "GOOD",
+                        "MEETUP",
+                        "main_campus",
+                        3900L,
+                        3900L,
+                        8,
+                        List.of()
+                )
+        );
         when(ossObjectService.presignGetUrl(eq("product/1001/202603/legacy.jpg")))
                 .thenReturn("http://cdn.local/signed-legacy.jpg");
         when(ossObjectService.presignGetUrl(eq("product/1001/202603/cover.jpg")))
@@ -266,6 +273,51 @@ class ProductV2ServiceTest {
         ArgumentCaptor<ProductEntity> productCaptor = ArgumentCaptor.forClass(ProductEntity.class);
         verify(productMapper).insertProduct(productCaptor.capture());
         assertThat(productCaptor.getValue().getDetailHtml()).isNull();
+    }
+
+    @Test
+    void shouldEvictDetailCacheAfterUpdateProduct() {
+        when(productMapper.findProductV2ById(1L)).thenReturn(new ProductV2Record(
+                1L,
+                "P001",
+                1001L,
+                "Old",
+                "summary",
+                null,
+                "product/1001/202603/cover.jpg",
+                "TEXTBOOK",
+                "TEXTBOOK_UNSPEC",
+                "GOOD",
+                "MEETUP",
+                "main_campus",
+                ProductStatus.ON_SALE.getCode(),
+                0,
+                3900L,
+                3900L,
+                8
+        ));
+        when(productMapper.listActiveSkusByProductId(1L)).thenReturn(List.of(
+                new moe.hhm.shiori.product.model.SkuRecord(10L, 1L, "SKU-10", "标准版", "[]",
+                        "sig-a", "标准版", "{}", 3900L, 8, 0)
+        ));
+        when(productMapper.findProductById(1L)).thenReturn(new moe.hhm.shiori.product.model.ProductRecord(
+                1L, "P001", 1001L, "New", "summary", "product/1001/202603/cover.jpg", ProductStatus.ON_SALE.getCode(), 0
+        ));
+
+        productV2Service.updateProduct(1L, 1001L, false, new moe.hhm.shiori.product.dto.v2.UpdateProductV2Request(
+                "New",
+                "summary",
+                null,
+                "product/1001/202603/cover.jpg",
+                "TEXTBOOK",
+                "TEXTBOOK_UNSPEC",
+                "GOOD",
+                "MEETUP",
+                "main_campus",
+                List.of(skuInput(10L, "版本", "标准版", 3900L, 8))
+        ));
+
+        verify(productDetailCacheService).evictProductDetail(1L);
     }
 
     private SkuInput skuInput(Long id, String specName, String specValue, long priceCent, int stock) {

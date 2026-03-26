@@ -853,6 +853,15 @@ public interface ProductMapper {
     Integer findStockBySkuId(@Param("skuId") Long skuId);
 
     @Select("""
+            SELECT product_id
+            FROM p_sku
+            WHERE id = #{skuId}
+              AND is_deleted = 0
+            LIMIT 1
+            """)
+    Long findProductIdBySkuId(@Param("skuId") Long skuId);
+
+    @Select("""
             SELECT id,
                    biz_no AS bizNo,
                    sku_id AS skuId,

@@ -46,6 +46,9 @@ class ProductServiceTest {
     @Mock
     private OssObjectService ossObjectService;
 
+    @Mock
+    private ProductDetailCacheService productDetailCacheService;
+
     private ProductService productService;
 
     @org.junit.jupiter.api.BeforeEach
@@ -58,7 +61,8 @@ class ProductServiceTest {
                 new SkuSpecCodec(new ObjectMapper()),
                 productMqProperties,
                 productOutboxProperties,
-                new ObjectMapper()
+                new ObjectMapper(),
+                productDetailCacheService
         );
     }
 
@@ -145,6 +149,7 @@ class ProductServiceTest {
         assertThat(readStringField(outbox, "aggregateType")).isEqualTo("product");
         assertThat(readStringField(outbox, "aggregateId")).isEqualTo("P001");
         assertThat(readStringField(outbox, "messageKey")).isEqualTo("P001");
+        verify(productDetailCacheService).evictProductDetail(1L);
     }
 
     @Test
@@ -182,6 +187,7 @@ class ProductServiceTest {
         ArgumentCaptor<Long> removedSkuCaptor = ArgumentCaptor.forClass(Long.class);
         verify(productMapper).softDeleteSkuById(removedSkuCaptor.capture(), eq(1L));
         assertThat(removedSkuCaptor.getValue()).isEqualTo(11L);
+        verify(productDetailCacheService).evictProductDetail(1L);
     }
 
     @Test

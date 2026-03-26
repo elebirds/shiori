@@ -383,7 +383,7 @@
 
 ### 中间件与基础设施 (Infrastructure)
 
-* **缓存:** Redis（缓存/防刷/短期幂等/热点保护）
+* **缓存:** Redis（缓存/防刷/短期幂等/热点保护）。`product-service` 的热点商品详情会写入 Redis，使用短 TTL 负缓存防穿透、互斥锁回源防击穿、TTL 随机抖动防雪崩，并在商品更新/上下架/库存变更成功后主动失效；商品图片签名 URL 也会按 `objectKey` 做独立短 TTL 缓存，且缓存时长严格小于签名有效期。
 * **消息总线:** Kafka / Kafka Connect / Debezium（业务事件 CDC 总线）
 * **可观测性:** Prometheus + Grafana（指标可视化）
 * **压测资产:** k6（脚本化压测，纳入仓库便于复现）

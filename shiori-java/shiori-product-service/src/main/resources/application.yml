@@ -20,6 +20,19 @@ server:
   port: 8082
 
 product:
+  detail-cache:
+    key-prefix: ${PRODUCT_DETAIL_CACHE_KEY_PREFIX:product:detail:v2:}
+    ttl-seconds: ${PRODUCT_DETAIL_CACHE_TTL_SECONDS:120}
+    null-ttl-seconds: ${PRODUCT_DETAIL_CACHE_NULL_TTL_SECONDS:15}
+    ttl-jitter-seconds: ${PRODUCT_DETAIL_CACHE_TTL_JITTER_SECONDS:30}
+    lock-ttl-millis: ${PRODUCT_DETAIL_CACHE_LOCK_TTL_MILLIS:3000}
+    lock-wait-millis: ${PRODUCT_DETAIL_CACHE_LOCK_WAIT_MILLIS:40}
+    lock-wait-attempts: ${PRODUCT_DETAIL_CACHE_LOCK_WAIT_ATTEMPTS:5}
+  media-url-cache:
+    enabled: ${PRODUCT_MEDIA_URL_CACHE_ENABLED:true}
+    key-prefix: ${PRODUCT_MEDIA_URL_CACHE_KEY_PREFIX:product:media:url:}
+    ttl-seconds: ${PRODUCT_MEDIA_URL_CACHE_TTL_SECONDS:180}
+    safety-margin-seconds: ${PRODUCT_MEDIA_URL_CACHE_SAFETY_MARGIN_SECONDS:30}
   outbox:
     enabled: ${PRODUCT_OUTBOX_ENABLED:true}
   mq:

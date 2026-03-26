@@ -48,19 +48,22 @@ public class ProductV2Service {
     private final ProductMetrics productMetrics;
     private final SkuSpecCodec skuSpecCodec;
     private final ProductMetaService productMetaService;
+    private final ProductDetailCacheService productDetailCacheService;
 
     public ProductV2Service(ProductMapper productMapper,
                             OssObjectService ossObjectService,
                             ProductService productService,
                             ProductMetrics productMetrics,
                             SkuSpecCodec skuSpecCodec,
-                            ProductMetaService productMetaService) {
+                            ProductMetaService productMetaService,
+                            ProductDetailCacheService productDetailCacheService) {
         this.productMapper = productMapper;
         this.ossObjectService = ossObjectService;
         this.productService = productService;
         this.productMetrics = productMetrics;
         this.skuSpecCodec = skuSpecCodec;
         this.productMetaService = productMetaService;
+        this.productDetailCacheService = productDetailCacheService;
     }
 
     public ProductV2PageResponse listOnSaleProducts(String keyword,
@@ -217,6 +220,14 @@ public class ProductV2Service {
     }
 
     public ProductV2DetailResponse getOnSaleProductDetail(Long productId) {
+        ProductDetailCacheService.CachedProductDetail product = productDetailCacheService.getOnSaleProductDetail(
+                productId,
+                () -> loadOnSaleProductDetail(productId)
+        );
+        return toDetailResponse(product);
+    }
+
+    private ProductDetailCacheService.CachedProductDetail loadOnSaleProductDetail(Long productId) {
         ProductV2Record product = productMapper.findOnSaleProductV2ById(productId);
         if (product == null) {
             ProductV2Record existing = productMapper.findProductV2ById(productId);
@@ -226,7 +237,36 @@ public class ProductV2Service {
             throw new BizException(ProductErrorCode.PRODUCT_NOT_ON_SALE, HttpStatus.BAD_REQUEST);
         }
         List<SkuRecord> skus = productMapper.listActiveSkusByProductId(productId);
-        return toDetailResponse(product, skus);
+        List<ProductDetailCacheService.CachedSku> cachedSkus = new ArrayList<>(skus.size());
+        for (SkuRecord sku : skus) {
+            List<SpecItemResponse> specItems = skuSpecCodec.fromSkuRecord(sku);
+            cachedSkus.add(new ProductDetailCacheService.CachedSku(
+                    sku.id(),
+                    sku.skuNo(),
+                    StringUtils.hasText(sku.displayName()) ? sku.displayName() : skuSpecCodec.toDisplayName(specItems),
+                    specItems,
+                    sku.priceCent(),
+                    sku.stock()
+            ));
+        }
+        return new ProductDetailCacheService.CachedProductDetail(
+                product.id(),
+                product.productNo(),
+                product.ownerUserId(),
+                product.title(),
+                product.description(),
+                product.detailHtml(),
+                product.coverObjectKey(),
+                product.categoryCode(),
+                product.subCategoryCode(),
+                product.conditionLevel(),
+                product.tradeMode(),
+                product.campusCode(),
+                product.minPriceCent(),
+                product.maxPriceCent(),
+                product.totalStock(),
+                cachedSkus
+        );
     }
 
     public ProductV2DetailResponse getMyProductDetail(Long productId, Long userId, boolean admin) {
@@ -364,6 +404,7 @@ public class ProductV2Service {
         if (latest == null) {
             throw new BizException(ProductErrorCode.PRODUCT_NOT_FOUND, HttpStatus.NOT_FOUND);
         }
+        productDetailCacheService.evictProductDetail(productId);
         return new ProductWriteResponse(latest.id(), latest.productNo(), ProductStatus.fromCode(latest.status()).name());
     }
 
@@ -436,6 +477,39 @@ public class ProductV2Service {
                 product.coverObjectKey(),
                 resolveCoverImageUrl(product.coverObjectKey()),
                 ProductStatus.fromCode(product.status()).name(),
+                product.categoryCode(),
+                product.subCategoryCode(),
+                product.conditionLevel(),
+                product.tradeMode(),
+                product.campusCode(),
+                product.minPriceCent(),
+                product.maxPriceCent(),
+                product.totalStock(),
+                skuResponses
+        );
+    }
+
+    private ProductV2DetailResponse toDetailResponse(ProductDetailCacheService.CachedProductDetail product) {
+        List<SkuResponse> skuResponses = product.skus().stream()
+                .map(sku -> new SkuResponse(
+                        sku.skuId(),
+                        sku.skuNo(),
+                        sku.displayName(),
+                        sku.specItems(),
+                        sku.priceCent(),
+                        sku.stock()
+                ))
+                .toList();
+        return new ProductV2DetailResponse(
+                product.productId(),
+                product.productNo(),
+                product.ownerUserId(),
+                product.title(),
+                product.description(),
+                renderDetailHtmlForResponse(product.detailHtml()),
+                product.coverObjectKey(),
+                resolveCoverImageUrl(product.coverObjectKey()),
+                ProductStatus.ON_SALE.name(),
                 product.categoryCode(),
                 product.subCategoryCode(),
                 product.conditionLevel(),
