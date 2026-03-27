@@ -1,18 +1,30 @@
 package moe.hhm.shiori.product.service;
 
+import java.time.Duration;
+import java.time.Instant;
 import moe.hhm.shiori.common.error.ProductErrorCode;
 import moe.hhm.shiori.common.exception.BizException;
+import moe.hhm.shiori.product.config.ProductMqProperties;
+import moe.hhm.shiori.product.config.ProductOutboxProperties;
+import moe.hhm.shiori.product.domain.OutboxStatus;
+import moe.hhm.shiori.product.domain.ProductStatus;
 import moe.hhm.shiori.product.domain.StockOpType;
 import moe.hhm.shiori.product.dto.StockDeductRequest;
 import moe.hhm.shiori.product.dto.StockOperateResponse;
 import moe.hhm.shiori.product.dto.StockReleaseRequest;
+import moe.hhm.shiori.product.event.EventEnvelope;
+import moe.hhm.shiori.product.event.ProductSearchUpsertedPayload;
+import moe.hhm.shiori.product.model.ProductOutboxEventEntity;
+import moe.hhm.shiori.product.model.ProductSearchSnapshotRecord;
 import moe.hhm.shiori.product.model.StockTxnRecord;
 import moe.hhm.shiori.product.repository.ProductMapper;
-import java.time.Duration;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 @Service
 public class ProductStockService {
@@ -20,13 +32,22 @@ public class ProductStockService {
     private final ProductMapper productMapper;
     private final ProductMetrics productMetrics;
     private final ProductDetailCacheService productDetailCacheService;
+    private final ProductMqProperties productMqProperties;
+    private final ProductOutboxProperties productOutboxProperties;
+    private final ObjectMapper objectMapper;
 
     public ProductStockService(ProductMapper productMapper,
                                ProductMetrics productMetrics,
-                               ProductDetailCacheService productDetailCacheService) {
+                               ProductDetailCacheService productDetailCacheService,
+                               ProductMqProperties productMqProperties,
+                               ProductOutboxProperties productOutboxProperties,
+                               ObjectMapper objectMapper) {
         this.productMapper = productMapper;
         this.productMetrics = productMetrics;
         this.productDetailCacheService = productDetailCacheService;
+        this.productMqProperties = productMqProperties;
+        this.productOutboxProperties = productOutboxProperties;
+        this.objectMapper = objectMapper;
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -112,7 +133,76 @@ public class ProductStockService {
         Long productId = productMapper.findProductIdBySkuId(skuId);
         if (productId != null) {
             productDetailCacheService.evictProductDetail(productId);
+            appendProductSearchUpsertOutbox(productId);
         }
         return new StockOperateResponse(true, false, bizNo, skuId, quantity, currentStock);
+    }
+
+    private void appendProductSearchUpsertOutbox(Long productId) {
+        if (!productOutboxProperties.isEnabled()) {
+            return;
+        }
+        ProductSearchSnapshotRecord snapshot = productMapper.findProductSearchSnapshotById(productId);
+        if (snapshot == null
+                || snapshot.productId() == null
+                || snapshot.ownerUserId() == null
+                || !StringUtils.hasText(snapshot.productNo())
+                || snapshot.isDeleted() == null
+                || snapshot.isDeleted() != 0
+                || snapshot.status() == null
+                || snapshot.status() != ProductStatus.ON_SALE.getCode()) {
+            return;
+        }
+
+        ProductSearchUpsertedPayload payload = new ProductSearchUpsertedPayload(
+                snapshot.productId(),
+                snapshot.productNo(),
+                snapshot.ownerUserId(),
+                snapshot.title(),
+                snapshot.description(),
+                snapshot.coverObjectKey(),
+                snapshot.categoryCode(),
+                snapshot.subCategoryCode(),
+                snapshot.conditionLevel(),
+                snapshot.tradeMode(),
+                snapshot.campusCode(),
+                snapshot.minPriceCent(),
+                snapshot.maxPriceCent(),
+                snapshot.totalStock(),
+                snapshot.status(),
+                snapshot.version(),
+                snapshot.createdAt() == null ? null : snapshot.createdAt().toString(),
+                snapshot.updatedAt() == null ? Instant.now().toString() : snapshot.updatedAt().toString()
+        );
+        EventEnvelope envelope = new EventEnvelope(
+                java.util.UUID.randomUUID().toString().replace("-", ""),
+                "PRODUCT_SEARCH_UPSERTED",
+                snapshot.productNo(),
+                Instant.now().toString(),
+                objectMapper.valueToTree(payload)
+        );
+        insertOutboxEvent(snapshot.productNo(), envelope);
+    }
+
+    private void insertOutboxEvent(String aggregateId, EventEnvelope envelope) {
+        String envelopeJson;
+        try {
+            envelopeJson = objectMapper.writeValueAsString(envelope);
+        } catch (JacksonException ex) {
+            throw new IllegalStateException("构建 product outbox 事件失败", ex);
+        }
+
+        ProductOutboxEventEntity entity = new ProductOutboxEventEntity();
+        entity.setEventId(envelope.eventId());
+        entity.setAggregateType("product");
+        entity.setAggregateId(aggregateId);
+        entity.setMessageKey(aggregateId);
+        entity.setType(envelope.type());
+        entity.setPayload(envelopeJson);
+        entity.setExchangeName(productMqProperties.getEventExchange());
+        entity.setRoutingKey(productMqProperties.getProductPublishedRoutingKey());
+        entity.setStatus(OutboxStatus.PENDING.name());
+        entity.setRetryCount(0);
+        productMapper.insertProductOutboxEvent(entity);
     }
 }

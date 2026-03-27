@@ -20,6 +20,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
@@ -46,6 +47,8 @@ class ProductV2ServiceTest {
 
     @Mock
     private ProductDetailCacheService productDetailCacheService;
+    @Mock
+    private ProductSearchQueryService productSearchQueryService;
 
     private ProductV2Service productV2Service;
 
@@ -58,8 +61,90 @@ class ProductV2ServiceTest {
                 productMetrics,
                 new SkuSpecCodec(new ObjectMapper()),
                 productMetaService,
-                productDetailCacheService
+                productDetailCacheService,
+                productSearchQueryService
         );
+    }
+
+    @Test
+    void shouldUseEsWhenKeywordPresent() {
+        when(productSearchQueryService.isSearchEnabled()).thenReturn(true);
+        when(productSearchQueryService.searchOnSaleProducts(eq("Java"),
+                any(ProductSearchQueryService.SearchRequest.class)))
+                .thenReturn(new ProductV2PageResponse(
+                        1L,
+                        1,
+                        10,
+                        List.of(new moe.hhm.shiori.product.dto.v2.ProductV2SummaryResponse(
+                                1L,
+                                "P001",
+                                1001L,
+                                "Java Book",
+                                "desc",
+                                "product/1001/202603/a.jpg",
+                                "http://cdn/a.jpg",
+                                "ON_SALE",
+                                "TEXTBOOK",
+                                "TEXTBOOK_UNSPEC",
+                                "GOOD",
+                                "MEETUP",
+                                "main_campus",
+                                3900L,
+                                3900L,
+                                8
+                        ))
+                ));
+
+        ProductV2PageResponse response = productV2Service.listOnSaleProducts(
+                "Java", null, null, null, null, null, null, null, 1, 10
+        );
+
+        assertThat(response.total()).isEqualTo(1L);
+        verify(productSearchQueryService).searchOnSaleProducts(eq("Java"),
+                any(ProductSearchQueryService.SearchRequest.class));
+        verify(productMapper, never()).listOnSaleProductsV2(any(), any(), any(), any(), any(), any(), any(), any(),
+                anyInt(), anyInt());
+        verify(productMetrics).incQuery("keyword");
+    }
+
+    @Test
+    void shouldFallbackToMysqlWhenEsQueryThrows() {
+        when(productSearchQueryService.isSearchEnabled()).thenReturn(true);
+        when(productSearchQueryService.isMysqlFallbackEnabled()).thenReturn(true);
+        when(productSearchQueryService.searchOnSaleProducts(eq("Java"),
+                any(ProductSearchQueryService.SearchRequest.class)))
+                .thenThrow(new RuntimeException("es down"));
+        when(productMapper.countOnSaleProductsV2("Java", null, null, null, null, null)).thenReturn(1L);
+        when(productMapper.listOnSaleProductsV2("Java", null, null, null, null, null,
+                "CREATED_AT", "DESC", 10, 0))
+                .thenReturn(List.of(new ProductV2Record(
+                        1L,
+                        "P001",
+                        1001L,
+                        "Java Book",
+                        "desc",
+                        null,
+                        "product/1001/202603/a.jpg",
+                        "TEXTBOOK",
+                        "TEXTBOOK_UNSPEC",
+                        "GOOD",
+                        "MEETUP",
+                        "main_campus",
+                        ProductStatus.ON_SALE.getCode(),
+                        0,
+                        3900L,
+                        3900L,
+                        8
+                )));
+        when(ossObjectService.presignGetUrl("product/1001/202603/a.jpg")).thenReturn("http://cdn/a.jpg");
+
+        ProductV2PageResponse response = productV2Service.listOnSaleProducts(
+                "Java", null, null, null, null, null, null, null, 1, 10
+        );
+
+        assertThat(response.total()).isEqualTo(1L);
+        verify(productMapper).listOnSaleProductsV2(eq("Java"), any(), any(), any(), any(), any(),
+                any(), any(), eq(10), eq(0));
     }
 
     @Test

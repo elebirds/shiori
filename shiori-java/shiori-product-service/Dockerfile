@@ -1,15 +1,7 @@
-FROM gradle:9.0.0-jdk21 AS builder
-
-WORKDIR /workspace
-COPY shiori-java/ /workspace/shiori-java/
-WORKDIR /workspace/shiori-java
-
-RUN gradle --no-daemon :shiori-product-service:bootJar -x test
-
-FROM gradle:9.0.0-jdk21
+FROM eclipse-temurin:21-jre
 
 WORKDIR /app
-COPY --from=builder /workspace/shiori-java/shiori-product-service/build/libs/*.jar /app/app.jar
+COPY shiori-java/shiori-product-service/build/libs/*.jar /app/app.jar
 
 ENV NACOS_ADDR=nacos:8848
 ENV NACOS_USERNAME=nacos

@@ -8,6 +8,8 @@ import moe.hhm.shiori.product.dto.ProductWriteResponse;
 import moe.hhm.shiori.product.dto.SpecItemResponse;
 import moe.hhm.shiori.product.dto.SkuResponse;
 import moe.hhm.shiori.product.dto.v2.ProductV2DetailResponse;
+import moe.hhm.shiori.product.dto.v2.ProductV2PageResponse;
+import moe.hhm.shiori.product.dto.v2.ProductV2SummaryResponse;
 import moe.hhm.shiori.product.service.ProductV2Service;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -144,5 +146,52 @@ class ProductV2ControllerMvcTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.detailHtml").value("<p><span style=\"font-size:18px\">detail</span></p><p><img src=\"http://cdn/detail.jpg\" data-object-key=\"product/1001/202603/detail.jpg\" style=\"width:50%\"/></p>"));
+    }
+
+    @Test
+    void shouldPassKeywordFiltersAndSortToListEndpoint() throws Exception {
+        when(productV2Service.listOnSaleProducts("Java", "TEXTBOOK", "TEXTBOOK_UNSPEC", "GOOD",
+                "MEETUP", "main_campus", "MIN_PRICE", "ASC", 2, 5))
+                .thenReturn(new ProductV2PageResponse(
+                        1L,
+                        2,
+                        5,
+                        List.of(new ProductV2SummaryResponse(
+                                1L,
+                                "P001",
+                                1001L,
+                                "Java Book",
+                                "desc",
+                                "product/1001/202603/a.jpg",
+                                "http://cdn/a.jpg",
+                                "ON_SALE",
+                                "TEXTBOOK",
+                                "TEXTBOOK_UNSPEC",
+                                "GOOD",
+                                "MEETUP",
+                                "main_campus",
+                                3900L,
+                                3900L,
+                                8
+                        ))
+                ));
+
+        mockMvc.perform(get("/api/v2/product/products")
+                        .param("keyword", "Java")
+                        .param("categoryCode", "TEXTBOOK")
+                        .param("subCategoryCode", "TEXTBOOK_UNSPEC")
+                        .param("conditionLevel", "GOOD")
+                        .param("tradeMode", "MEETUP")
+                        .param("campusCode", "main_campus")
+                        .param("sortBy", "MIN_PRICE")
+                        .param("sortDir", "ASC")
+                        .param("page", "2")
+                        .param("size", "5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.total").value(1));
+
+        verify(productV2Service).listOnSaleProducts("Java", "TEXTBOOK", "TEXTBOOK_UNSPEC", "GOOD",
+                "MEETUP", "main_campus", "MIN_PRICE", "ASC", 2, 5);
     }
 }

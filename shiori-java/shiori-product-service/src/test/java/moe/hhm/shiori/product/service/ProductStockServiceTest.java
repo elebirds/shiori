@@ -3,22 +3,28 @@ package moe.hhm.shiori.product.service;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import moe.hhm.shiori.common.exception.BizException;
+import moe.hhm.shiori.product.config.ProductMqProperties;
+import moe.hhm.shiori.product.config.ProductOutboxProperties;
 import moe.hhm.shiori.product.dto.StockDeductRequest;
 import moe.hhm.shiori.product.dto.StockOperateResponse;
 import moe.hhm.shiori.product.dto.StockReleaseRequest;
+import moe.hhm.shiori.product.model.ProductSearchSnapshotRecord;
 import moe.hhm.shiori.product.model.SkuRecord;
 import moe.hhm.shiori.product.model.StockTxnRecord;
 import moe.hhm.shiori.product.repository.ProductMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import tools.jackson.databind.ObjectMapper;
 
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -37,8 +43,19 @@ class ProductStockServiceTest {
     @Spy
     private ProductMetrics productMetrics = new ProductMetrics(meterRegistry);
 
-    @InjectMocks
     private ProductStockService productStockService;
+
+    @BeforeEach
+    void setUp() {
+        productStockService = new ProductStockService(
+                productMapper,
+                productMetrics,
+                productDetailCacheService,
+                new ProductMqProperties(),
+                new ProductOutboxProperties(),
+                new ObjectMapper()
+        );
+    }
 
     @Test
     void shouldDeductStockSuccess() {
@@ -49,6 +66,7 @@ class ProductStockServiceTest {
         when(productMapper.deductStockAtomic(10L, 2)).thenReturn(1);
         when(productMapper.findStockBySkuId(10L)).thenReturn(8);
         when(productMapper.findProductIdBySkuId(10L)).thenReturn(1L);
+        when(productMapper.findProductSearchSnapshotById(1L)).thenReturn(searchSnapshot(1L, 2L, 3900L, 3900L, 8));
 
         StockOperateResponse response = productStockService.deduct(new StockDeductRequest(10L, 2, "BIZ-1"));
 
@@ -58,6 +76,8 @@ class ProductStockServiceTest {
         verify(productMapper).updateStockTxnSuccess("BIZ-1", "DEDUCT", 1);
         verify(productMapper).findProductIdBySkuId(10L);
         verify(productDetailCacheService).evictProductDetail(1L);
+        verify(productMapper).insertProductOutboxEvent(argThat(event ->
+                "PRODUCT_SEARCH_UPSERTED".equals(event.getType())));
         Timer timer = meterRegistry.find("shiori_product_stock_deduct_latency_seconds")
                 .tag("result", "success")
                 .timer();
@@ -101,6 +121,7 @@ class ProductStockServiceTest {
         when(productMapper.increaseStockAtomic(10L, 2)).thenReturn(1);
         when(productMapper.findStockBySkuId(10L)).thenReturn(12);
         when(productMapper.findProductIdBySkuId(10L)).thenReturn(1L);
+        when(productMapper.findProductSearchSnapshotById(1L)).thenReturn(searchSnapshot(1L, 2L, 3900L, 3900L, 12));
 
         StockOperateResponse response = productStockService.release(new StockReleaseRequest(10L, 2, "BIZ-4"));
 
@@ -108,6 +129,23 @@ class ProductStockServiceTest {
         assertThat(response.currentStock()).isEqualTo(12);
         verify(productMapper).updateStockTxnSuccess("BIZ-4", "RELEASE", 1);
         verify(productDetailCacheService).evictProductDetail(1L);
+        verify(productMapper).insertProductOutboxEvent(argThat(event ->
+                "PRODUCT_SEARCH_UPSERTED".equals(event.getType())));
+    }
+
+    @Test
+    void shouldSkipSearchOutboxWhenProductSnapshotMissingAfterStockChange() {
+        when(productMapper.findActiveSkuByIdForUpdate(10L)).thenReturn(
+                new SkuRecord(10L, 1L, "S001", "标准版", "{}", 3900L, 10, 0)
+        );
+        when(productMapper.findStockTxnByBizNoAndType("BIZ-5", "DEDUCT")).thenReturn(null);
+        when(productMapper.deductStockAtomic(10L, 1)).thenReturn(1);
+        when(productMapper.findStockBySkuId(10L)).thenReturn(9);
+        when(productMapper.findProductIdBySkuId(10L)).thenReturn(1L);
+        when(productMapper.findProductSearchSnapshotById(1L)).thenReturn(null);
+
+        assertThatCode(() -> productStockService.deduct(new StockDeductRequest(10L, 1, "BIZ-5")))
+                .doesNotThrowAnyException();
     }
 
     @Test
@@ -144,5 +182,33 @@ class ProductStockServiceTest {
         inOrder.verify(productMapper).findStockTxnByBizNoAndType("BIZ-FAST", "DEDUCT");
         inOrder.verify(productMapper).insertStockTxn("BIZ-FAST", 10L, "DEDUCT", 2, 0);
         inOrder.verify(productMapper).deductStockAtomic(10L, 2);
+    }
+
+    private ProductSearchSnapshotRecord searchSnapshot(Long productId,
+                                                       long version,
+                                                       long minPriceCent,
+                                                       long maxPriceCent,
+                                                       int totalStock) {
+        return new ProductSearchSnapshotRecord(
+                productId,
+                "P001",
+                1001L,
+                "Java Book",
+                "desc",
+                "product/1001/202603/cover.jpg",
+                "TEXTBOOK",
+                "TEXTBOOK_UNSPEC",
+                "GOOD",
+                "MEETUP",
+                "main_campus",
+                minPriceCent,
+                maxPriceCent,
+                totalStock,
+                2,
+                0,
+                version,
+                java.time.LocalDateTime.parse("2026-03-27T10:00:00"),
+                java.time.LocalDateTime.parse("2026-03-27T10:01:00")
+        );
     }
 }

@@ -24,6 +24,7 @@ dependencies {
     implementation 'com.nimbusds:nimbus-jose-jwt:10.3'
     implementation 'com.alibaba.cloud:spring-cloud-starter-alibaba-nacos-discovery'
     implementation 'com.alibaba.cloud:spring-cloud-starter-alibaba-nacos-config'
+    implementation 'co.elastic.clients:elasticsearch-java:8.17.2'
     implementation 'org.flywaydb:flyway-mysql'
     implementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter:4.0.1'
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.2'

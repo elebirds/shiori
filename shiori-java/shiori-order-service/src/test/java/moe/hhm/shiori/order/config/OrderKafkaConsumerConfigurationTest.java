@@ -5,9 +5,11 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.support.ExponentialBackOffWithMaxRetries;
+import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.KafkaOperations;
 import org.springframework.kafka.listener.CommonErrorHandler;
+import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.util.backoff.FixedBackOff;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -27,6 +29,10 @@ class OrderKafkaConsumerConfigurationTest {
             assertThat(context).hasNotFailed();
             assertThat(context).hasSingleBean(CommonErrorHandler.class);
             assertThat(context).hasBean("kafkaListenerContainerFactory");
+            ConcurrentKafkaListenerContainerFactory<?, ?> factory =
+                    context.getBean("kafkaListenerContainerFactory", ConcurrentKafkaListenerContainerFactory.class);
+            assertThat(factory.getContainerProperties().getAckMode())
+                    .isEqualTo(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
         });
     }
 

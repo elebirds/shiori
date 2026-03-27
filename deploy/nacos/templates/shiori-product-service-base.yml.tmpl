@@ -37,6 +37,13 @@ product:
   mq:
     event-exchange: ${PRODUCT_EVENT_EXCHANGE:shiori.product.event}
     product-published-routing-key: ${PRODUCT_PUBLISHED_ROUTING_KEY:product.published}
+  search:
+    enabled: ${PRODUCT_SEARCH_ENABLED}
+    endpoint: ${PRODUCT_SEARCH_ENDPOINT}
+    index-name: ${PRODUCT_SEARCH_INDEX_NAME}
+    connect-timeout: ${PRODUCT_SEARCH_CONNECT_TIMEOUT}
+    read-timeout: ${PRODUCT_SEARCH_READ_TIMEOUT}
+    mysql-fallback-enabled: ${PRODUCT_SEARCH_MYSQL_FALLBACK_ENABLED}
 
 management:
   endpoints:

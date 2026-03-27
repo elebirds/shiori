@@ -1,0 +1,39 @@
+spring:
+  application:
+    name: shiori-search-indexer-service
+  config:
+    import:
+      - optional:nacos:${spring.application.name}-base.yml?group=${NACOS_CONFIG_GROUP:SHIORI_DEV_DOCKER}&refreshEnabled=true
+      - optional:nacos:${spring.application.name}-secret.yml?group=${NACOS_CONFIG_GROUP:SHIORI_DEV_DOCKER}&refreshEnabled=true
+      - optional:nacos:shiori-security-base.yml?group=${NACOS_CONFIG_GROUP:SHIORI_DEV_DOCKER}&refreshEnabled=true
+      - optional:nacos:shiori-security-secret.yml?group=${NACOS_CONFIG_GROUP:SHIORI_DEV_DOCKER}&refreshEnabled=true
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_ADDR:nacos:8848}
+      config:
+        server-addr: ${NACOS_ADDR:nacos:8848}
+      username: ${NACOS_USERNAME}
+      password: ${NACOS_PASSWORD}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:127.0.0.1:9092}
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      enable-auto-commit: false
+      auto-offset-reset: latest
+    listener:
+      ack-mode: manual
+      missing-topics-fatal: false
+
+server:
+  port: 8086
+
+search:
+  kafka:
+    enabled: ${SEARCH_KAFKA_ENABLED:false}
+    product-outbox-topic: ${SEARCH_PRODUCT_OUTBOX_TOPIC:shiori.cdc.product.outbox.raw}
+    product-outbox-group-id: ${SEARCH_PRODUCT_OUTBOX_GROUP_ID:shiori-search-indexer}
+  elasticsearch:
+    endpoint: ${SEARCH_ELASTICSEARCH_ENDPOINT:http://127.0.0.1:9200}
+    index-name: ${SEARCH_ELASTICSEARCH_INDEX_NAME:shiori_product_search}

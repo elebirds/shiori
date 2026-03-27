@@ -2,6 +2,7 @@ package moe.hhm.shiori.product.service;
 
 import java.lang.reflect.Field;
 import java.util.List;
+import java.util.stream.Collectors;
 import moe.hhm.shiori.common.exception.BizException;
 import moe.hhm.shiori.product.config.ProductMqProperties;
 import moe.hhm.shiori.product.config.ProductOutboxProperties;
@@ -15,6 +16,7 @@ import moe.hhm.shiori.product.dto.UpdateProductRequest;
 import moe.hhm.shiori.product.model.ProductEntity;
 import moe.hhm.shiori.product.model.ProductOutboxEventEntity;
 import moe.hhm.shiori.product.model.ProductRecord;
+import moe.hhm.shiori.product.model.ProductSearchSnapshotRecord;
 import moe.hhm.shiori.product.model.ProductV2Record;
 import moe.hhm.shiori.product.model.SkuRecord;
 import moe.hhm.shiori.product.repository.ProductMapper;
@@ -138,17 +140,26 @@ class ProductServiceTest {
                 3900L,
                 12
         ));
+        when(productMapper.findProductSearchSnapshotById(1L)).thenReturn(
+                searchSnapshot(1L, "P001", ProductStatus.ON_SALE.getCode(), 2L, 3900L, 3900L, 12)
+        );
 
         ProductWriteResponse response = productService.publishProduct(1L, 1001L, false);
 
         assertThat(response.status()).isEqualTo(ProductStatus.ON_SALE.name());
         verify(productMapper).updateProductStatusById(1L, ProductStatus.ON_SALE.getCode());
         ArgumentCaptor<ProductOutboxEventEntity> outboxCaptor = ArgumentCaptor.forClass(ProductOutboxEventEntity.class);
-        verify(productMapper).insertProductOutboxEvent(outboxCaptor.capture());
-        ProductOutboxEventEntity outbox = outboxCaptor.getValue();
-        assertThat(readStringField(outbox, "aggregateType")).isEqualTo("product");
-        assertThat(readStringField(outbox, "aggregateId")).isEqualTo("P001");
-        assertThat(readStringField(outbox, "messageKey")).isEqualTo("P001");
+        verify(productMapper, times(2)).insertProductOutboxEvent(outboxCaptor.capture());
+        assertThat(outboxCaptor.getAllValues().stream()
+                .map(ProductOutboxEventEntity::getType)
+                .collect(Collectors.toSet()))
+                .containsExactlyInAnyOrder("PRODUCT_PUBLISHED", "PRODUCT_SEARCH_UPSERTED");
+        assertThat(outboxCaptor.getAllValues())
+                .allSatisfy(outbox -> {
+                    assertThat(readStringField(outbox, "aggregateType")).isEqualTo("product");
+                    assertThat(readStringField(outbox, "aggregateId")).isEqualTo("P001");
+                    assertThat(readStringField(outbox, "messageKey")).isEqualTo("P001");
+                });
         verify(productDetailCacheService).evictProductDetail(1L);
     }
 
@@ -160,6 +171,24 @@ class ProductServiceTest {
 
         assertThatThrownBy(() -> productService.offShelfProduct(1L, 1001L, false))
                 .isInstanceOf(BizException.class);
+    }
+
+    @Test
+    void shouldAppendSearchRemovedOutboxWhenOffShelfOnSaleProduct() {
+        when(productMapper.findProductById(1L)).thenReturn(new ProductRecord(
+                1L, "P001", 1001L, "Java Book", "desc", null, ProductStatus.ON_SALE.getCode(), 0
+        ));
+        when(productMapper.findProductSearchSnapshotById(1L)).thenReturn(
+                searchSnapshot(1L, "P001", ProductStatus.OFF_SHELF.getCode(), 3L, 3900L, 3900L, 12)
+        );
+
+        ProductWriteResponse response = productService.offShelfProduct(1L, 1001L, false);
+
+        assertThat(response.status()).isEqualTo(ProductStatus.OFF_SHELF.name());
+        ArgumentCaptor<ProductOutboxEventEntity> outboxCaptor = ArgumentCaptor.forClass(ProductOutboxEventEntity.class);
+        verify(productMapper).insertProductOutboxEvent(outboxCaptor.capture());
+        assertThat(outboxCaptor.getValue().getType()).isEqualTo("PRODUCT_SEARCH_REMOVED");
+        verify(productDetailCacheService).evictProductDetail(1L);
     }
 
     @Test
@@ -253,6 +282,36 @@ class ProductServiceTest {
 
     private SkuInput skuInput(Long id, String specName, String specValue, long priceCent, int stock) {
         return new SkuInput(id, List.of(new SpecItemInput(specName, specValue)), priceCent, stock);
+    }
+
+    private ProductSearchSnapshotRecord searchSnapshot(Long productId,
+                                                       String productNo,
+                                                       int status,
+                                                       long version,
+                                                       long minPriceCent,
+                                                       long maxPriceCent,
+                                                       int totalStock) {
+        return new ProductSearchSnapshotRecord(
+                productId,
+                productNo,
+                1001L,
+                "Java Book",
+                "desc",
+                "product/1001/202603/cover.jpg",
+                "TEXTBOOK",
+                "TEXTBOOK_UNSPEC",
+                "GOOD",
+                "MEETUP",
+                "main_campus",
+                minPriceCent,
+                maxPriceCent,
+                totalStock,
+                status,
+                0,
+                version,
+                java.time.LocalDateTime.parse("2026-03-27T10:00:00"),
+                java.time.LocalDateTime.parse("2026-03-27T10:01:00")
+        );
     }
 
     private String readStringField(Object target, String fieldName) {

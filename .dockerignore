@@ -14,3 +14,9 @@ ci-logs
 **/coverage
 **/playwright-report
 **/test-results
+!shiori-java/shiori-product-service/build/
+!shiori-java/shiori-product-service/build/libs/
+!shiori-java/shiori-product-service/build/libs/*.jar
+!shiori-java/shiori-search-indexer-service/build/
+!shiori-java/shiori-search-indexer-service/build/libs/
+!shiori-java/shiori-search-indexer-service/build/libs/*.jar
