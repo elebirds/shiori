@@ -408,6 +408,34 @@ if (throwOnFailure && !failedRefundNos.isEmpty()) {
 2. 这样错误处理器才能继续走重试或 DLT
 3. 否则消息会被误判为成功，offset 被推进，业务失败却无法回放
 
+### 5.8 真实联调额外暴露了一个 Spring Boot 4 运行时装配点
+
+这次如果只看单测，其实不一定能立刻发现运行时问题。
+
+真实联调时我还踩到了一个很典型的坑：
+
+1. 仅引入 `spring-kafka` 并不够
+2. Spring Boot 4 下还需要显式引入 `spring-boot-kafka`
+3. 否则运行时不会自动生成 `KafkaTemplate / KafkaOperations / ConsumerFactory`
+4. 结果就是错误处理器里注入 `KafkaOperations` 失败，消费者根本起不来
+
+依赖修正对齐 [`build.gradle`](/Users/hhm/code/shiori/shiori-java/shiori-order-service/build.gradle) / [`build.gradle`](/Users/hhm/code/shiori/shiori-java/shiori-social-service/build.gradle)：
+
+```groovy
+implementation 'org.springframework.boot:spring-boot-kafka'
+implementation 'org.springframework.kafka:spring-kafka'
+```
+
+我还补了两类测试把这个问题固定住：
+
+1. 配置装配测试：验证 `CommonErrorHandler` 和 `kafkaListenerContainerFactory` 能创建
+2. 自动配置集成测试：验证 `KafkaOperations / ConsumerFactory` 在真实 Boot 自动配置下确实存在
+
+对应测试文件：
+
+1. [`OrderKafkaAutoConfigurationIntegrationTest.java`](/Users/hhm/code/shiori/shiori-java/shiori-order-service/src/test/java/moe/hhm/shiori/order/config/OrderKafkaAutoConfigurationIntegrationTest.java)
+2. [`SocialKafkaAutoConfigurationIntegrationTest.java`](/Users/hhm/code/shiori/shiori-java/shiori-social-service/src/test/java/moe/hhm/shiori/social/config/SocialKafkaAutoConfigurationIntegrationTest.java)
+
 ---
 
 ## 6. 消费者重启后从哪里开始消费
@@ -435,9 +463,109 @@ if (throwOnFailure && !failedRefundNos.isEmpty()) {
 
 ---
 
-## 7. 几个关键边界，不能夸大
+## 7. 真实联调证据：这套方案不是只停留在设计图上
 
-### 7.1 这不是端到端 `exactly-once`
+这次我实际做了一轮本地 Docker + MySQL + Kafka + Nacos 的真实联调，不是只停留在单测。
+
+联调时间：
+
+1. 2026-03-27
+2. 本地 `docker compose` 环境
+3. `order-service` 与 `social-service` 都使用真实容器启动
+
+为了把两条链路都跑起来，我做了两件事：
+
+1. 修复了本地 MySQL 历史数据卷里的账号密码漂移，否则服务都起不来
+2. 临时把 Nacos 里的 `order.kafka.enabled` 打开做验证，联调后已恢复原状态
+
+### 7.1 启动证据
+
+真实启动后，两边消费者都成功订阅了目标 topic：
+
+1. `order-service` 订阅 `shiori.cdc.payment.outbox.raw`
+2. `social-service` 订阅 `shiori.cdc.product.outbox.raw`
+
+日志里可以看到：
+
+1. consumer group 完成 join / assignment
+2. 分区分配成功
+3. `Started ...Application`
+
+这说明：
+
+1. Kafka 自动配置生效了
+2. 错误处理器和监听容器都真正加载了
+3. 不再是“代码写了，但运行时起不来”
+
+### 7.2 成功链路验证：重复消息只落一次
+
+我手工向两个 raw topic 各发了两次相同的成功消息。
+
+`social-service` 验证样本：
+
+1. `event_id = it-social-ok-1774546040`
+2. 目标商品号：`ITP1774546040`
+
+实际结果：
+
+1. `s_event_consume_log` 中该事件状态是 `SUCCEEDED`
+2. 同一 `event_id` 重复投递两次后，日志计数仍然是 `1`
+3. `s_post` 中 `related_product_no = ITP1774546040` 的帖子数是 `1`
+
+这证明：
+
+1. Kafka 层面消息确实重复到达了
+2. 但消费端幂等把重复副作用挡住了
+
+`order-service` 验证样本：
+
+1. `event_id = it-order-ok-1774546040`
+
+实际结果：
+
+1. `o_event_consume_log` 中该事件状态是 `SUCCEEDED`
+2. 同一 `event_id` 重复投递两次后，日志计数仍然是 `1`
+
+这说明 `order-service` 这条链路也满足“重复消息不重复落副作用”的设计目标。
+
+### 7.3 失败链路验证：坏消息进入 DLT，不堵主链路
+
+我又分别向两个 raw topic 发了 payload 非法的脏消息：
+
+1. `it-social-bad-1774546040`
+2. `it-order-bad-1774546040`
+
+实际结果：
+
+1. `it-social-bad-1774546040` 出现在 `shiori.cdc.product.outbox.raw.dlt`
+2. `it-order-bad-1774546040` 出现在 `shiori.cdc.payment.outbox.raw.dlt`
+
+同时数据库查询结果是：
+
+1. `SOCIAL_BAD_LOG_COUNT = 0`
+2. `ORDER_BAD_LOG_COUNT = 0`
+
+这正符合当前实现的预期：
+
+1. 脏消息在解析阶段就被识别为不可恢复异常
+2. 它不会进入正常业务处理
+3. 也不会被错误记成成功消费日志
+4. 而是直接由错误处理器送入 DLT
+
+### 7.4 这轮联调最终证明了什么
+
+这轮真实联调至少证明了 4 件事：
+
+1. 消费者能在真实容器环境里成功启动和订阅 Kafka
+2. 重复消息会被消费端幂等拦住，不会重复落副作用
+3. 脏消息会进入 DLT，而不是反复卡住主消费链路
+4. 这套方案不只是“理论上可讲”，而是已经在本地端到端跑通过
+
+---
+
+## 8. 几个关键边界，不能夸大
+
+### 8.1 这不是端到端 `exactly-once`
 
 这次方案不是“端到端只执行一次”，而是：
 
@@ -446,7 +574,7 @@ if (throwOnFailure && !failedRefundNos.isEmpty()) {
 
 这是一个更务实、也更符合当前项目实现的说法。
 
-### 7.2 这次做到了 DLT 隔离，但没有做 DLT 回放平台
+### 8.2 这次做到了 DLT 隔离，但没有做 DLT 回放平台
 
 当前已经做到：
 
@@ -460,7 +588,7 @@ if (throwOnFailure && !failedRefundNos.isEmpty()) {
 2. 自动回放工具
 3. 运维回灌流程
 
-### 7.3 这次不是全项目所有消费者都完全统一
+### 8.3 这次不是全项目所有消费者都完全统一
 
 当前主要补齐的是：
 
@@ -471,7 +599,7 @@ if (throwOnFailure && !failedRefundNos.isEmpty()) {
 
 ---
 
-## 8. 代码落点
+## 9. 代码落点
 
 面试时可以直接引用这些文件：
 
@@ -489,10 +617,16 @@ if (throwOnFailure && !failedRefundNos.isEmpty()) {
 12. [`V2__enhance_event_consume_log_for_kafka.sql`](/Users/hhm/code/shiori/shiori-java/shiori-social-service/src/main/resources/db/migration/V2__enhance_event_consume_log_for_kafka.sql)
 13. [`application.yml`](/Users/hhm/code/shiori/shiori-java/shiori-order-service/src/main/resources/application.yml)
 14. [`application.yml`](/Users/hhm/code/shiori/shiori-java/shiori-social-service/src/main/resources/application.yml)
+15. [`build.gradle`](/Users/hhm/code/shiori/shiori-java/shiori-order-service/build.gradle)
+16. [`build.gradle`](/Users/hhm/code/shiori/shiori-java/shiori-social-service/build.gradle)
+17. [`OrderKafkaAutoConfigurationIntegrationTest.java`](/Users/hhm/code/shiori/shiori-java/shiori-order-service/src/test/java/moe/hhm/shiori/order/config/OrderKafkaAutoConfigurationIntegrationTest.java)
+18. [`SocialKafkaAutoConfigurationIntegrationTest.java`](/Users/hhm/code/shiori/shiori-java/shiori-social-service/src/test/java/moe/hhm/shiori/social/config/SocialKafkaAutoConfigurationIntegrationTest.java)
+19. [`OrderKafkaConsumerConfigurationTest.java`](/Users/hhm/code/shiori/shiori-java/shiori-order-service/src/test/java/moe/hhm/shiori/order/config/OrderKafkaConsumerConfigurationTest.java)
+20. [`SocialKafkaConsumerConfigurationTest.java`](/Users/hhm/code/shiori/shiori-java/shiori-social-service/src/test/java/moe/hhm/shiori/social/config/SocialKafkaConsumerConfigurationTest.java)
 
 ---
 
-## 9. 面试时怎么讲最顺
+## 10. 面试时怎么讲最顺
 
 建议按下面顺序讲：
 
@@ -501,6 +635,7 @@ if (throwOnFailure && !failedRefundNos.isEmpty()) {
 3. 再讲失败处理：可恢复异常有限重试，不可恢复异常或重试耗尽进 DLT。
 4. 再讲 offset：业务成功后手动 `ack`，消费者重启从 Kafka 已提交 offset 继续。
 5. 最后讲项目细节：`order-service` 额外修了“吞错即成功”的问题。
+6. 如果面试官继续追问“你怎么证明真的跑过”，就补真实联调证据：重复消息只落一次，脏消息实际进了 DLT。
 
 可以直接背下面这段：
 
@@ -508,3 +643,4 @@ if (throwOnFailure && !failedRefundNos.isEmpty()) {
 > 具体做法是：每条事件都带 `eventId`，消费前先查本地消费日志，按 `(consumerGroup, eventId)` 做持久化去重；如果已成功处理过就直接跳过。消费成功后才手动 `ack`，让 offset 提交和业务成功绑定。
 > 失败处理上，我用 `DefaultErrorHandler` 做有限重试，用 `DeadLetterPublishingRecoverer` 把不可恢复异常或重试耗尽的消息送到 `<topic>.dlt`，并通过 `commitRecovered=true` 提交恢复后的 offset，避免死信消息继续卡住主链路。
 > 另外我还把 `topic、partition、offset、status、last_error` 落到消费日志表里，方便排障。在 `order-service` 里，我还修了一个关键问题：原来退款批量重试会吞掉单条失败，导致 Kafka 误判成功；现在改成 Kafka 场景下只要批次里还有失败就抛异常，这样消息才能继续走重试或 DLT。
+> 这套方案我还做了真实联调，不只是单测：我实际发过重复消息和脏消息，验证过成功消息只落一次、坏消息会进入 DLT。
