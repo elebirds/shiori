@@ -7,6 +7,7 @@ import moe.hhm.shiori.order.client.ProductServiceClient;
 import moe.hhm.shiori.order.client.RefundBalancePaymentSnapshot;
 import moe.hhm.shiori.order.config.OrderProperties;
 import moe.hhm.shiori.order.dto.OrderRefundResponse;
+import moe.hhm.shiori.order.mq.OrderRefundBatchRetryException;
 import moe.hhm.shiori.order.model.OrderItemRecord;
 import moe.hhm.shiori.order.model.OrderRecord;
 import moe.hhm.shiori.order.model.OrderRefundEntity;
@@ -152,6 +153,48 @@ class OrderRefundServiceTest {
         assertThatThrownBy(() -> orderRefundService.applyRefund(1001L, "O6001", "   "))
                 .isInstanceOf(BizException.class);
         verify(orderMapper, never()).insertOrderRefund(any());
+    }
+
+    @Test
+    void shouldThrowBatchRetryExceptionWhenAnyPendingRefundRetryFails() {
+        when(orderMapper.listPendingFundsOrderRefundsBySeller(2001L, "PENDING_FUNDS", 100))
+                .thenReturn(java.util.List.of(
+                        refund("R7001", "O7001", 1001L, 2001L, "PENDING_FUNDS"),
+                        refund("R7002", "O7002", 1001L, 2001L, "PENDING_FUNDS")
+                ));
+        when(orderMapper.findOrderRefundByRefundNoForUpdate("R7001"))
+                .thenReturn(refund("R7001", "O7001", 1001L, 2001L, "PENDING_FUNDS"));
+        when(paymentServiceClient.refundOrderPayment(eq("O7001"), eq("R7001"), eq("SYSTEM"), eq(null), anyString(),
+                eq(1001L), any()))
+                .thenReturn(new RefundBalancePaymentSnapshot("O7001", "R7001", "P7001", "SUCCEEDED", false));
+        when(orderMapper.updateOrderRefundAfterRetry(eq("R7001"), eq("PENDING_FUNDS"), eq("SUCCEEDED"),
+                eq("P7001"), eq(null), eq(1)))
+                .thenReturn(1);
+        when(orderMapper.findOrderByOrderNo("O7001"))
+                .thenReturn(order("O7001", 1001L, 2001L, 4, 100L));
+        when(orderMapper.markOrderRefunded("O7001", "SUCCEEDED", 6, 2, 4, 5)).thenReturn(0);
+        when(orderMapper.findOrderRefundByRefundNo("R7001"))
+                .thenReturn(refund("R7001", "O7001", 1001L, 2001L, "SUCCEEDED"));
+        when(orderMapper.findOrderRefundByRefundNoForUpdate("R7002"))
+                .thenReturn(refund("R7002", "O7002", 1001L, 2001L, "PENDING_FUNDS"));
+        when(paymentServiceClient.refundOrderPayment(eq("O7002"), eq("R7002"), eq("SYSTEM"), eq(null), anyString(),
+                eq(1001L), any()))
+                .thenThrow(new BizException(
+                        moe.hhm.shiori.common.error.CommonErrorCode.INTERNAL_SERVER_ERROR,
+                        org.springframework.http.HttpStatus.BAD_GATEWAY
+                ));
+
+        assertThatThrownBy(() -> orderRefundService.retryPendingRefundsBySellerOrThrow(2001L))
+                .isInstanceOf(OrderRefundBatchRetryException.class)
+                .hasMessageContaining("sellerUserId=2001")
+                .hasMessageContaining("failedCount=1");
+    }
+
+    @Test
+    void shouldIgnoreBlankSellerWhenRetryPendingRefundsBySellerOrThrow() {
+        orderRefundService.retryPendingRefundsBySellerOrThrow(null);
+
+        verify(orderMapper, never()).listPendingFundsOrderRefundsBySeller(any(), any(), any(Integer.class));
     }
 
     private OrderRecord order(String orderNo, Long buyerUserId, Long sellerUserId, Integer status, Long amountCent) {

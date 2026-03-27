@@ -21,6 +21,9 @@ spring:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       auto-offset-reset: latest
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
     listener:
       missing-topics-fatal: false
 
@@ -32,3 +35,6 @@ social:
     enabled: ${SOCIAL_KAFKA_ENABLED:true}
     product-outbox-topic: ${SOCIAL_PRODUCT_OUTBOX_TOPIC:shiori.cdc.product.outbox.raw}
     product-outbox-group-id: ${SOCIAL_PRODUCT_OUTBOX_GROUP_ID:shiori-social-product-cdc}
+    retry-interval-ms: ${SOCIAL_KAFKA_RETRY_INTERVAL_MS:1000}
+    max-attempts: ${SOCIAL_KAFKA_MAX_ATTEMPTS:3}
+    dlt-suffix: ${SOCIAL_KAFKA_DLT_SUFFIX:.dlt}

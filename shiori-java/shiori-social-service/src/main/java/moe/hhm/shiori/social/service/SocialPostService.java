@@ -14,7 +14,6 @@ import moe.hhm.shiori.social.dto.v2.PostRelatedProductResponse;
 import moe.hhm.shiori.social.dto.v2.PostV2ItemResponse;
 import moe.hhm.shiori.social.dto.v2.PostV2PageResponse;
 import moe.hhm.shiori.social.event.ProductPublishedPayload;
-import moe.hhm.shiori.social.model.EventConsumeLogEntity;
 import moe.hhm.shiori.social.model.PostEntity;
 import moe.hhm.shiori.social.model.PostRecord;
 import moe.hhm.shiori.social.repository.SocialPostMapper;
@@ -105,18 +104,10 @@ public class SocialPostService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public void handleProductPublished(String eventId, ProductPublishedPayload payload) {
-        if (!StringUtils.hasText(eventId) || payload == null || payload.ownerUserId() == null || payload.ownerUserId() <= 0) {
+    public void createAutoPostFromProductPublished(ProductPublishedPayload payload) {
+        if (payload == null || payload.ownerUserId() == null || payload.ownerUserId() <= 0) {
             return;
         }
-        EventConsumeLogEntity consumeLog = new EventConsumeLogEntity();
-        consumeLog.setEventId(eventId);
-        consumeLog.setEventType("PRODUCT_PUBLISHED");
-        int affected = socialPostMapper.insertConsumeLog(consumeLog);
-        if (affected <= 0) {
-            return;
-        }
-
         PostEntity entity = new PostEntity();
         entity.setPostNo(generatePostNo());
         entity.setAuthorUserId(payload.ownerUserId());

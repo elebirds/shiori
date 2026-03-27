@@ -1,29 +1,35 @@
 package moe.hhm.shiori.social.mq;
 
 import moe.hhm.shiori.social.event.ProductPublishedPayload;
-import moe.hhm.shiori.social.service.SocialPostService;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.kafka.support.Acknowledgment;
 import tools.jackson.databind.ObjectMapper;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class ProductOutboxCdcConsumerTest {
 
     @Mock
-    private SocialPostService socialPostService;
+    private ProductOutboxCdcConsumeService consumeService;
+    @Mock
+    private Acknowledgment acknowledgment;
 
     private ProductOutboxCdcConsumer consumer;
 
     @BeforeEach
     void setUp() {
-        consumer = new ProductOutboxCdcConsumer(new ObjectMapper(), socialPostService);
+        consumer = new ProductOutboxCdcConsumer(new ObjectMapper(), consumeService, "shiori-social-product-cdc");
     }
 
     @Test
@@ -40,9 +46,9 @@ class ProductOutboxCdcConsumerTest {
                 }
                 """;
 
-        consumer.onMessage(message);
+        consumer.onMessage(new ConsumerRecord<>("shiori.cdc.product.outbox.raw", 1, 8L, "P001", message), acknowledgment);
 
-        verify(socialPostService).handleProductPublished("event-1", new ProductPublishedPayload(
+        verify(consumeService).handle(eq("event-1"), eq(new ProductPublishedPayload(
                 1001L,
                 "P001",
                 2002L,
@@ -51,11 +57,16 @@ class ProductOutboxCdcConsumerTest {
                 3900L,
                 4900L,
                 "main"
-        ));
+        )), argThat(metadata -> metadata != null
+                && "shiori.cdc.product.outbox.raw".equals(metadata.topic())
+                && metadata.partition() == 1
+                && metadata.offset() == 8L
+                && "shiori-social-product-cdc".equals(metadata.consumerGroup())));
+        verify(acknowledgment).acknowledge();
     }
 
     @Test
-    void shouldRejectWhenAggregateTypeInvalid() {
+    void shouldIgnoreWhenAggregateTypeInvalid() {
         String message = """
                 {
                   "event_id":"event-2",
@@ -68,8 +79,13 @@ class ProductOutboxCdcConsumerTest {
                 }
                 """;
 
-        assertThatThrownBy(() -> consumer.onMessage(message))
-                .isInstanceOf(IllegalArgumentException.class);
+        consumer.onMessage(
+                new ConsumerRecord<String, String>("shiori.cdc.product.outbox.raw", 0, 1L, "P002", message),
+                acknowledgment
+        );
+
+        verifyNoInteractions(consumeService);
+        verify(acknowledgment).acknowledge();
     }
 
     @Test
@@ -86,8 +102,35 @@ class ProductOutboxCdcConsumerTest {
                 }
                 """;
 
-        consumer.onMessage(message);
+        consumer.onMessage(
+                new ConsumerRecord<String, String>("shiori.cdc.product.outbox.raw", 2, 5L, "P003", message),
+                acknowledgment
+        );
 
-        verifyNoInteractions(socialPostService);
+        verifyNoInteractions(consumeService);
+        verify(acknowledgment).acknowledge();
+    }
+
+    @Test
+    void shouldThrowWithoutAcknowledgingWhenPayloadInvalid() {
+        String message = """
+                {
+                  "event_id":"event-4",
+                  "aggregate_type":"product",
+                  "aggregate_id":"P004",
+                  "message_key":"P004",
+                  "type":"PRODUCT_PUBLISHED",
+                  "payload":"not-json",
+                  "status":"PENDING"
+                }
+                """;
+
+        assertThatThrownBy(() -> consumer.onMessage(
+                new ConsumerRecord<String, String>("shiori.cdc.product.outbox.raw", 0, 2L, "P004", message),
+                acknowledgment))
+                .isInstanceOf(NonRetryableKafkaConsumerException.class);
+
+        verifyNoInteractions(consumeService);
+        verifyNoMoreInteractions(acknowledgment);
     }
 }

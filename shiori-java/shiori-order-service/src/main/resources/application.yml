@@ -21,6 +21,9 @@ spring:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       auto-offset-reset: latest
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
     listener:
       missing-topics-fatal: false
 
@@ -37,6 +40,9 @@ order:
     enabled: ${ORDER_KAFKA_ENABLED:false}
     wallet-balance-outbox-topic: ${ORDER_WALLET_BALANCE_OUTBOX_TOPIC:shiori.cdc.payment.outbox.raw}
     wallet-balance-outbox-group-id: ${ORDER_WALLET_BALANCE_OUTBOX_GROUP_ID:shiori-order-wallet-cdc}
+    retry-interval-ms: ${ORDER_KAFKA_RETRY_INTERVAL_MS:1000}
+    max-attempts: ${ORDER_KAFKA_MAX_ATTEMPTS:3}
+    dlt-suffix: ${ORDER_KAFKA_DLT_SUFFIX:.dlt}
   review:
     window-days: ${ORDER_REVIEW_WINDOW_DAYS:15}
     edit-hours: ${ORDER_REVIEW_EDIT_HOURS:24}

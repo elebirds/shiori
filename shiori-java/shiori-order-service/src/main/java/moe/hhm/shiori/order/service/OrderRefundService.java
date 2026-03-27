@@ -1,6 +1,7 @@
 package moe.hhm.shiori.order.service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ThreadLocalRandom;
@@ -16,6 +17,7 @@ import moe.hhm.shiori.order.domain.OrderRefundStatus;
 import moe.hhm.shiori.order.domain.OrderStatus;
 import moe.hhm.shiori.order.dto.OrderRefundPageResponse;
 import moe.hhm.shiori.order.dto.OrderRefundResponse;
+import moe.hhm.shiori.order.mq.OrderRefundBatchRetryException;
 import moe.hhm.shiori.order.model.OrderItemRecord;
 import moe.hhm.shiori.order.model.OrderRecord;
 import moe.hhm.shiori.order.model.OrderRefundEntity;
@@ -252,6 +254,15 @@ public class OrderRefundService {
 
     @Transactional(rollbackFor = Exception.class)
     public void retryPendingRefundsBySeller(Long sellerUserId) {
+        retryPendingRefundsBySellerInternal(sellerUserId, false);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void retryPendingRefundsBySellerOrThrow(Long sellerUserId) {
+        retryPendingRefundsBySellerInternal(sellerUserId, true);
+    }
+
+    private void retryPendingRefundsBySellerInternal(Long sellerUserId, boolean throwOnFailure) {
         if (sellerUserId == null || sellerUserId <= 0) {
             return;
         }
@@ -261,12 +272,17 @@ public class OrderRefundService {
                 OrderRefundStatus.PENDING_FUNDS.name(),
                 batchSize
         );
+        List<String> failedRefundNos = new ArrayList<>();
         for (OrderRefundRecord record : records) {
             try {
                 retryPendingRefund(record.refundNo(), ROLE_SYSTEM, null, record.buyerUserId(), "余额变更自动重试");
             } catch (RuntimeException ex) {
+                failedRefundNos.add(record.refundNo());
                 log.warn("余额事件触发退款重试失败, refundNo={}, err={}", record.refundNo(), ex.getMessage());
             }
+        }
+        if (throwOnFailure && !failedRefundNos.isEmpty()) {
+            throw new OrderRefundBatchRetryException(sellerUserId, failedRefundNos.size());
         }
     }
 

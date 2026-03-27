@@ -1,6 +1,6 @@
-package moe.hhm.shiori.social.config;
+package moe.hhm.shiori.order.config;
 
-import moe.hhm.shiori.social.mq.NonRetryableKafkaConsumerException;
+import moe.hhm.shiori.order.mq.NonRetryableKafkaConsumerException;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,14 +17,14 @@ import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.util.backoff.FixedBackOff;
 
 @Configuration
-@ConditionalOnProperty(prefix = "social.kafka", name = "enabled", havingValue = "true")
-public class SocialKafkaConsumerConfiguration {
+@ConditionalOnProperty(prefix = "order.kafka", name = "enabled", havingValue = "true")
+public class OrderKafkaConsumerConfiguration {
 
     @Bean
-    CommonErrorHandler socialKafkaErrorHandler(KafkaOperations<Object, Object> kafkaOperations,
-                                               @Value("${social.kafka.retry-interval-ms:1000}") long retryIntervalMs,
-                                               @Value("${social.kafka.max-attempts:3}") long maxAttempts,
-                                               @Value("${social.kafka.dlt-suffix:.dlt}") String dltSuffix) {
+    CommonErrorHandler orderKafkaErrorHandler(KafkaOperations<Object, Object> kafkaOperations,
+                                              @Value("${order.kafka.retry-interval-ms:1000}") long retryIntervalMs,
+                                              @Value("${order.kafka.max-attempts:3}") long maxAttempts,
+                                              @Value("${order.kafka.dlt-suffix:.dlt}") String dltSuffix) {
         DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(
                 kafkaOperations,
                 (ConsumerRecord<?, ?> record, Exception ex) -> new TopicPartition(record.topic() + dltSuffix, record.partition())
@@ -41,11 +41,11 @@ public class SocialKafkaConsumerConfiguration {
     @Bean
     ConcurrentKafkaListenerContainerFactory<String, String> kafkaListenerContainerFactory(
             ConsumerFactory<String, String> consumerFactory,
-            CommonErrorHandler socialKafkaErrorHandler) {
+            CommonErrorHandler orderKafkaErrorHandler) {
         ConcurrentKafkaListenerContainerFactory<String, String> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory);
-        factory.setCommonErrorHandler(socialKafkaErrorHandler);
+        factory.setCommonErrorHandler(orderKafkaErrorHandler);
         factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
         return factory;
     }
