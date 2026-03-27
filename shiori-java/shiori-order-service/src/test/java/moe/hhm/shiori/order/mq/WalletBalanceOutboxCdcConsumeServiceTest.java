@@ -7,7 +7,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.annotation.Transactional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -29,6 +31,16 @@ class WalletBalanceOutboxCdcConsumeServiceTest {
     @BeforeEach
     void setUp() {
         service = new WalletBalanceOutboxCdcConsumeService(consumeLogService, orderRefundService);
+    }
+
+    @Test
+    void shouldDeclareTransactionalBoundaryOnHandle() throws NoSuchMethodException {
+        Transactional transactional = WalletBalanceOutboxCdcConsumeService.class
+                .getMethod("handle", String.class, WalletBalanceChangedPayload.class, KafkaMessageMetadata.class)
+                .getAnnotation(Transactional.class);
+
+        assertThat(transactional).isNotNull();
+        assertThat(transactional.rollbackFor()).contains(Exception.class);
     }
 
     @Test
@@ -72,5 +84,21 @@ class WalletBalanceOutboxCdcConsumeServiceTest {
                 .isInstanceOf(OrderRefundBatchRetryException.class);
 
         verify(consumeLogService).markFailed(eq("event-3"), eq(metadata), any(OrderRefundBatchRetryException.class));
+    }
+
+    @Test
+    void shouldRethrowWithoutMarkFailedWhenProcessingStillOwnedByAnotherAttempt() {
+        KafkaMessageMetadata metadata = new KafkaMessageMetadata("shiori.cdc.payment.outbox.raw", 2, 13L, "group-a");
+        WalletBalanceChangedPayload payload =
+                new WalletBalanceChangedPayload(2001L, 500L, 0L, "O1001", "2026-03-07T00:00:00Z");
+        when(consumeLogService.startProcessing("event-4", "WalletBalanceChanged", metadata))
+                .thenThrow(new KafkaProcessingInProgressException("event-4"));
+
+        assertThatThrownBy(() -> service.handle("event-4", payload, metadata))
+                .isInstanceOf(KafkaProcessingInProgressException.class);
+
+        verify(orderRefundService, never()).retryPendingRefundsBySellerOrThrow(any());
+        verify(consumeLogService, never()).markFailed(any(), any(), any());
+        verify(consumeLogService, never()).markSucceeded(any(), any());
     }
 }

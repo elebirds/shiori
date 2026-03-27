@@ -72,6 +72,21 @@ class ProductOutboxCdcConsumeServiceTest {
         verify(consumeLogService).markFailed(eq("event-3"), eq(metadata), any(IllegalStateException.class));
     }
 
+    @Test
+    void shouldRethrowWithoutMarkFailedWhenProcessingStillOwnedByAnotherAttempt() {
+        KafkaMessageMetadata metadata = new KafkaMessageMetadata("shiori.cdc.product.outbox.raw", 0, 5L, "group-a");
+        ProductPublishedPayload payload = payload();
+        when(consumeLogService.startProcessing("event-4", "PRODUCT_PUBLISHED", metadata))
+                .thenThrow(new KafkaProcessingInProgressException("event-4"));
+
+        assertThatThrownBy(() -> service.handle("event-4", payload, metadata))
+                .isInstanceOf(KafkaProcessingInProgressException.class);
+
+        verify(socialPostService, never()).createAutoPostFromProductPublished(any());
+        verify(consumeLogService, never()).markFailed(any(), any(), any());
+        verify(consumeLogService, never()).markSucceeded(any(), any());
+    }
+
     private ProductPublishedPayload payload() {
         return new ProductPublishedPayload(
                 1001L,

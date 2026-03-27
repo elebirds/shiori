@@ -14,14 +14,16 @@ public interface KafkaConsumeLogMapper {
     @Select("""
             SELECT consumer_group AS consumerGroup,
                    event_id AS eventId,
-                   status
+                   status,
+                   updated_at AS updatedAt
             FROM s_event_consume_log
             WHERE consumer_group = #{consumerGroup}
               AND event_id = #{eventId}
             LIMIT 1
+            FOR UPDATE
             """)
-    KafkaConsumeLogRecord findByConsumerGroupAndEventId(@Param("consumerGroup") String consumerGroup,
-                                                        @Param("eventId") String eventId);
+    KafkaConsumeLogRecord findByConsumerGroupAndEventIdForUpdate(@Param("consumerGroup") String consumerGroup,
+                                                                 @Param("eventId") String eventId);
 
     @Insert("""
             INSERT INTO s_event_consume_log (
@@ -47,19 +49,23 @@ public interface KafkaConsumeLogMapper {
                 CURRENT_TIMESTAMP(3),
                 CURRENT_TIMESTAMP(3)
             )
-            ON DUPLICATE KEY UPDATE
-                event_type = VALUES(event_type),
-                topic = VALUES(topic),
-                partition_id = VALUES(partition_id),
-                message_offset = VALUES(message_offset),
-                status = CASE
-                    WHEN status = 'SUCCEEDED' THEN status
-                    ELSE VALUES(status)
-                END,
-                last_error = VALUES(last_error),
-                updated_at = CURRENT_TIMESTAMP(3)
             """)
-    int upsert(KafkaConsumeLogEntity entity);
+    int insertProcessing(KafkaConsumeLogEntity entity);
+
+    @Update("""
+            UPDATE s_event_consume_log
+            SET event_type = #{eventType},
+                topic = #{topic},
+                partition_id = #{partitionId},
+                message_offset = #{messageOffset},
+                status = #{status},
+                last_error = NULL,
+                updated_at = CURRENT_TIMESTAMP(3)
+            WHERE consumer_group = #{consumerGroup}
+              AND event_id = #{eventId}
+              AND status <> 'SUCCEEDED'
+            """)
+    int updateProcessing(KafkaConsumeLogEntity entity);
 
     @Update("""
             UPDATE s_event_consume_log

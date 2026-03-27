@@ -21,12 +21,14 @@ public class ProductOutboxCdcConsumeService {
 
     @Transactional(rollbackFor = Exception.class)
     public void handle(String eventId, ProductPublishedPayload payload, KafkaMessageMetadata metadata) {
-        if (!kafkaConsumeLogService.startProcessing(eventId, "PRODUCT_PUBLISHED", metadata)) {
-            return;
-        }
         try {
+            if (!kafkaConsumeLogService.startProcessing(eventId, "PRODUCT_PUBLISHED", metadata)) {
+                return;
+            }
             socialPostService.createAutoPostFromProductPublished(payload);
             kafkaConsumeLogService.markSucceeded(eventId, metadata);
+        } catch (KafkaProcessingInProgressException ex) {
+            throw ex;
         } catch (RuntimeException ex) {
             kafkaConsumeLogService.markFailed(eventId, metadata, ex);
             throw ex;
