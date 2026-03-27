@@ -1,8 +1,10 @@
 package moe.hhm.shiori.order.mq;
 
+import java.sql.SQLNonTransientException;
 import moe.hhm.shiori.order.event.WalletBalanceChangedPayload;
 import moe.hhm.shiori.order.service.OrderRefundService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.dao.NonTransientDataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,7 +33,29 @@ public class WalletBalanceOutboxCdcConsumeService {
             throw ex;
         } catch (RuntimeException ex) {
             kafkaConsumeLogService.markFailed(eventId, metadata, ex);
-            throw ex;
+            throw classify(ex);
         }
+    }
+
+    private RuntimeException classify(RuntimeException ex) {
+        if (ex instanceof NonRetryableKafkaConsumerException nonRetryable) {
+            return nonRetryable;
+        }
+        if (!isNonRetryable(ex)) {
+            return ex;
+        }
+        return new NonRetryableKafkaConsumerException("wallet balance outbox consume failed without retry", ex);
+    }
+
+    private boolean isNonRetryable(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof NonTransientDataAccessException
+                    || current instanceof SQLNonTransientException) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 }

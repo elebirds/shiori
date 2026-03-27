@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -84,6 +85,24 @@ class WalletBalanceOutboxCdcConsumeServiceTest {
                 .isInstanceOf(OrderRefundBatchRetryException.class);
 
         verify(consumeLogService).markFailed(eq("event-3"), eq(metadata), any(OrderRefundBatchRetryException.class));
+    }
+
+    @Test
+    void shouldWrapNonTransientDataAccessFailureAsNonRetryable() {
+        KafkaMessageMetadata metadata = new KafkaMessageMetadata("shiori.cdc.payment.outbox.raw", 2, 12L, "group-a");
+        WalletBalanceChangedPayload payload =
+                new WalletBalanceChangedPayload(2001L, 500L, 0L, "O1001", "2026-03-07T00:00:00Z");
+        DataIntegrityViolationException cause = new DataIntegrityViolationException("data too long");
+        when(consumeLogService.startProcessing("event-3a", "WalletBalanceChanged", metadata)).thenReturn(true);
+        doThrow(cause)
+                .when(orderRefundService)
+                .retryPendingRefundsBySellerOrThrow(2001L);
+
+        assertThatThrownBy(() -> service.handle("event-3a", payload, metadata))
+                .isInstanceOf(NonRetryableKafkaConsumerException.class)
+                .hasCause(cause);
+
+        verify(consumeLogService).markFailed("event-3a", metadata, cause);
     }
 
     @Test

@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -15,6 +16,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.same;
 
 @ExtendWith(MockitoExtension.class)
 class ProductOutboxCdcConsumeServiceTest {
@@ -70,6 +72,23 @@ class ProductOutboxCdcConsumeServiceTest {
                 .hasMessageContaining("insert failed");
 
         verify(consumeLogService).markFailed(eq("event-3"), eq(metadata), any(IllegalStateException.class));
+    }
+
+    @Test
+    void shouldWrapNonTransientDataAccessFailureAsNonRetryable() {
+        KafkaMessageMetadata metadata = new KafkaMessageMetadata("shiori.cdc.product.outbox.raw", 0, 4L, "group-a");
+        ProductPublishedPayload payload = payload();
+        DataIntegrityViolationException cause = new DataIntegrityViolationException("data too long");
+        when(consumeLogService.startProcessing("event-3a", "PRODUCT_PUBLISHED", metadata)).thenReturn(true);
+        doThrow(cause)
+                .when(socialPostService)
+                .createAutoPostFromProductPublished(payload);
+
+        assertThatThrownBy(() -> service.handle("event-3a", payload, metadata))
+                .isInstanceOf(NonRetryableKafkaConsumerException.class)
+                .hasCause(cause);
+
+        verify(consumeLogService).markFailed("event-3a", metadata, cause);
     }
 
     @Test

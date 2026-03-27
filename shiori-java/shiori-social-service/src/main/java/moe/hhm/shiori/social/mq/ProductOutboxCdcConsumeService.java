@@ -1,8 +1,10 @@
 package moe.hhm.shiori.social.mq;
 
+import java.sql.SQLNonTransientException;
 import moe.hhm.shiori.social.event.ProductPublishedPayload;
 import moe.hhm.shiori.social.service.SocialPostService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.dao.NonTransientDataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,7 +33,29 @@ public class ProductOutboxCdcConsumeService {
             throw ex;
         } catch (RuntimeException ex) {
             kafkaConsumeLogService.markFailed(eventId, metadata, ex);
-            throw ex;
+            throw classify(ex);
         }
+    }
+
+    private RuntimeException classify(RuntimeException ex) {
+        if (ex instanceof NonRetryableKafkaConsumerException nonRetryable) {
+            return nonRetryable;
+        }
+        if (!isNonRetryable(ex)) {
+            return ex;
+        }
+        return new NonRetryableKafkaConsumerException("product outbox consume failed without retry", ex);
+    }
+
+    private boolean isNonRetryable(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof NonTransientDataAccessException
+                    || current instanceof SQLNonTransientException) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 }
