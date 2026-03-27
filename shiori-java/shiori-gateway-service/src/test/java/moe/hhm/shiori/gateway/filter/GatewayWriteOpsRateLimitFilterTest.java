@@ -18,47 +18,45 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class GatewayWriteOpsRateLimitFilterTest {
 
     @Test
-    void shouldRateLimitLoginByIp() {
+    void shouldResolveLoginIdentityFromIp() {
         GatewaySecurityProperties properties = new GatewaySecurityProperties();
         properties.getRateLimit().setEnabled(true);
-        properties.getRateLimit().setLoginPerSecond(1);
+        CapturingRateLimiter rateLimiter = new CapturingRateLimiter(GatewayRateLimitDecision.allow(false));
         GatewayWriteOpsRateLimitFilter filter = new GatewayWriteOpsRateLimitFilter(
                 properties,
-                new GatewayGovernanceMetrics(new SimpleMeterRegistry())
+                new GatewayGovernanceMetrics(new SimpleMeterRegistry()),
+                rateLimiter
         );
         CapturingChain chain = new CapturingChain();
 
-        MockServerWebExchange first = exchange(HttpMethod.POST, "/api/user/auth/login", null, "10.0.0.1");
-        filter.filter(first, chain).block();
+        MockServerWebExchange exchange = exchange(HttpMethod.POST, "/api/user/auth/login", null, "10.0.0.1");
+        filter.filter(exchange, chain).block();
 
-        MockServerWebExchange second = exchange(HttpMethod.POST, "/api/user/auth/login", null, "10.0.0.1");
-        assertThatThrownBy(() -> filter.filter(second, chain).block())
-                .isInstanceOf(BizException.class)
-                .matches(ex -> ((BizException) ex).getErrorCode().code() == 20004);
+        assertThat(rateLimiter.lastRule).isEqualTo(new GatewayRateLimitRule("login", 20, java.time.Duration.ofSeconds(1)));
+        assertThat(rateLimiter.lastIdentity).isEqualTo("ip:10.0.0.1");
+        assertThat(chain.called).isTrue();
     }
 
     @Test
-    void shouldRateLimitOrderPayByUserId() {
+    void shouldBlockOrderPayByUserIdWhenLimiterRejects() {
         GatewaySecurityProperties properties = new GatewaySecurityProperties();
         properties.getRateLimit().setEnabled(true);
-        properties.getRateLimit().setOrderPayPerSecond(1);
+        CapturingRateLimiter rateLimiter = new CapturingRateLimiter(GatewayRateLimitDecision.block(750, false));
         GatewayWriteOpsRateLimitFilter filter = new GatewayWriteOpsRateLimitFilter(
                 properties,
-                new GatewayGovernanceMetrics(new SimpleMeterRegistry())
+                new GatewayGovernanceMetrics(new SimpleMeterRegistry()),
+                rateLimiter
         );
         CapturingChain chain = new CapturingChain();
 
-        MockServerWebExchange first = exchange(HttpMethod.POST, "/api/v2/order/orders/O001/pay", "1001", null);
-        filter.filter(first, chain).block();
-
-        MockServerWebExchange second = exchange(HttpMethod.POST, "/api/v2/order/orders/O001/pay", "1001", null);
-        assertThatThrownBy(() -> filter.filter(second, chain).block())
+        MockServerWebExchange exchange = exchange(HttpMethod.POST, "/api/v2/order/orders/O001/pay", "1001", null);
+        assertThatThrownBy(() -> filter.filter(exchange, chain).block())
                 .isInstanceOf(BizException.class)
                 .matches(ex -> ((BizException) ex).getErrorCode().code() == 20004);
 
-        MockServerWebExchange third = exchange(HttpMethod.POST, "/api/v2/order/orders/O001/pay", "1002", null);
-        filter.filter(third, chain).block();
-        assertThat(chain.called).isTrue();
+        assertThat(rateLimiter.lastRule).isEqualTo(new GatewayRateLimitRule("order_pay", 50, java.time.Duration.ofSeconds(1)));
+        assertThat(rateLimiter.lastIdentity).isEqualTo("uid:1001");
+        assertThat(chain.called).isFalse();
     }
 
     private MockServerWebExchange exchange(HttpMethod method, String path, String userId, String xForwardedFor) {
@@ -72,7 +70,25 @@ class GatewayWriteOpsRateLimitFilterTest {
         return MockServerWebExchange.from(builder.build());
     }
 
-    private static class CapturingChain implements GatewayFilterChain {
+    private static final class CapturingRateLimiter implements GatewayRateLimiter {
+
+        private final GatewayRateLimitDecision decision;
+        private GatewayRateLimitRule lastRule;
+        private String lastIdentity;
+
+        private CapturingRateLimiter(GatewayRateLimitDecision decision) {
+            this.decision = decision;
+        }
+
+        @Override
+        public Mono<GatewayRateLimitDecision> acquire(GatewayRateLimitRule rule, String identity) {
+            lastRule = rule;
+            lastIdentity = identity;
+            return Mono.just(decision);
+        }
+    }
+
+    private static final class CapturingChain implements GatewayFilterChain {
         private boolean called;
 
         @Override
