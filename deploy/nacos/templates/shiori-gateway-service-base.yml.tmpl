@@ -40,6 +40,10 @@ security:
       redis-channel: ${SECURITY_AUTHZ_EVENT_REDIS_CHANNEL:shiori.authz.user.changed}
 
 management:
+  defaults:
+    metrics:
+      export:
+        enabled: false
   endpoints:
     web:
       exposure:
@@ -47,3 +51,31 @@ management:
   endpoint:
     health:
       show-details: never
+  tracing:
+    enabled: ${TRACING_ENABLED:true}
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
+    propagation:
+      consume: [w3c]
+      produce: [w3c]
+  opentelemetry:
+    resource-attributes:
+      service.namespace: shiori
+      deployment.environment: ${SHIORI_ENV:dev}
+    tracing:
+      export:
+        otlp:
+          endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://jaeger:4318/v1/traces}
+  otlp:
+    metrics:
+      export:
+        enabled: false
+  logging:
+    export:
+      otlp:
+        enabled: false
+
+logging:
+  include-application-name: false
+  pattern:
+    correlation: "[${spring.application.name:},%X{traceId:-},%X{spanId:-}] "
