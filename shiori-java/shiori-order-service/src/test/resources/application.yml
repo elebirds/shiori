@@ -1,9 +1,27 @@
 spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.micrometer.metrics.autoconfigure.export.otlp.OtlpMetricsExportAutoConfiguration
+      - org.springframework.boot.opentelemetry.autoconfigure.logging.otlp.OtlpLoggingAutoConfiguration
   cloud:
     nacos:
       config:
         enabled: false
       discovery:
+        enabled: false
+
+management:
+  defaults:
+    metrics:
+      export:
+        enabled: false
+  otlp:
+    metrics:
+      export:
+        enabled: false
+  logging:
+    export:
+      otlp:
         enabled: false
 
 order:
