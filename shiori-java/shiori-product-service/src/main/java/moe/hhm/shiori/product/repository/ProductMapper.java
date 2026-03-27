@@ -5,6 +5,7 @@ import java.util.List;
 import moe.hhm.shiori.product.model.ProductEntity;
 import moe.hhm.shiori.product.model.ProductOutboxEventEntity;
 import moe.hhm.shiori.product.model.ProductRecord;
+import moe.hhm.shiori.product.model.ProductSearchSnapshotRecord;
 import moe.hhm.shiori.product.model.ProductV2Record;
 import moe.hhm.shiori.product.model.SkuEntity;
 import moe.hhm.shiori.product.model.SkuRecord;
@@ -193,6 +194,57 @@ public interface ProductMapper {
             LIMIT 1
             """)
     ProductV2Record findOnSaleProductV2ById(@Param("productId") Long productId);
+
+    @Select("""
+            SELECT p.id AS productId,
+                   p.product_no AS productNo,
+                   p.owner_user_id AS ownerUserId,
+                   p.title,
+                   p.description,
+                   p.cover_object_key AS coverObjectKey,
+                   p.category_code AS categoryCode,
+                   p.sub_category_code AS subCategoryCode,
+                   p.condition_level AS conditionLevel,
+                   p.trade_mode AS tradeMode,
+                   p.campus_code AS campusCode,
+                   agg.min_price_cent AS minPriceCent,
+                   agg.max_price_cent AS maxPriceCent,
+                   agg.total_stock AS totalStock,
+                   p.status,
+                   p.is_deleted AS isDeleted,
+                   p.version,
+                   p.created_at AS createdAt,
+                   p.updated_at AS updatedAt
+            FROM p_product p
+            LEFT JOIN (
+                SELECT product_id,
+                       MIN(price_cent) AS min_price_cent,
+                       MAX(price_cent) AS max_price_cent,
+                       SUM(stock) AS total_stock
+                FROM p_sku
+                WHERE is_deleted = 0
+                GROUP BY product_id
+            ) agg ON agg.product_id = p.id
+            WHERE p.id = #{productId}
+            LIMIT 1
+            """)
+    ProductSearchSnapshotRecord findProductSearchSnapshotById(@Param("productId") Long productId);
+
+    @Select("""
+            <script>
+            SELECT id
+            FROM p_product
+            WHERE is_deleted = 0
+              AND status = 2
+              <if test="lastProductId != null">
+                AND id &gt; #{lastProductId}
+              </if>
+            ORDER BY id ASC
+            LIMIT #{batchSize}
+            </script>
+            """)
+    List<Long> listOnSaleProductIdsAfterId(@Param("lastProductId") Long lastProductId,
+                                           @Param("batchSize") int batchSize);
 
     @Select("""
             <script>

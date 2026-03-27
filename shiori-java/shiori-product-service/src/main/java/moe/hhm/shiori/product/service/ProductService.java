@@ -27,9 +27,12 @@ import moe.hhm.shiori.product.dto.SkuResponse;
 import moe.hhm.shiori.product.dto.UpdateProductRequest;
 import moe.hhm.shiori.product.event.EventEnvelope;
 import moe.hhm.shiori.product.event.ProductPublishedPayload;
+import moe.hhm.shiori.product.event.ProductSearchRemovedPayload;
+import moe.hhm.shiori.product.event.ProductSearchUpsertedPayload;
 import moe.hhm.shiori.product.model.ProductOutboxEventEntity;
 import moe.hhm.shiori.product.model.ProductEntity;
 import moe.hhm.shiori.product.model.ProductRecord;
+import moe.hhm.shiori.product.model.ProductSearchSnapshotRecord;
 import moe.hhm.shiori.product.model.ProductV2Record;
 import moe.hhm.shiori.product.model.SkuEntity;
 import moe.hhm.shiori.product.model.SkuRecord;
@@ -46,6 +49,9 @@ import tools.jackson.databind.ObjectMapper;
 public class ProductService {
 
     private static final String OUTBOX_AGGREGATE_TYPE_PRODUCT = "product";
+    private static final String PRODUCT_PUBLISHED_EVENT_TYPE = "PRODUCT_PUBLISHED";
+    private static final String PRODUCT_SEARCH_UPSERTED_EVENT_TYPE = "PRODUCT_SEARCH_UPSERTED";
+    private static final String PRODUCT_SEARCH_REMOVED_EVENT_TYPE = "PRODUCT_SEARCH_REMOVED";
 
     private final ProductMapper productMapper;
     private final OssObjectService ossObjectService;
@@ -227,6 +233,9 @@ public class ProductService {
         }
 
         ProductRecord latest = requireProduct(productId);
+        if (ProductStatus.fromCode(latest.status()) == ProductStatus.ON_SALE) {
+            appendProductSearchUpsertOutbox(productId);
+        }
         productDetailCacheService.evictProductDetail(productId);
         return new ProductWriteResponse(latest.id(), latest.productNo(), ProductStatus.fromCode(latest.status()).name());
     }
@@ -251,6 +260,7 @@ public class ProductService {
             throw new IllegalStateException("商品上架后未找到详情记录");
         }
         appendProductPublishedOutbox(latest);
+        appendProductSearchUpsertOutbox(productId);
         productDetailCacheService.evictProductDetail(productId);
         return new ProductWriteResponse(productId, product.productNo(), ProductStatus.ON_SALE.name());
     }
@@ -265,6 +275,7 @@ public class ProductService {
             throw new BizException(ProductErrorCode.INVALID_PRODUCT_STATUS, HttpStatus.BAD_REQUEST);
         }
         productMapper.updateProductStatusById(productId, ProductStatus.OFF_SHELF.getCode());
+        appendProductSearchRemovedOutbox(productId, "OFF_SHELF");
         productDetailCacheService.evictProductDetail(productId);
         return new ProductWriteResponse(productId, product.productNo(), ProductStatus.OFF_SHELF.name());
     }
@@ -382,11 +393,91 @@ public class ProductService {
         );
         EventEnvelope envelope = new EventEnvelope(
                 UUID.randomUUID().toString().replace("-", ""),
-                "PRODUCT_PUBLISHED",
+                PRODUCT_PUBLISHED_EVENT_TYPE,
                 product.productNo(),
                 Instant.now().toString(),
                 objectMapper.valueToTree(payload)
         );
+        insertOutboxEvent(product.productNo(), envelope);
+    }
+
+    public void appendProductSearchUpsertOutbox(Long productId) {
+        if (!productOutboxProperties.isEnabled()) {
+            return;
+        }
+        ProductSearchSnapshotRecord snapshot = productMapper.findProductSearchSnapshotById(productId);
+        if (!isSearchUpsertable(snapshot)) {
+            return;
+        }
+        ProductSearchUpsertedPayload payload = new ProductSearchUpsertedPayload(
+                snapshot.productId(),
+                snapshot.productNo(),
+                snapshot.ownerUserId(),
+                snapshot.title(),
+                snapshot.description(),
+                snapshot.coverObjectKey(),
+                snapshot.categoryCode(),
+                snapshot.subCategoryCode(),
+                snapshot.conditionLevel(),
+                snapshot.tradeMode(),
+                snapshot.campusCode(),
+                snapshot.minPriceCent(),
+                snapshot.maxPriceCent(),
+                snapshot.totalStock(),
+                snapshot.status(),
+                snapshot.version(),
+                snapshot.createdAt() == null ? null : snapshot.createdAt().toString(),
+                snapshot.updatedAt() == null ? Instant.now().toString() : snapshot.updatedAt().toString()
+        );
+        EventEnvelope envelope = new EventEnvelope(
+                UUID.randomUUID().toString().replace("-", ""),
+                PRODUCT_SEARCH_UPSERTED_EVENT_TYPE,
+                snapshot.productNo(),
+                Instant.now().toString(),
+                objectMapper.valueToTree(payload)
+        );
+        insertOutboxEvent(snapshot.productNo(), envelope);
+    }
+
+    private void appendProductSearchRemovedOutbox(Long productId, String reason) {
+        if (!productOutboxProperties.isEnabled()) {
+            return;
+        }
+        ProductSearchSnapshotRecord snapshot = productMapper.findProductSearchSnapshotById(productId);
+        if (snapshot == null || snapshot.productId() == null || !StringUtils.hasText(snapshot.productNo())) {
+            return;
+        }
+        ProductSearchRemovedPayload payload = new ProductSearchRemovedPayload(
+                snapshot.productId(),
+                snapshot.productNo(),
+                snapshot.status(),
+                snapshot.version(),
+                snapshot.updatedAt() == null ? Instant.now().toString() : snapshot.updatedAt().toString(),
+                reason
+        );
+        EventEnvelope envelope = new EventEnvelope(
+                UUID.randomUUID().toString().replace("-", ""),
+                PRODUCT_SEARCH_REMOVED_EVENT_TYPE,
+                snapshot.productNo(),
+                Instant.now().toString(),
+                objectMapper.valueToTree(payload)
+        );
+        insertOutboxEvent(snapshot.productNo(), envelope);
+    }
+
+    private boolean isSearchUpsertable(ProductSearchSnapshotRecord snapshot) {
+        if (snapshot == null || snapshot.productId() == null || snapshot.ownerUserId() == null) {
+            return false;
+        }
+        if (!StringUtils.hasText(snapshot.productNo())) {
+            return false;
+        }
+        return snapshot.isDeleted() != null && snapshot.isDeleted() == 0
+                && snapshot.status() != null
+                && snapshot.status() == ProductStatus.ON_SALE.getCode();
+    }
+
+    private void insertOutboxEvent(String aggregateId, EventEnvelope envelope) {
         String envelopeJson;
         try {
             envelopeJson = objectMapper.writeValueAsString(envelope);
@@ -397,8 +488,8 @@ public class ProductService {
         ProductOutboxEventEntity entity = new ProductOutboxEventEntity();
         entity.setEventId(envelope.eventId());
         entity.setAggregateType(OUTBOX_AGGREGATE_TYPE_PRODUCT);
-        entity.setAggregateId(product.productNo());
-        entity.setMessageKey(product.productNo());
+        entity.setAggregateId(aggregateId);
+        entity.setMessageKey(aggregateId);
         entity.setType(envelope.type());
         entity.setPayload(envelopeJson);
         entity.setExchangeName(productMqProperties.getEventExchange());

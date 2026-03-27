@@ -49,6 +49,7 @@ public class ProductV2Service {
     private final SkuSpecCodec skuSpecCodec;
     private final ProductMetaService productMetaService;
     private final ProductDetailCacheService productDetailCacheService;
+    private final ProductSearchQueryService productSearchQueryService;
 
     public ProductV2Service(ProductMapper productMapper,
                             OssObjectService ossObjectService,
@@ -56,7 +57,8 @@ public class ProductV2Service {
                             ProductMetrics productMetrics,
                             SkuSpecCodec skuSpecCodec,
                             ProductMetaService productMetaService,
-                            ProductDetailCacheService productDetailCacheService) {
+                            ProductDetailCacheService productDetailCacheService,
+                            ProductSearchQueryService productSearchQueryService) {
         this.productMapper = productMapper;
         this.ossObjectService = ossObjectService;
         this.productService = productService;
@@ -64,6 +66,7 @@ public class ProductV2Service {
         this.skuSpecCodec = skuSpecCodec;
         this.productMetaService = productMetaService;
         this.productDetailCacheService = productDetailCacheService;
+        this.productSearchQueryService = productSearchQueryService;
     }
 
     public ProductV2PageResponse listOnSaleProducts(String keyword,
@@ -87,6 +90,34 @@ public class ProductV2Service {
         String normalizedCampusCode = normalizeCampusCode(campusCode, false);
         String normalizedSortBy = normalizeSortBy(sortBy);
         String normalizedSortDir = normalizeSortDir(sortDir);
+        boolean explicitSort = StringUtils.hasText(sortBy);
+
+        if (StringUtils.hasText(keyword) && productSearchQueryService.isSearchEnabled()) {
+            try {
+                ProductV2PageResponse response = productSearchQueryService.searchOnSaleProducts(
+                        keyword,
+                        new ProductSearchQueryService.SearchRequest(
+                                normalizedCategory,
+                                normalizedSubCategory,
+                                normalizedCondition,
+                                normalizedTradeMode,
+                                normalizedCampusCode,
+                                normalizedSortBy,
+                                normalizedSortDir,
+                                normalizedPage,
+                                normalizedSize,
+                                explicitSort
+                        )
+                );
+                productMetrics.incQuery(buildFilterCombo(keyword, normalizedCategory, normalizedSubCategory,
+                        normalizedCondition, normalizedTradeMode, normalizedCampusCode, normalizedSortBy));
+                return response;
+            } catch (RuntimeException ex) {
+                if (!productSearchQueryService.isMysqlFallbackEnabled()) {
+                    throw ex;
+                }
+            }
+        }
 
         long total = productMapper.countOnSaleProductsV2(keyword, normalizedCategory, normalizedSubCategory,
                 normalizedCondition, normalizedTradeMode, normalizedCampusCode);
